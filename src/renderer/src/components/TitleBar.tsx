@@ -1,5 +1,5 @@
-import { Menu, MenuButton, MenuItems } from "@headlessui/react";
-import { ArrowsPointingOutIcon, EllipsisHorizontalIcon, MinusIcon, RectangleStackIcon, RectangleGroupIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { Button } from "@heroui/react";
+import { ArrowsPointingOutIcon, MinusIcon, RectangleStackIcon, RectangleGroupIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 type TitleBarProps = {
   sessionTitle: string;
@@ -34,32 +34,31 @@ export function TitleBar({
 
       <div className="app-drag flex flex-1 items-center justify-start pl-10">
         <nav className="no-drag hidden items-center gap-5 text-xs text-shell-500 lg:flex">
-          <button className="transition hover:text-shell-200">聊天</button>
-          <button className="transition hover:text-shell-200">历史</button>
-          <button className="transition hover:text-shell-200">附件</button>
-          <button className="transition hover:text-shell-200">帮助</button>
+          <Button variant="ghost" className="min-w-0 px-0 text-xs text-shell-500">
+            聊天
+          </Button>
+          <Button variant="ghost" className="min-w-0 px-0 text-xs text-shell-500">
+            历史
+          </Button>
+          <Button variant="ghost" className="min-w-0 px-0 text-xs text-shell-500">
+            附件
+          </Button>
+          <Button variant="ghost" className="min-w-0 px-0 text-xs text-shell-500">
+            帮助
+          </Button>
         </nav>
       </div>
 
       <div className="no-drag flex items-center gap-2">
-        <button
-          type="button"
+        <Button
+          isIconOnly
+          variant="ghost"
           onClick={onToggleRightPanel}
-          className="rounded-lg border border-black/8 bg-white/75 p-2 text-shell-400 transition hover:bg-accent-500/8"
-          title={rightPanelOpen ? "收起右侧上下文" : "展开右侧上下文"}
+          className="heroui-ghost-button h-9 min-w-9 rounded-lg"
+          aria-label={rightPanelOpen ? "收起右侧上下文" : "展开右侧上下文"}
         >
           <RectangleGroupIcon className="h-4 w-4" />
-        </button>
-
-        <Menu as="div" className="relative">
-          <MenuButton className="rounded-lg border border-black/8 bg-white/75 p-2 text-shell-400 transition hover:bg-accent-500/8">
-            <EllipsisHorizontalIcon className="h-4 w-4" />
-          </MenuButton>
-          <MenuItems
-            anchor="bottom end"
-            className="no-drag mt-2 w-40 rounded-2xl border border-black/8 bg-white/95 p-2 text-sm text-shell-400 shadow-glow focus:outline-none"
-          />
-        </Menu>
+        </Button>
 
         <div className="ml-2 flex items-center overflow-hidden rounded-xl border border-black/8 bg-white/78">
           <button type="button" onClick={onMinimize} className="titlebar-control" title="最小化">

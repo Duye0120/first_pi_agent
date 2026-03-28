@@ -1,3 +1,4 @@
+import { Button } from "@heroui/react";
 import { AdjustmentsHorizontalIcon, BoltIcon, Cog6ToothIcon, PlusIcon, Squares2X2Icon } from "@heroicons/react/24/outline";
 import type { ChatSessionSummary } from "@shared/contracts";
 import { formatRelativeTime } from "@renderer/lib/session";
@@ -19,11 +20,11 @@ export function Sidebar({ summaries, activeSessionId, onSelectSession, onNewSess
             { label: "技能", icon: Squares2X2Icon },
             { label: "自动化", icon: BoltIcon },
           ].map(({ label, icon: Icon, active, onClick }) => (
-            <button
+            <Button
               key={label}
-              type="button"
               onClick={onClick}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${
+              variant="ghost"
+              className={`flex w-full justify-start gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${
                 active
                   ? "bg-white text-shell-200 shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                   : "text-shell-400 hover:bg-white/70 hover:text-shell-200"
@@ -31,7 +32,7 @@ export function Sidebar({ summaries, activeSessionId, onSelectSession, onNewSess
             >
               <Icon className="h-4 w-4" />
               <span>{label}</span>
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -40,9 +41,9 @@ export function Sidebar({ summaries, activeSessionId, onSelectSession, onNewSess
         <div className="flex items-center justify-between">
           <p className="text-xs uppercase tracking-[0.24em] text-shell-500">线程</p>
           <div className="flex items-center gap-1 text-shell-500">
-            <button type="button" className="rounded-lg p-1 transition hover:bg-white/70 hover:text-shell-200">
+            <Button isIconOnly variant="ghost" className="h-7 min-w-7 rounded-lg p-0 text-shell-500">
               <AdjustmentsHorizontalIcon className="h-4 w-4" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -52,11 +53,11 @@ export function Sidebar({ summaries, activeSessionId, onSelectSession, onNewSess
           const active = summary.id === activeSessionId;
 
           return (
-            <button
+            <Button
               key={summary.id}
-              type="button"
               onClick={() => onSelectSession(summary.id)}
-              className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
+              variant="ghost"
+              className={`h-auto w-full justify-start rounded-xl border px-3 py-2.5 text-left transition ${
                 active
                   ? "border-accent-400/25 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
                   : "border-transparent bg-transparent hover:border-black/6 hover:bg-white/72"
@@ -69,19 +70,16 @@ export function Sidebar({ summaries, activeSessionId, onSelectSession, onNewSess
                 </div>
                 <span className="shrink-0 text-[11px] text-shell-500">{formatRelativeTime(summary.updatedAt)}</span>
               </div>
-            </button>
+            </Button>
           );
         })}
       </div>
 
       <div className="mt-auto border-t border-black/5 px-3 py-3">
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-shell-400 transition hover:bg-white/72 hover:text-shell-200"
-        >
+        <Button variant="ghost" className="flex w-full justify-start gap-3 rounded-xl px-3 py-2 text-left text-sm text-shell-400">
           <Cog6ToothIcon className="h-4 w-4" />
           设置
-        </button>
+        </Button>
       </div>
     </aside>
   );
