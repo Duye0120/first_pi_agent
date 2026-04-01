@@ -1,0 +1,2 @@
+- [Aesthetics First](feedback_aesthetics.md) — 不好看的东西一定不好用，视觉品质是硬性要求
+- [Light Theme](feedback_light_theme.md) — 默认浅色主题，颜色走 CSS 变量，后期支持自定义

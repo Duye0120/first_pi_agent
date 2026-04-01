@@ -4,7 +4,14 @@
       "Bash(git:*)",
       "Bash(ls:*)",
       "Read(//c/Users/Administrator/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.6/skills/brainstorming/**)",
-      "Bash(bash scripts/start-server.sh --project-dir \"D:/a_github/first_pi_agent\")"
+      "Bash(bash scripts/start-server.sh --project-dir \"D:/a_github/first_pi_agent\")",
+      "Bash(npm ls:*)",
+      "Bash(pnpm check:*)",
+      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\")",
+      "Bash(npx --yes pnpm check)",
+      "Bash(npx --yes pnpm install)",
+      "Bash(npx --yes pnpm install @xterm/xterm @xterm/addon-fit @xterm/addon-web-links)",
+      "Bash(npx --yes pnpm install node-pty)"
     ]
   }
 }
