@@ -1,0 +1,59 @@
+/* ── Pi Desktop Agent — Theme Variables ──────────────────────────
+ * Single source of truth for all colors.
+ * Components use semantic Tailwind classes (e.g. bg-step-card)
+ * which resolve to these variables via tailwind.config.ts.
+ *
+ * To add a dark theme later:
+ *   [data-theme="dark"] { --color-bg-primary: #0f172a; ... }
+ * To support custom themes:
+ *   [data-theme="custom"] variables injected at runtime from settings.
+ * ────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Global Base ─────────────────────────────────────────── */
+  --color-bg-primary:        #ffffff;
+  --color-bg-secondary:      #f9fafb;
+  --color-bg-tertiary:       #f3f4f6;
+  --color-bg-shell:          #e8ecf2;
+  --color-text-primary:      #111827;
+  --color-text-secondary:    #6b7280;
+  --color-text-muted:        #9ca3af;
+  --color-border:            #e5e7eb;
+  --color-border-light:      #f3f4f6;
+
+  /* ── Step Cards ──────────────────────────────────────────── */
+  --color-step-bg:           #f9fafb;
+  --color-step-bg-hover:     #f3f4f6;
+  --color-step-border:       #e5e7eb;
+
+  /* ── Status Bars ─────────────────────────────────────────── */
+  --color-status-executing:  #3b82f6;
+  --color-status-success:    #10b981;
+  --color-status-error:      #ef4444;
+  --color-status-thinking:   #8b5cf6;
+  --color-status-cancelled:  #9ca3af;
+
+  /* ── Code / Terminal ─────────────────────────────────────── */
+  --color-code-bg:           #f8fafc;
+  --color-code-text:         #1e293b;
+  --color-code-border:       #e2e8f0;
+  --color-terminal-bg:       #f8fafc;
+  --color-terminal-text:     #1e293b;
+
+  /* ── Diff ────────────────────────────────────────────────── */
+  --color-diff-add-bg:       #dcfce7;
+  --color-diff-add-text:     #166534;
+  --color-diff-add-marker:   #22c55e;
+  --color-diff-del-bg:       #fee2e2;
+  --color-diff-del-text:     #991b1b;
+  --color-diff-del-marker:   #ef4444;
+  --color-diff-hunk-header:  #eff6ff;
+  --color-diff-context:      var(--color-bg-primary);
+  --color-diff-gutter:       var(--color-bg-secondary);
+  --color-diff-line-number:  var(--color-text-muted);
+
+  /* ── Accent / Interactive ────────────────────────────────── */
+  --color-accent:            #3b82f6;
+  --color-accent-hover:      #2563eb;
+  --color-accent-subtle:     #eff6ff;
+}

@@ -1,13 +1,17 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
-import { buildMockAssistantReply } from "./mockChat.js";
 import { pickFiles, readFilePreview } from "./files.js";
 import { createSession, getUiState, listSessions, loadSession, saveSession, setRightPanelOpen } from "./store.js";
 import { IPC_CHANNELS } from "../shared/ipc.js";
-import type { ChatSession, SelectedFile, SendMessageInput } from "../shared/contracts.js";
+import type { ChatSession, SendMessageInput } from "../shared/contracts.js";
+import { ElectronAdapter } from "./adapter.js";
+import { initAgent, promptAgent, cancelAgent, getCurrentHandle } from "./agent.js";
+import { getSettings, updateSettings } from "./settings.js";
+import { getMaskedCredentials, setCredential, deleteCredential, testCredential } from "./credentials.js";
 
 let mainWindow: BrowserWindow | null = null;
+let adapter: ElectronAdapter | null = null;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function getPreloadPath() {
@@ -73,14 +77,45 @@ function registerIpcHandlers() {
   ipcMain.handle(IPC_CHANNELS.sessionsCreate, async () => createSession());
 
   ipcMain.handle(IPC_CHANNELS.chatSend, async (_event, input: SendMessageInput) => {
-    const session = await loadSession(input.sessionId);
-    const attachments = (session?.attachments ?? []).filter((file: SelectedFile) => input.attachmentIds.includes(file.id));
+    if (!adapter) return;
 
-    return buildMockAssistantReply({
-      input,
-      attachments,
-    });
+    // Ensure agent is initialized for this session
+    let handle = getCurrentHandle();
+    if (!handle || handle.sessionId !== input.sessionId) {
+      const session = await loadSession(input.sessionId);
+      handle = initAgent(input.sessionId, adapter, session?.messages ?? []);
+    }
+
+    try {
+      await promptAgent(handle, input.text);
+    } catch (err) {
+      // Send error event to renderer
+      adapter.send({
+        type: "agent_error",
+        message: err instanceof Error ? err.message : "Agent 执行失败",
+        timestamp: Date.now(),
+      });
+    }
+    // Return void — response comes via agent events
   });
+
+  ipcMain.handle(IPC_CHANNELS.agentCancel, async () => {
+    const handle = getCurrentHandle();
+    if (handle) cancelAgent(handle);
+  });
+
+  // Settings
+  ipcMain.handle(IPC_CHANNELS.settingsGet, async () => getSettings());
+  ipcMain.handle(IPC_CHANNELS.settingsUpdate, async (_event, partial) => updateSettings(partial));
+
+  // Credentials
+  ipcMain.handle(IPC_CHANNELS.credentialsGet, async () => getMaskedCredentials());
+  ipcMain.handle(IPC_CHANNELS.credentialsSet, async (_event, provider: string, apiKey: string) =>
+    setCredential(provider, apiKey));
+  ipcMain.handle(IPC_CHANNELS.credentialsDelete, async (_event, provider: string) =>
+    deleteCredential(provider));
+  ipcMain.handle(IPC_CHANNELS.credentialsTest, async (_event, provider: string, apiKey: string) =>
+    testCredential(provider, apiKey));
 
   ipcMain.handle(IPC_CHANNELS.uiGetState, async () => getUiState());
   ipcMain.handle(IPC_CHANNELS.uiSetRightPanelOpen, async (_event, open: boolean) => setRightPanelOpen(open));
@@ -104,6 +139,7 @@ function registerIpcHandlers() {
 app.whenReady().then(() => {
   registerIpcHandlers();
   createMainWindow();
+  adapter = new ElectronAdapter(mainWindow!);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

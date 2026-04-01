@@ -1,10 +1,11 @@
 @import "tailwindcss";
+@import "./styles/theme.css";
 @config "../../../tailwind.config.ts";
 
 :root {
   color-scheme: light;
   font-family: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei UI", sans-serif;
-  background: #e8ecf2;
+  background: var(--color-bg-shell);
 }
 
 html,
@@ -16,8 +17,8 @@ body,
 
 body {
   overflow: hidden;
-  color: #121b24;
-  background: #e8ecf2;
+  color: var(--color-text-primary);
+  background: var(--color-bg-shell);
 }
 
 * {

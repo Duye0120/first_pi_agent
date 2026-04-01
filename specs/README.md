@@ -40,17 +40,17 @@
 
 | # | 文档 | 主题 | 状态 |
 |---|------|------|------|
-| 10 | [steps-visualization.md](./10-steps-visualization.md) | 推理过程可视化：事件映射、卡片结构、状态指示器、流式更新 | `draft` |
-| 11 | [terminal-integration.md](./11-terminal-integration.md) | 内嵌终端：xterm.js 集成、ANSI 渲染、流式输出 | `draft` |
-| 12 | [file-diff-display.md](./12-file-diff-display.md) | 文件 Diff 展示：diff 库选型、UI 嵌入方式 | `draft` |
-| 13 | [composer-and-settings.md](./13-composer-and-settings.md) | Composer 增强、BYOK 配置 UI、workspace 管理 | `draft` |
+| 10 | [steps-visualization.md](./10-steps-visualization.md) | 推理过程可视化：事件映射、卡片结构、状态指示器、流式更新 | `in-review` |
+| 11 | [terminal-integration.md](./11-terminal-integration.md) | 内嵌终端：xterm.js 集成、多 Tab、底部抽屉 | `in-review` |
+| 12 | [file-diff-display.md](./12-file-diff-display.md) | 文件 Diff 展示：Unified/Split 视图、chunk 操作、inline comment | `in-review` |
+| 13 | [composer-and-settings.md](./13-composer-and-settings.md) | Composer 增强、BYOK 配置 UI、workspace 管理、主题自定义 | `in-review` |
 
 ### 第五层：数据与安全
 
 | # | 文档 | 主题 | 状态 |
 |---|------|------|------|
-| 14 | [data-storage.md](./14-data-storage.md) | 存储布局、会话持久化、credentials 管理 | `draft` |
-| 15 | [security.md](./15-security.md) | 沙箱策略、权限模型、危险操作处理 | `draft` |
+| 14 | [data-storage.md](./14-data-storage.md) | 存储布局、多文件会话、凭证安全、记忆向量数据库 | `in-review` |
+| 15 | [security.md](./15-security.md) | 沙箱策略、命令黑白名单、prompt injection 防护、审计日志 | `in-review` |
 
 ### 后续规划（v1 不实现，预留接口）
 

@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { RectangleGroupIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Button } from "@heroui/react";
 import type { ChatMessage, ChatSession, ChatSessionSummary, SelectedFile, WindowFrameState } from "@shared/contracts";
@@ -8,6 +8,7 @@ import { MessageList } from "@renderer/components/MessageList";
 import { Sidebar } from "@renderer/components/Sidebar";
 import { TitleBar } from "@renderer/components/TitleBar";
 import { deriveSessionTitle, mergeAttachments, upsertSummary } from "@renderer/lib/session";
+import { useAgentEvents } from "@renderer/hooks/useAgentEvents";
 
 const ACTIVE_SESSION_STORAGE_KEY = "first-pi-agent.active-session-id";
 
@@ -39,6 +40,8 @@ export default function App() {
   const [frameState, setFrameState] = useState<WindowFrameState>({ isMaximized: false });
 
   const activeSessionId = activeSession?.id ?? null;
+  const { currentResponse, isAgentRunning, cancel, buildAssistantMessage } = useAgentEvents();
+  const prevResponseRef = useRef(currentResponse);
 
   const hydrateSession = useCallback((session: ChatSession) => {
     startTransition(() => {
@@ -93,6 +96,25 @@ export default function App() {
       setBooting(false);
     }
   }, [desktopApi, hydrateSession]);
+
+  // When agent finishes, persist the assistant message into the session
+  useEffect(() => {
+    if (
+      currentResponse &&
+      currentResponse !== prevResponseRef.current &&
+      (currentResponse.status === "completed" || currentResponse.status === "error") &&
+      activeSession
+    ) {
+      prevResponseRef.current = currentResponse;
+      const assistantMessage = buildAssistantMessage(currentResponse);
+      const nextSession: ChatSession = {
+        ...activeSession,
+        messages: [...activeSession.messages, assistantMessage],
+        updatedAt: assistantMessage.timestamp,
+      };
+      persistSession(nextSession);
+    }
+  }, [currentResponse, activeSession, buildAssistantMessage, persistSession]);
 
   useEffect(() => {
     void bootApp();
@@ -244,19 +266,12 @@ export default function App() {
         throw new Error("桌面桥接不可用，无法发送消息。");
       }
 
-      const assistantMessage = await desktopApi.chat.send({
+      // Fire and forget — response comes via agent events (useAgentEvents hook)
+      await desktopApi.chat.send({
         sessionId: activeSession.id,
         text,
         attachmentIds: attachments.map((attachment) => attachment.id),
       });
-
-      const sessionAfterAssistantMessage: ChatSession = {
-        ...sessionAfterUserMessage,
-        messages: [...sessionAfterUserMessage.messages, assistantMessage],
-        updatedAt: assistantMessage.timestamp,
-      };
-
-      persistSession(sessionAfterAssistantMessage);
     } catch (error) {
       const message = error instanceof Error ? error.message : "发送失败，请稍后重试。";
       const systemMessage: ChatMessage = {
@@ -342,7 +357,10 @@ export default function App() {
             <div className={`grid min-h-0 flex-1 ${rightPanelOpen ? "grid-cols-[minmax(0,1fr)_300px]" : "grid-cols-[minmax(0,1fr)]"}`}>
               <section className="flex min-h-0 flex-col bg-transparent">
                 <div className="min-h-0 flex-1 overflow-y-auto">
-                  <MessageList messages={activeSession?.messages ?? []} />
+                  <MessageList
+                    messages={activeSession?.messages ?? []}
+                    streamingResponse={currentResponse}
+                  />
                 </div>
 
                 <Composer
