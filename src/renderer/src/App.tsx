@@ -138,11 +138,20 @@ export default function App() {
       setFrameState(state);
     });
 
-    // Cmd/Ctrl+J to toggle terminal
+    // Global keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "j") {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key === "j") {
         e.preventDefault();
         setTerminalOpen((prev) => !prev);
+      } else if (mod && e.key === "n") {
+        e.preventDefault();
+        void createNewSession();
+      } else if (mod && e.key === ",") {
+        e.preventDefault();
+        setSettingsOpen((prev) => !prev);
+      } else if (e.key === "Escape") {
+        if (settingsOpen) setSettingsOpen(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
