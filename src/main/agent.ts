@@ -4,7 +4,8 @@ import { getModel } from "@mariozechner/pi-ai";
 import type { ElectronAdapter } from "./adapter.js";
 import { getSettings } from "./settings.js";
 import { getApiKey } from "./credentials.js";
-import { getTimeTool } from "../tools/getTime.js";
+import { getBuiltinTools } from "./tools/index.js";
+import { buildSoulPromptSection } from "./soul.js";
 
 export interface AgentHandle {
   agent: Agent;
@@ -43,10 +44,10 @@ export function initAgent(
 
   const agent = new Agent({
     initialState: {
-      systemPrompt: buildSystemPrompt(),
+      systemPrompt: buildSystemPrompt(adapter.workspacePath),
       model,
       thinkingLevel: settings.thinkingLevel,
-      tools: [getTimeTool],
+      tools: getBuiltinTools(adapter.workspacePath),
       messages: existingMessages ?? [],
     },
     getApiKey: (provider: string) => {
@@ -102,14 +103,23 @@ export function getCurrentHandle(): AgentHandle | null {
   return currentHandle;
 }
 
-function buildSystemPrompt(): string {
-  // Phase 1: basic system prompt. Phase 5 will integrate Soul files.
-  return [
+function buildSystemPrompt(workspacePath: string): string {
+  const base = [
     "你是 Pi，一个运行在用户桌面上的 AI 助手。",
     "你可以帮助用户完成各种软件开发和日常任务。",
     "请用中文回复。",
     "",
     "你拥有以下工具能力：",
     "- get_time: 获取当前时间",
+    "- file_read: 读取本地文件内容（指定行范围）",
+    "- file_write: 创建或写入本地文件（覆盖/追加）",
+    "- shell_exec: 执行 shell 命令（有安全限制）",
+    "- web_fetch: 获取网页内容并转换为纯文本",
+    "",
+    "使用工具时，路径相对于用户的 workspace 目录。",
+    "执行命令前请确认命令的安全性。",
   ].join("\n");
+
+  const soul = buildSoulPromptSection(workspacePath);
+  return soul ? base + soul : base;
 }

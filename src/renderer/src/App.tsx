@@ -1,12 +1,13 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { RectangleGroupIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Button } from "@heroui/react";
-import type { ChatMessage, ChatSession, ChatSessionSummary, SelectedFile, WindowFrameState } from "@shared/contracts";
+import type { ChatMessage, ChatSession, ChatSessionSummary, ModelSelection, SelectedFile, Settings, ThinkingLevel, WindowFrameState } from "@shared/contracts";
 import { Composer } from "@renderer/components/Composer";
 import { ContextPanel } from "@renderer/components/ContextPanel";
 import { MessageList } from "@renderer/components/MessageList";
 import { Sidebar } from "@renderer/components/Sidebar";
 import { TitleBar } from "@renderer/components/TitleBar";
+import { SettingsModal } from "@renderer/components/SettingsModal";
 import { deriveSessionTitle, mergeAttachments, upsertSummary } from "@renderer/lib/session";
 import { useAgentEvents } from "@renderer/hooks/useAgentEvents";
 
@@ -38,6 +39,9 @@ export default function App() {
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [frameState, setFrameState] = useState<WindowFrameState>({ isMaximized: false });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [currentModel, setCurrentModel] = useState<ModelSelection>({ provider: "anthropic", model: "claude-sonnet-4-20250514" });
+  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("off");
 
   const activeSessionId = activeSession?.id ?? null;
   const { currentResponse, isAgentRunning, cancel, buildAssistantMessage } = useAgentEvents();
@@ -67,15 +71,20 @@ export default function App() {
     }
 
     try {
-      const [uiState, frame, sessionSummaries] = await Promise.all([
+      const [uiState, frame, sessionSummaries, settings] = await Promise.all([
         desktopApi.ui.getState(),
         desktopApi.window.getState(),
         desktopApi.sessions.list(),
+        desktopApi.settings.get(),
       ]);
 
       setRightPanelOpen(uiState.rightPanelOpen);
       setFrameState(frame);
       setSummaries(sessionSummaries);
+      if (settings) {
+        setCurrentModel(settings.defaultModel);
+        setThinkingLevel(settings.thinkingLevel);
+      }
 
       const storedSessionId = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
       let nextSession = storedSessionId ? await desktopApi.sessions.load(storedSessionId) : null;
@@ -298,6 +307,16 @@ export default function App() {
     void desktopApi?.ui.setRightPanelOpen(nextOpen);
   }, [desktopApi, rightPanelOpen]);
 
+  const handleModelChange = useCallback((model: ModelSelection) => {
+    setCurrentModel(model);
+    void desktopApi?.settings.update({ defaultModel: model });
+  }, [desktopApi]);
+
+  const handleThinkingLevelChange = useCallback((level: ThinkingLevel) => {
+    setThinkingLevel(level);
+    void desktopApi?.settings.update({ thinkingLevel: level });
+  }, [desktopApi]);
+
   if (booting) {
     return (
       <main className="grid h-screen place-items-center bg-[#e8ecf2] text-shell-300">
@@ -337,6 +356,7 @@ export default function App() {
           activeSessionId={activeSessionId}
           onSelectSession={selectSession}
           onNewSession={createNewSession}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
 
         <section className="flex min-h-0 flex-col overflow-hidden">
@@ -360,6 +380,7 @@ export default function App() {
                   <MessageList
                     messages={activeSession?.messages ?? []}
                     streamingResponse={currentResponse}
+                    onCancelAgent={cancel}
                   />
                 </div>
 
@@ -367,11 +388,17 @@ export default function App() {
                   draft={activeSession?.draft ?? ""}
                   attachments={activeSession?.attachments ?? []}
                   isSending={isSending}
+                  isAgentRunning={isAgentRunning}
                   isPickingFiles={isPickingFiles}
+                  currentModel={currentModel}
+                  thinkingLevel={thinkingLevel}
                   onDraftChange={updateDraft}
                   onAttachFiles={attachFiles}
                   onRemoveAttachment={removeAttachment}
                   onSend={() => void sendMessage()}
+                  onCancel={cancel}
+                  onModelChange={handleModelChange}
+                  onThinkingLevelChange={handleThinkingLevelChange}
                 />
               </section>
 
@@ -394,6 +421,8 @@ export default function App() {
           </div>
         </section>
       </div>
+
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </main>
   );
 }

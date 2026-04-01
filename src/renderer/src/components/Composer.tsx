@@ -1,28 +1,41 @@
 import { useLayoutEffect, useRef } from "react";
 import { Button, Chip, TextArea } from "@heroui/react";
-import { ChevronDownIcon, PaperAirplaneIcon, PaperClipIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import type { SelectedFile } from "@shared/contracts";
+import { PaperAirplaneIcon, PaperClipIcon, StopCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import type { ModelSelection, SelectedFile, ThinkingLevel } from "@shared/contracts";
+import { ModelSelector } from "./ModelSelector";
 
 type ComposerProps = {
   draft: string;
   attachments: SelectedFile[];
   isSending: boolean;
+  isAgentRunning: boolean;
   isPickingFiles: boolean;
+  currentModel: ModelSelection;
+  thinkingLevel: ThinkingLevel;
   onDraftChange: (draft: string) => void;
   onAttachFiles: () => void;
   onRemoveAttachment: (attachmentId: string) => void;
   onSend: () => void;
+  onCancel: () => void;
+  onModelChange: (model: ModelSelection) => void;
+  onThinkingLevelChange: (level: ThinkingLevel) => void;
 };
 
 export function Composer({
   draft,
   attachments,
   isSending,
+  isAgentRunning,
   isPickingFiles,
+  currentModel,
+  thinkingLevel,
   onDraftChange,
   onAttachFiles,
   onRemoveAttachment,
   onSend,
+  onCancel,
+  onModelChange,
+  onThinkingLevelChange,
 }: ComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -87,29 +100,34 @@ export function Composer({
             <span className="hidden text-xs text-shell-500 md:inline">Enter 发送，Shift + Enter 换行</span>
           </div>
 
-          <Button
-            isIconOnly
-            onClick={onSend}
-            isDisabled={isSending || (!draft.trim() && attachments.length === 0)}
-            className="h-10 min-w-10 rounded-full bg-shell-100 text-white transition hover:bg-accent-500 disabled:cursor-not-allowed disabled:bg-shell-700 disabled:text-shell-500"
-          >
-            <PaperAirplaneIcon className="h-4 w-4" />
-          </Button>
+          {isAgentRunning ? (
+            <Button
+              isIconOnly
+              onClick={onCancel}
+              className="h-10 min-w-10 rounded-full bg-red-500 text-white transition hover:bg-red-600"
+            >
+              <StopCircleIcon className="h-5 w-5" />
+            </Button>
+          ) : (
+            <Button
+              isIconOnly
+              onClick={onSend}
+              isDisabled={isSending || (!draft.trim() && attachments.length === 0)}
+              className="h-10 min-w-10 rounded-full bg-shell-100 text-white transition hover:bg-accent-500 disabled:cursor-not-allowed disabled:bg-shell-700 disabled:text-shell-500"
+            >
+              <PaperAirplaneIcon className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-black/6 pt-3">
-          <Chip variant="tertiary" className="status-pill">
-            GPT-5.4
-            <ChevronDownIcon className="h-3.5 w-3.5" />
-          </Chip>
-          <Chip variant="tertiary" className="status-pill">
-            自动
-            <ChevronDownIcon className="h-3.5 w-3.5" />
-          </Chip>
-          <Chip variant="tertiary" className="status-pill">
-            首选文件 `config.toml`
-          </Chip>
-          <span className="ml-auto text-xs text-shell-500">main</span>
+          <ModelSelector
+            currentModel={currentModel}
+            thinkingLevel={thinkingLevel}
+            onModelChange={onModelChange}
+            onThinkingLevelChange={onThinkingLevelChange}
+          />
+          <span className="ml-auto text-xs text-shell-500">workspace</span>
         </div>
       </div>
     </section>

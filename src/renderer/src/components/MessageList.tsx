@@ -1,13 +1,16 @@
 import { ChevronDownIcon, CloudIcon } from "@heroicons/react/24/outline";
 import type { ChatMessage, AgentResponse } from "@shared/contracts";
 import { formatTime } from "@renderer/lib/session";
+import { AgentResponseBlock } from "./AgentResponseBlock";
+import { FinalReply } from "./FinalReply";
 
 type MessageListProps = {
   messages: ChatMessage[];
   streamingResponse?: AgentResponse | null;
+  onCancelAgent?: () => void;
 };
 
-export function MessageList({ messages, streamingResponse }: MessageListProps) {
+export function MessageList({ messages, streamingResponse, onCancelAgent }: MessageListProps) {
   if (messages.length === 0) {
     return (
       <section className="flex min-h-full flex-col items-center justify-center px-12 py-10">
@@ -39,66 +42,54 @@ export function MessageList({ messages, streamingResponse }: MessageListProps) {
           );
         }
 
-        const isUser = message.role === "user";
+        if (message.role === "user") {
+          return (
+            <article key={message.id} className="max-w-4xl">
+              <div className="mb-3 flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-shell-500">
+                <span>You</span>
+                <span className="tracking-normal">{formatTime(message.timestamp)}</span>
+              </div>
+              <div className="inline-flex rounded-2xl border border-accent-400/20 bg-accent-500/8 px-4 py-3 text-sm leading-7 text-shell-200">
+                {message.content}
+              </div>
+            </article>
+          );
+        }
+
+        // Assistant message — use AgentResponseBlock if it has steps, otherwise FinalReply
+        if (message.steps && message.steps.length > 0) {
+          return (
+            <AgentResponseBlock
+              key={message.id}
+              response={{
+                id: message.id,
+                status: message.status === "done" ? "completed" : "error",
+                steps: message.steps,
+                finalText: message.content,
+                startedAt: new Date(message.timestamp).getTime(),
+                endedAt: new Date(message.timestamp).getTime(),
+              }}
+            />
+          );
+        }
 
         return (
           <article key={message.id} className="max-w-4xl">
             <div className="mb-3 flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-shell-500">
-              <span>{isUser ? "You" : "Assistant"}</span>
+              <span>Assistant</span>
               <span className="tracking-normal">{formatTime(message.timestamp)}</span>
             </div>
-            {isUser ? (
-              <div className="inline-flex rounded-2xl border border-accent-400/20 bg-accent-500/8 px-4 py-3 text-sm leading-7 text-shell-200">
-                {message.content}
-              </div>
-            ) : (
-              <div className="text-[15px] leading-8 text-shell-200">
-                <p className="whitespace-pre-wrap">{message.content}</p>
-              </div>
-            )}
+            <FinalReply text={message.content} />
           </article>
         );
       })}
 
       {/* Streaming agent response (not yet persisted) */}
       {streamingResponse && streamingResponse.status === "running" && (
-        <article className="max-w-4xl">
-          <div className="mb-3 flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-shell-500">
-            <span>Assistant</span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent-500" />
-              思考中…
-            </span>
-          </div>
-          {streamingResponse.steps.length > 0 && (
-            <div className="mb-3 flex flex-col gap-1">
-              {streamingResponse.steps.map((step) => (
-                <div
-                  key={step.id}
-                  className="flex items-center gap-2 rounded-lg border border-step-border bg-step-card px-3 py-2 text-xs text-text-secondary"
-                >
-                  <span
-                    className={`inline-block h-1.5 w-1.5 rounded-full ${
-                      step.status === "executing" ? "animate-pulse bg-status-exec" :
-                      step.status === "success" ? "bg-status-ok" :
-                      "bg-status-err"
-                    }`}
-                  />
-                  <span>
-                    {step.kind === "thinking"
-                      ? "思考中…"
-                      : `${step.toolName ?? "工具"}(${Object.keys(step.toolArgs ?? {}).join(", ")})`
-                    }
-                  </span>
-                  {step.status === "success" && <span className="text-text-muted">✓</span>}
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="text-[15px] leading-8 text-shell-200">
-            <p className="whitespace-pre-wrap">{streamingResponse.finalText || "\u00A0"}</p>
-          </div>
-        </article>
+        <AgentResponseBlock
+          response={streamingResponse}
+          onCancel={onCancelAgent}
+        />
       )}
     </section>
   );

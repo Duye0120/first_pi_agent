@@ -2,6 +2,7 @@ import type { BrowserWindow } from "electron";
 import type { AgentEvent as CoreAgentEvent } from "@mariozechner/pi-agent-core";
 import type { AgentEvent } from "../shared/agent-events.js";
 import { IPC_CHANNELS } from "../shared/ipc.js";
+import { getSettings } from "./settings.js";
 
 /**
  * ElectronAdapter: bridges pi-agent-core events to the renderer via IPC.
@@ -13,6 +14,11 @@ export class ElectronAdapter {
 
   constructor(window: BrowserWindow) {
     this.window = window;
+  }
+
+  /** Current workspace path from settings */
+  get workspacePath(): string {
+    return getSettings().workspace;
   }
 
   setSessionId(id: string): void {

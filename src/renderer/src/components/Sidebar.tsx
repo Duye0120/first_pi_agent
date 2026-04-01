@@ -8,9 +8,10 @@ type SidebarProps = {
   activeSessionId: string | null;
   onSelectSession: (sessionId: string) => void;
   onNewSession: () => void;
+  onOpenSettings: () => void;
 };
 
-export function Sidebar({ summaries, activeSessionId, onSelectSession, onNewSession }: SidebarProps) {
+export function Sidebar({ summaries, activeSessionId, onSelectSession, onNewSession, onOpenSettings }: SidebarProps) {
   return (
     <aside className="flex h-full flex-col bg-transparent">
       <div className="px-3 pb-4 pt-3">
@@ -76,7 +77,7 @@ export function Sidebar({ summaries, activeSessionId, onSelectSession, onNewSess
       </div>
 
       <div className="mt-auto border-t border-black/5 px-3 py-3">
-        <Button variant="ghost" className="flex w-full justify-start gap-3 rounded-xl px-3 py-2 text-left text-sm text-shell-400 hover:bg-white/50">
+        <Button variant="ghost" onClick={onOpenSettings} className="flex w-full justify-start gap-3 rounded-xl px-3 py-2 text-left text-sm text-shell-400 hover:bg-white/50">
           <Cog6ToothIcon className="h-4 w-4" />
           设置
         </Button>

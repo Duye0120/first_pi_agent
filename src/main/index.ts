@@ -9,6 +9,7 @@ import { ElectronAdapter } from "./adapter.js";
 import { initAgent, promptAgent, cancelAgent, getCurrentHandle } from "./agent.js";
 import { getSettings, updateSettings } from "./settings.js";
 import { getMaskedCredentials, setCredential, deleteCredential, testCredential } from "./credentials.js";
+import { getSoulFilesStatus } from "./soul.js";
 
 let mainWindow: BrowserWindow | null = null;
 let adapter: ElectronAdapter | null = null;
@@ -116,6 +117,29 @@ function registerIpcHandlers() {
     deleteCredential(provider));
   ipcMain.handle(IPC_CHANNELS.credentialsTest, async (_event, provider: string, apiKey: string) =>
     testCredential(provider, apiKey));
+
+  // Models
+  ipcMain.handle(IPC_CHANNELS.modelsListAvailable, async () => {
+    const creds = getMaskedCredentials();
+    const models = [
+      { provider: "anthropic", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4", available: !!creds.anthropic?.hasKey },
+      { provider: "anthropic", model: "claude-opus-4-20250514", label: "Claude Opus 4", available: !!creds.anthropic?.hasKey },
+      { provider: "anthropic", model: "claude-haiku-3-5-20241022", label: "Claude Haiku 3.5", available: !!creds.anthropic?.hasKey },
+      { provider: "openai", model: "gpt-4o", label: "GPT-4o", available: !!creds.openai?.hasKey },
+      { provider: "openai", model: "gpt-4o-mini", label: "GPT-4o Mini", available: !!creds.openai?.hasKey },
+      { provider: "google", model: "gemini-2.0-flash", label: "Gemini 2.0 Flash", available: !!creds.google?.hasKey },
+    ];
+    return models;
+  });
+
+  // Workspace
+  ipcMain.handle(IPC_CHANNELS.workspaceChange, async (_event, path: string) => {
+    updateSettings({ workspace: path });
+  });
+  ipcMain.handle(IPC_CHANNELS.workspaceGetSoul, async () => {
+    const settings = getSettings();
+    return getSoulFilesStatus(settings.workspace);
+  });
 
   ipcMain.handle(IPC_CHANNELS.uiGetState, async () => getUiState());
   ipcMain.handle(IPC_CHANNELS.uiSetRightPanelOpen, async (_event, open: boolean) => setRightPanelOpen(open));
