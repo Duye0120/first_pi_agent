@@ -119,12 +119,54 @@
 **index.html:**
 - `body class` 的 `bg-[#e8ecf2]` 改为 `bg-[#f0f0f0]`
 
+### 7. Archive Feature（归档线程）
+
+**概念：** 线程不能直接删除。主列表里只能"归档"，归档后的线程从主列表消失，进入归档列表。只有在归档列表里才能永久删除。
+
+**数据层（contracts.ts + store.ts）：**
+
+- `ChatSession` 新增 `archived?: boolean` 字段（可选，默认 `false`）
+- `ChatSessionSummary` 新增 `archived?: boolean` 字段
+- `store.ts` 新增：
+  - `archiveSession(sessionId: string)` — 将 session 的 `archived` 设为 `true` 并保存
+  - `unarchiveSession(sessionId: string)` — 将 session 的 `archived` 设为 `false` 并保存
+  - `listSessions()` — 只返回 `archived !== true` 的 sessions
+  - `listArchivedSessions()` — 只返回 `archived === true` 的 sessions
+  - `deleteSession()` — 已存在，保持不变（归档页面调用）
+
+**IPC 层（ipc.ts + preload + main/index.ts）：**
+
+- 新增 IPC channels：
+  - `sessions:archive` — 归档指定 session
+  - `sessions:unarchive` — 取消归档
+  - `sessions:list-archived` — 列出已归档 sessions
+  - `sessions:delete` — 永久删除（仅归档页面使用）
+- `DesktopApi.sessions` 新增：
+  - `archive(sessionId: string): Promise<void>`
+  - `unarchive(sessionId: string): Promise<void>`
+  - `listArchived(): Promise<ChatSessionSummary[]>`
+  - `delete(sessionId: string): Promise<void>`
+
+**Sidebar UI：**
+
+- 线程列表底部（设置按钮上方）新增"已归档"入口，样式为小号图标+文字（类似 Codex 的 `归档线程` 按钮）
+- 点击后侧边栏线程列表区域切换为归档列表视图：
+  - 顶部显示 `← 已归档` 返回按钮
+  - 列出所有已归档线程（同样的单行紧凑样式）
+  - 每个归档线程 hover 时显示两个操作：恢复（取消归档） / 删除（永久）
+- 主列表中线程 hover 时显示归档图标按钮（`ArchiveBoxIcon`），点击归档该线程
+
 ## Files to Modify
 
 1. `src/renderer/src/styles/theme.css` — 修改 shell 背景色变量
 2. `src/renderer/src/styles.css` — 滚动条、floating-workspace 圆角
 3. `src/renderer/src/App.tsx` — rightPanelOpen 默认值、grid cols padding、booting/error 页面字号
-4. `src/renderer/src/components/Sidebar.tsx` — 删按钮、重写线程 item
+4. `src/renderer/src/components/Sidebar.tsx` — 删按钮、重写线程 item、新增归档入口和归档列表视图
 5. `src/renderer/src/components/Composer.tsx` — 收紧间距、合并工具栏行
 6. `src/renderer/src/components/MessageList.tsx` — 用户消息右对齐灰泡、助手消息去标签
 7. `src/renderer/index.html` — body 背景色
+8. `src/shared/contracts.ts` — ChatSession/ChatSessionSummary 加 `archived` 字段，DesktopApi 加归档方法
+9. `src/shared/ipc.ts` — 新增归档相关 IPC channel
+10. `src/main/store.ts` — 新增 archiveSession/unarchiveSession/listArchivedSessions
+11. `src/main/index.ts` — 注册归档相关 IPC handler
+12. `src/preload/index.ts` — 暴露归档相关 desktopApi 方法
