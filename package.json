@@ -8,7 +8,8 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "electron-vite dev --watch",
+    "dev:renderer": "electron-vite dev --rendererOnly",
     "demo:cli": "tsx src/main.ts",
     "mcp:dev": "tsx watch src/chatgpt/server.ts",
     "mcp:start": "tsx src/chatgpt/server.ts",

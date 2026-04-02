@@ -2,6 +2,7 @@ import { Component, type ReactNode } from "react";
 import ReactDOM from "react-dom/client";
 import "@heroui/react/styles";
 import App from "./App";
+import { TooltipProvider } from "@renderer/components/ui/tooltip";
 import "./styles.css";
 
 type BoundaryState = {
@@ -47,6 +48,8 @@ class RenderErrorBoundary extends Component<{ children: ReactNode }, BoundarySta
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <RenderErrorBoundary>
-    <App />
+    <TooltipProvider delayDuration={150}>
+      <App />
+    </TooltipProvider>
   </RenderErrorBoundary>,
 );

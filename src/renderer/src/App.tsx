@@ -1,40 +1,25 @@
-import { startTransition, useCallback, useEffect, useRef, useState } from "react";
-import { RectangleGroupIcon } from "@heroicons/react/24/outline";
-import { Button } from "@heroui/react";
-import type { ChatMessage, ChatSession, ChatSessionSummary, ModelSelection, SelectedFile, SessionGroup, ThinkingLevel, WindowFrameState } from "@shared/contracts";
-import { Composer } from "@renderer/components/Composer";
+import { startTransition, useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { CommandLineIcon, RectangleGroupIcon } from "@heroicons/react/24/outline";
+import type { ChatSession, ChatSessionSummary, ModelSelection, SessionGroup, ThinkingLevel, WindowFrameState } from "@shared/contracts";
+import { AssistantThreadPanel } from "@renderer/components/AssistantThreadPanel";
 import { ContextPanel } from "@renderer/components/ContextPanel";
-import { MessageList } from "@renderer/components/MessageList";
 import { Sidebar } from "@renderer/components/Sidebar";
 import { TitleBar } from "@renderer/components/TitleBar";
 import { SettingsModal } from "@renderer/components/SettingsModal";
 import { TerminalDrawer } from "@renderer/components/TerminalDrawer";
-import { deriveSessionTitle, mergeAttachments, upsertSummary } from "@renderer/lib/session";
-import { useAgentEvents } from "@renderer/hooks/useAgentEvents";
+import { Button } from "@renderer/components/ui/button";
+import { mergeAttachments, upsertSummary } from "@renderer/lib/session";
 
 const ACTIVE_SESSION_STORAGE_KEY = "first-pi-agent.active-session-id";
-
-function buildUserMessage(text: string, attachments: SelectedFile[]): ChatMessage {
-  const trimmed = text.trim();
-  const fallback = attachments.length > 0 ? `附加了 ${attachments.length} 个本地文件。` : "空消息";
-
-  return {
-    id: crypto.randomUUID(),
-    role: "user",
-    content: trimmed || fallback,
-    timestamp: new Date().toISOString(),
-    status: "done",
-    meta: {
-      attachmentIds: attachments.map((attachment) => attachment.id),
-    },
-  };
-}
+const SIDEBAR_WIDTH_STORAGE_KEY = "first-pi-agent.sidebar-width";
+const DEFAULT_SIDEBAR_WIDTH = 292;
+const MIN_SIDEBAR_WIDTH = 244;
+const MAX_SIDEBAR_WIDTH = 420;
 
 export default function App() {
   const desktopApi = window.desktopApi;
   const [booting, setBooting] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
-  const [isSending, setIsSending] = useState(false);
   const [isPickingFiles, setIsPickingFiles] = useState(false);
   const [summaries, setSummaries] = useState<ChatSessionSummary[]>([]);
   const [archivedSummaries, setArchivedSummaries] = useState<ChatSessionSummary[]>([]);
@@ -44,14 +29,25 @@ export default function App() {
   const [frameState, setFrameState] = useState<WindowFrameState>({ isMaximized: false });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_SIDEBAR_WIDTH;
+    }
+
+    const storedWidth = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+    if (!Number.isFinite(storedWidth)) {
+      return DEFAULT_SIDEBAR_WIDTH;
+    }
+
+    return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, storedWidth));
+  });
   const [currentModel, setCurrentModel] = useState<ModelSelection>({ provider: "anthropic", model: "claude-sonnet-4-20250514" });
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("off");
 
   const activeSessionId = activeSession?.id ?? null;
-  const { currentResponse, isAgentRunning, cancel, buildAssistantMessage } = useAgentEvents();
-  const prevResponseRef = useRef(currentResponse);
   const summariesRef = useRef<ChatSessionSummary[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
+  const sidebarWidthRef = useRef(sidebarWidth);
 
   useEffect(() => {
     summariesRef.current = summaries;
@@ -60,6 +56,11 @@ export default function App() {
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
+
+  useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth;
+    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
+  }, [sidebarWidth]);
 
   const hydrateSession = useCallback((session: ChatSession) => {
     startTransition(() => {
@@ -145,24 +146,6 @@ export default function App() {
       setBooting(false);
     }
   }, [desktopApi, hydrateSession]);
-
-  useEffect(() => {
-    if (
-      currentResponse &&
-      currentResponse !== prevResponseRef.current &&
-      (currentResponse.status === "completed" || currentResponse.status === "error") &&
-      activeSession
-    ) {
-      prevResponseRef.current = currentResponse;
-      const assistantMessage = buildAssistantMessage(currentResponse);
-      const nextSession: ChatSession = {
-        ...activeSession,
-        messages: [...activeSession.messages, assistantMessage],
-        updatedAt: assistantMessage.timestamp,
-      };
-      persistSession(nextSession);
-    }
-  }, [currentResponse, activeSession, buildAssistantMessage, persistSession]);
 
   useEffect(() => {
     void bootApp();
@@ -284,6 +267,41 @@ export default function App() {
     void createNewSession();
   }, [createNewSession, desktopApi, refreshSessionLists, selectSession]);
 
+  const renameSession = useCallback(async (sessionId: string, title: string) => {
+    if (!desktopApi) {
+      return;
+    }
+
+    const nextTitle = title.trim();
+    if (!nextTitle) {
+      return;
+    }
+
+    await desktopApi.sessions.rename(sessionId, nextTitle);
+
+    setSummaries((prev) =>
+      prev.map((summary) =>
+        summary.id === sessionId
+          ? { ...summary, title: nextTitle, updatedAt: new Date().toISOString() }
+          : summary,
+      ),
+    );
+
+    setArchivedSummaries((prev) =>
+      prev.map((summary) =>
+        summary.id === sessionId
+          ? { ...summary, title: nextTitle, updatedAt: new Date().toISOString() }
+          : summary,
+      ),
+    );
+
+    setActiveSession((current) =>
+      current && current.id === sessionId
+        ? { ...current, title: nextTitle, updatedAt: new Date().toISOString() }
+        : current,
+    );
+  }, [desktopApi]);
+
   const createGroup = useCallback(async (name: string) => {
     if (!desktopApi) return;
     const group = await desktopApi.groups.create(name);
@@ -312,25 +330,6 @@ export default function App() {
       prev.map((s) => (s.id === sessionId ? { ...s, groupId: groupId ?? undefined } : s))
     );
   }, [desktopApi]);
-
-  const updateDraft = useCallback(
-    (draft: string) => {
-      setActiveSession((current) => {
-        if (!current) {
-          return current;
-        }
-
-        const nextSession = {
-          ...current,
-          draft,
-        };
-
-        void desktopApi?.sessions.save(nextSession);
-        return nextSession;
-      });
-    },
-    [desktopApi],
-  );
 
   const attachFiles = useCallback(async () => {
     if (!activeSession || !desktopApi) {
@@ -391,65 +390,6 @@ export default function App() {
     [activeSession, persistSession],
   );
 
-  const sendMessage = useCallback(async () => {
-    if (!activeSession || isSending) {
-      return;
-    }
-
-    const text = activeSession.draft.trim();
-    const attachments = activeSession.attachments;
-
-    if (!text && attachments.length === 0) {
-      return;
-    }
-
-    setIsSending(true);
-
-    try {
-      const userMessage = buildUserMessage(text, attachments);
-      const nextSessionTitle =
-        activeSession.messages.length === 0 ? deriveSessionTitle(text, attachments) : activeSession.title;
-
-      const sessionAfterUserMessage: ChatSession = {
-        ...activeSession,
-        title: nextSessionTitle,
-        messages: [...activeSession.messages, userMessage],
-        draft: "",
-        attachments: [],
-        updatedAt: userMessage.timestamp,
-      };
-
-      persistSession(sessionAfterUserMessage);
-
-      if (!desktopApi) {
-        throw new Error("桌面桥接不可用，无法发送消息。");
-      }
-
-      await desktopApi.chat.send({
-        sessionId: activeSession.id,
-        text,
-        attachmentIds: attachments.map((attachment) => attachment.id),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "发送失败，请稍后重试。";
-      const systemMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "system",
-        content: message,
-        timestamp: new Date().toISOString(),
-        status: "error",
-      };
-
-      persistSession({
-        ...activeSession,
-        messages: [...activeSession.messages, systemMessage],
-        updatedAt: systemMessage.timestamp,
-      });
-    } finally {
-      setIsSending(false);
-    }
-  }, [activeSession, desktopApi, isSending, persistSession]);
-
   const toggleRightPanel = useCallback(() => {
     const nextOpen = !rightPanelOpen;
     setRightPanelOpen(nextOpen);
@@ -465,6 +405,34 @@ export default function App() {
     setThinkingLevel(level);
     void desktopApi?.settings.update({ thinkingLevel: level });
   }, [desktopApi]);
+
+  const startSidebarResize = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startWidth = sidebarWidthRef.current;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const proposedWidth = startWidth + moveEvent.clientX - startX;
+      const nextWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, proposedWidth));
+      setSidebarWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }, []);
 
   if (booting) {
     return (
@@ -492,82 +460,101 @@ export default function App() {
   }
 
   return (
-    <main className="flex h-screen flex-col bg-[#f0f0f0] text-gray-800">
+    <main className="flex h-screen flex-col bg-shell-window text-foreground">
       <TitleBar
         isMaximized={frameState.isMaximized}
         onMinimize={() => desktopApi?.window.minimize()}
         onToggleMaximize={() => desktopApi?.window.toggleMaximize()}
         onClose={() => desktopApi?.window.close()}
       />
-      <div className="grid min-h-0 flex-1 grid-cols-[200px_minmax(0,1fr)]">
-        <Sidebar
-          summaries={summaries}
-          activeSessionId={activeSessionId}
-          onSelectSession={selectSession}
-          onNewSession={createNewSession}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onArchiveSession={archiveSession}
-          onUnarchiveSession={unarchiveSession}
-          onDeleteSession={deleteSessionPermanently}
-          archivedSummaries={archivedSummaries}
-          groups={groups}
-          onCreateGroup={createGroup}
-          onRenameGroup={renameGroup}
-          onDeleteGroup={deleteGroup}
-          onSetSessionGroup={setSessionGroup}
-        />
+      <div
+        className="grid min-h-0 flex-1 overflow-hidden bg-shell-window"
+        style={{ gridTemplateColumns: `${sidebarWidth}px minmax(0, 1fr)` }}
+      >
+        <aside className="relative min-h-0 bg-transparent">
+          <Sidebar
+            summaries={summaries}
+            activeSessionId={activeSessionId}
+            onSelectSession={selectSession}
+            onNewSession={createNewSession}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onArchiveSession={archiveSession}
+            onUnarchiveSession={unarchiveSession}
+            onDeleteSession={deleteSessionPermanently}
+            onRenameSession={renameSession}
+            archivedSummaries={archivedSummaries}
+            groups={groups}
+            onCreateGroup={createGroup}
+            onRenameGroup={renameGroup}
+            onDeleteGroup={deleteGroup}
+            onSetSessionGroup={setSessionGroup}
+          />
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整侧边栏宽度"
+            onMouseDown={startSidebarResize}
+            className="group absolute inset-y-0 right-0 z-20 flex w-3 translate-x-1/2 cursor-col-resize items-center justify-center"
+          >
+            <div className="h-14 w-[2px] rounded-full bg-shell-resize transition group-hover:h-24 group-hover:bg-shell-resize-hover" />
+          </div>
+        </aside>
 
-        <section className="flex min-h-0 flex-col overflow-hidden">
-          <div className="floating-workspace flex min-h-0 flex-1 flex-col overflow-hidden rounded-tl-xl border-l border-black/8 bg-white">
-            <div className="flex items-center justify-between border-b border-black/6 px-4 py-2">
-              <h1 className="truncate text-[13px] font-medium text-gray-500">{activeSession?.title ?? "新线程"}</h1>
+        <section className="relative flex min-h-0 flex-col overflow-hidden bg-shell-window">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[30px] border border-shell-border border-r-0 border-b-0 bg-shell-panel shadow-none">
+            <div className="flex items-center justify-end gap-2 px-5 pb-3 pt-4">
               <Button
-                isIconOnly
-                variant="ghost"
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setTerminalOpen((prev) => !prev)}
+                className={`h-9 w-9 rounded-xl border-shell-border bg-shell-toolbar text-muted-foreground shadow-none hover:bg-shell-toolbar-hover hover:text-foreground ${terminalOpen ? "border-shell-border bg-shell-panel text-foreground" : ""}`}
+                aria-label={terminalOpen ? "收起终端" : "展开终端"}
+              >
+                <CommandLineIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
                 onClick={toggleRightPanel}
-                className="heroui-ghost-button h-7 min-w-7 rounded-md"
+                className={`h-9 w-9 rounded-xl border-shell-border bg-shell-toolbar text-muted-foreground shadow-none hover:bg-shell-toolbar-hover hover:text-foreground ${rightPanelOpen ? "border-shell-border bg-shell-panel text-foreground" : ""}`}
                 aria-label={rightPanelOpen ? "收起右侧上下文" : "展开右侧上下文"}
               >
                 <RectangleGroupIcon className="h-4 w-4" />
               </Button>
             </div>
 
-            <div className={`grid min-h-0 flex-1 ${rightPanelOpen ? "grid-cols-[minmax(0,1fr)_300px]" : "grid-cols-[minmax(0,1fr)]"}`}>
-              <section className="flex min-h-0 flex-col bg-transparent">
-                <div className="min-h-0 flex-1 overflow-y-auto">
-                  <MessageList
-                    messages={activeSession?.messages ?? []}
-                    streamingResponse={currentResponse}
-                    onCancelAgent={cancel}
+            <div className={`grid min-h-0 flex-1 bg-shell-panel ${rightPanelOpen ? "grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-[minmax(0,1fr)]"}`}>
+              <section className="flex min-h-0 flex-col bg-shell-panel">
+                {activeSession && desktopApi ? (
+                  <AssistantThreadPanel
+                    session={activeSession}
+                    desktopApi={desktopApi}
+                    onPersistSession={persistSession}
+                    currentModel={currentModel}
+                    thinkingLevel={thinkingLevel}
+                    isPickingFiles={isPickingFiles}
+                    onAttachFiles={attachFiles}
+                    onRemoveAttachment={removeAttachment}
+                    onModelChange={handleModelChange}
+                    onThinkingLevelChange={handleThinkingLevelChange}
                   />
-                </div>
-
-                <Composer
-                  draft={activeSession?.draft ?? ""}
-                  attachments={activeSession?.attachments ?? []}
-                  isSending={isSending}
-                  isAgentRunning={isAgentRunning}
-                  isPickingFiles={isPickingFiles}
-                  currentModel={currentModel}
-                  thinkingLevel={thinkingLevel}
-                  onDraftChange={updateDraft}
-                  onAttachFiles={attachFiles}
-                  onRemoveAttachment={removeAttachment}
-                  onSend={() => void sendMessage()}
-                  onCancel={cancel}
-                  onModelChange={handleModelChange}
-                  onThinkingLevelChange={handleThinkingLevelChange}
-                />
+                ) : (
+                  <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
+                    当前没有可用线程。
+                  </div>
+                )}
               </section>
 
               {rightPanelOpen ? <ContextPanel open={rightPanelOpen} session={activeSession} /> : null}
             </div>
-          </div>
 
-          <TerminalDrawer
-            open={terminalOpen}
-            onToggle={() => setTerminalOpen((prev) => !prev)}
-          />
+            <TerminalDrawer
+              open={terminalOpen}
+              onToggle={() => setTerminalOpen((prev) => !prev)}
+            />
+          </div>
         </section>
       </div>
 

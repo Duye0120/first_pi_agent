@@ -189,6 +189,7 @@ export type DesktopApi = {
     listArchived: () => Promise<ChatSessionSummary[]>;
     delete: (sessionId: string) => Promise<void>;
     setGroup: (sessionId: string, groupId: string | null) => Promise<void>;
+    rename: (sessionId: string, title: string) => Promise<void>;
   };
   groups: {
     list: () => Promise<SessionGroup[]>;

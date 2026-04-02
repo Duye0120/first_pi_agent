@@ -10,28 +10,58 @@
  * ────────────────────────────────────────────────────────────── */
 
 :root {
+  --background: 214 25% 96%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 222 47% 11%;
+  --primary-foreground: 210 20% 98%;
+  --secondary: 210 32% 97%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 26% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 210 28% 95%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 210 20% 98%;
+  --border: 214 22% 88%;
+  --input: 214 22% 88%;
+  --ring: 221 83% 53%;
+
   /* ── Global Base ─────────────────────────────────────────── */
   --color-bg-primary:        #ffffff;
-  --color-bg-secondary:      #f9fafb;
-  --color-bg-tertiary:       #f3f4f6;
-  --color-bg-shell:          #f0f0f0;
+  --color-bg-secondary:      #f8fafc;
+  --color-bg-tertiary:       #f1f5f9;
+  --color-bg-shell:          #f8fafc;
+  --color-shell-window:      #e8edf3;
+  --color-shell-panel:       #ffffff;
+  --color-shell-panel-muted: #f8fafc;
+  --color-shell-border:      #dbe2ea;
+  --color-shell-toolbar:     #f8fafc;
+  --color-shell-toolbar-hover:#eef2f7;
+  --color-shell-hover:       rgba(255, 255, 255, 0.72);
+  --color-shell-terminal:    #fbfcfe;
+  --color-shell-resize-handle: rgba(15, 23, 42, 0.07);
+  --color-shell-resize-handle-hover: rgba(15, 23, 42, 0.14);
   --color-text-primary:      #111827;
-  --color-text-secondary:    #6b7280;
-  --color-text-muted:        #9ca3af;
-  --color-border:            #e5e7eb;
-  --color-border-light:      #f3f4f6;
+  --color-text-secondary:    #475569;
+  --color-text-muted:        #64748b;
+  --color-border:            #e2e8f0;
+  --color-border-light:      #f1f5f9;
 
   /* ── Step Cards ──────────────────────────────────────────── */
-  --color-step-bg:           #f9fafb;
-  --color-step-bg-hover:     #f3f4f6;
-  --color-step-border:       #e5e7eb;
+  --color-step-bg:           #ffffff;
+  --color-step-bg-hover:     #f8fafc;
+  --color-step-border:       #e2e8f0;
 
   /* ── Status Bars ─────────────────────────────────────────── */
-  --color-status-executing:  #3b82f6;
-  --color-status-success:    #10b981;
-  --color-status-error:      #ef4444;
-  --color-status-thinking:   #8b5cf6;
-  --color-status-cancelled:  #9ca3af;
+  --color-status-executing:  #2563eb;
+  --color-status-success:    #16a34a;
+  --color-status-error:      #dc2626;
+  --color-status-thinking:   #7c3aed;
+  --color-status-cancelled:  #94a3b8;
 
   /* ── Code / Terminal ─────────────────────────────────────── */
   --color-code-bg:           #f8fafc;
@@ -53,7 +83,7 @@
   --color-diff-line-number:  var(--color-text-muted);
 
   /* ── Accent / Interactive ────────────────────────────────── */
-  --color-accent:            #3b82f6;
-  --color-accent-hover:      #2563eb;
-  --color-accent-subtle:     #eff6ff;
+  --color-accent:            #2563eb;
+  --color-accent-hover:      #1d4ed8;
+  --color-accent-subtle:     #dbeafe;
 }
