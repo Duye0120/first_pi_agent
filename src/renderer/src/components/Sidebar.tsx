@@ -23,6 +23,7 @@ type SidebarProps = {
   onArchiveSession: (sessionId: string) => void;
   onUnarchiveSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
+  onRenameSession: (sessionId: string, title: string) => void;
   archivedSummaries: ChatSessionSummary[];
   groups: SessionGroup[];
   onCreateGroup: (name: string) => void;
@@ -40,6 +41,7 @@ export function Sidebar({
   onArchiveSession,
   onUnarchiveSession,
   onDeleteSession,
+  onRenameSession,
   archivedSummaries,
   groups,
   onCreateGroup,
@@ -53,6 +55,9 @@ export function Sidebar({
   const [newGroupName, setNewGroupName] = useState("");
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [threadMenuOpenFor, setThreadMenuOpenFor] = useState<string | null>(null);
+  const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
+  const [sessionRenameValue, setSessionRenameValue] = useState("");
   const [movingSessionId, setMovingSessionId] = useState<string | null>(null);
   const [groupMenuOpenFor, setGroupMenuOpenFor] = useState<string | null>(null);
   // Drag & drop state
@@ -62,6 +67,7 @@ export function Sidebar({
 
   const newGroupInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const renameSessionInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (creatingGroup) newGroupInputRef.current?.focus();
@@ -72,14 +78,19 @@ export function Sidebar({
   }, [renamingGroupId]);
 
   useEffect(() => {
-    if (!groupMenuOpenFor && !movingSessionId) return;
+    if (renamingSessionId) renameSessionInputRef.current?.focus();
+  }, [renamingSessionId]);
+
+  useEffect(() => {
+    if (!groupMenuOpenFor && !movingSessionId && !threadMenuOpenFor) return;
     const handler = () => {
       setGroupMenuOpenFor(null);
       setMovingSessionId(null);
+      setThreadMenuOpenFor(null);
     };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
-  }, [groupMenuOpenFor, movingSessionId]);
+  }, [groupMenuOpenFor, movingSessionId, threadMenuOpenFor]);
 
   const toggleGroupCollapse = (groupId: string) => {
     setCollapsedGroups((prev) => {
@@ -105,6 +116,14 @@ export function Sidebar({
     setRenameValue("");
   };
 
+  const submitRenameSession = () => {
+    if (renamingSessionId && sessionRenameValue.trim()) {
+      onRenameSession(renamingSessionId, sessionRenameValue.trim());
+    }
+    setRenamingSessionId(null);
+    setSessionRenameValue("");
+  };
+
   const ungroupedSessions = summaries.filter((s) => !s.groupId);
   const groupedSessions = groups.map((group) => ({
     group,
@@ -114,6 +133,8 @@ export function Sidebar({
   const renderThreadItem = (summary: ChatSessionSummary, indented = false) => {
     const active = summary.id === activeSessionId;
     const isMoving = movingSessionId === summary.id;
+    const isThreadMenuOpen = threadMenuOpenFor === summary.id;
+    const isRenaming = renamingSessionId === summary.id;
 
     return (
       <div key={summary.id} className="relative">
@@ -135,46 +156,94 @@ export function Sidebar({
             onSelectSession(summary.id);
             setMovingSessionId(null);
             setGroupMenuOpenFor(null);
+            setThreadMenuOpenFor(null);
           }}
-          className={`group flex cursor-pointer items-center rounded-md py-1.5 transition ${indented ? "pl-5 pr-2" : "px-2.5"
-            } ${active ? "bg-white shadow-sm" : "hover:bg-black/[0.04]"}`}
+          className={`group flex cursor-pointer items-center rounded-xl py-2 transition ${indented ? "pl-6 pr-2.5" : "px-3"
+            } ${active ? "border border-shell-border bg-shell-panel" : "border border-transparent hover:bg-shell-hover"}`}
         >
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className={`truncate text-[12px] ${active ? "text-gray-800" : "text-gray-600"}`}>
-                {summary.title}
-              </span>
-              <span className="shrink-0 text-[10px] text-gray-400">
+            <div className="flex items-center justify-between gap-2">
+              {isRenaming ? (
+                <input
+                  ref={renameSessionInputRef}
+                  type="text"
+                  value={sessionRenameValue}
+                  onChange={(e) => setSessionRenameValue(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submitRenameSession();
+                    else if (e.key === "Escape") {
+                      setRenamingSessionId(null);
+                      setSessionRenameValue("");
+                    }
+                  }}
+                  onBlur={submitRenameSession}
+                  className="min-w-0 flex-1 border-none bg-transparent p-0 text-[12px] font-medium text-foreground outline-none"
+                />
+              ) : (
+                <span className={`truncate text-[12px] ${active ? "font-medium text-foreground" : "text-foreground/80"}`}>
+                  {summary.title}
+                </span>
+              )}
+              <span className="shrink-0 text-[10px] text-muted-foreground">
                 {formatRelativeTime(summary.updatedAt)}
               </span>
             </div>
           </div>
-          <div className="ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-            {groups.length > 0 && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMovingSessionId(isMoving ? null : summary.id);
-                  setGroupMenuOpenFor(null);
-                }}
-                className="cursor-pointer rounded p-0.5 text-gray-400 hover:bg-black/5 hover:text-gray-600"
-                title="移动到分组"
-              >
-                <FolderIcon className="h-3 w-3" />
-              </button>
-            )}
+          <div className="relative ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onArchiveSession(summary.id);
+                setThreadMenuOpenFor(isThreadMenuOpen ? null : summary.id);
+                setGroupMenuOpenFor(null);
+                setMovingSessionId(null);
               }}
-              className="cursor-pointer rounded p-0.5 text-gray-400 hover:bg-black/5 hover:text-gray-600"
-              title="归档"
+              className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-shell-panel hover:text-foreground"
+              title="更多"
             >
-              <ArchiveBoxIcon className="h-3 w-3" />
+              <EllipsisHorizontalIcon className="h-3.5 w-3.5" />
             </button>
+            {isThreadMenuOpen ? (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="absolute right-0 top-full z-20 mt-1 min-w-[132px] rounded-xl border border-shell-border bg-popover py-1 shadow-lg"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRenamingSessionId(summary.id);
+                    setSessionRenameValue(summary.title);
+                    setThreadMenuOpenFor(null);
+                  }}
+                  className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-foreground hover:bg-accent"
+                >
+                  重命名
+                </button>
+                {groups.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMovingSessionId(isMoving ? null : summary.id);
+                      setThreadMenuOpenFor(null);
+                    }}
+                    className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-foreground hover:bg-accent"
+                  >
+                    分组
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onArchiveSession(summary.id);
+                    setThreadMenuOpenFor(null);
+                  }}
+                  className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-foreground hover:bg-accent"
+                >
+                  归档
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -182,7 +251,7 @@ export function Sidebar({
         {isMoving && (
           <div
             onClick={(e) => e.stopPropagation()}
-            className={`mx-2 mb-1 rounded-md border border-black/8 bg-white py-1 shadow-sm ${indented ? "ml-5" : ""}`}
+            className={`mx-2 mb-2 rounded-xl border border-shell-border bg-popover py-1 shadow-lg ${indented ? "ml-6" : ""}`}
           >
             {summary.groupId && (
               <button
@@ -191,7 +260,7 @@ export function Sidebar({
                   onSetSessionGroup(summary.id, null);
                   setMovingSessionId(null);
                 }}
-                className="flex w-full cursor-pointer items-center gap-2 px-2.5 py-1 text-[11px] text-gray-500 hover:bg-black/[0.04] hover:text-gray-700"
+                className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 移出分组
               </button>
@@ -204,12 +273,12 @@ export function Sidebar({
                   onSetSessionGroup(summary.id, g.id);
                   setMovingSessionId(null);
                 }}
-                className={`flex w-full cursor-pointer items-center gap-2 px-2.5 py-1 text-[11px] hover:bg-black/[0.04] ${summary.groupId === g.id ? "text-gray-800" : "text-gray-500 hover:text-gray-700"
+                className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-accent ${summary.groupId === g.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                   }`}
               >
-                <FolderIcon className="h-3 w-3 shrink-0 text-gray-400" />
+                <FolderIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
                 <span className="truncate">{g.name}</span>
-                {summary.groupId === g.id && <span className="ml-auto text-[10px] text-gray-400">✓</span>}
+                {summary.groupId === g.id && <span className="ml-auto text-[10px] text-muted-foreground">✓</span>}
               </button>
             ))}
           </div>
@@ -219,33 +288,33 @@ export function Sidebar({
   };
 
   return (
-    <aside className="flex h-full flex-col bg-transparent text-[13px]">
+    <aside className="flex h-full bg-transparent flex-col text-[13px] text-foreground">
       {/* Top: New thread */}
-      <div className="px-2 pb-1 pt-2">
+      <div className="px-3 pb-3 pt-3">
         <button
           type="button"
           onClick={onNewSession}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-gray-700 transition hover:bg-black/[0.05]"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-xl border border-shell-border bg-shell-panel px-3 py-2.5 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
         >
-          <PlusIcon className="h-3.5 w-3.5" />
+          <PlusIcon className="h-4 w-4" />
           <span>新线程</span>
         </button>
       </div>
 
       {/* Threads header */}
-      <div className="flex items-center px-3 pb-1 pt-2">
+      <div className="flex items-center px-4 pb-2 pt-1">
         {showArchived ? (
           <button
             type="button"
             onClick={() => setShowArchived(false)}
-            className="flex cursor-pointer items-center gap-1.5 text-[11px] text-gray-500 transition hover:text-gray-700"
+            className="flex cursor-pointer items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-muted-foreground transition hover:text-foreground"
           >
             <ArrowUturnLeftIcon className="h-3 w-3" />
             <span>返回</span>
           </button>
         ) : (
           <>
-            <span className="flex-1 text-[11px] font-medium text-gray-500">线程</span>
+            <span className="flex-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">线程</span>
             <button
               type="button"
               onClick={(e) => {
@@ -254,7 +323,7 @@ export function Sidebar({
                 setGroupMenuOpenFor(null);
                 setMovingSessionId(null);
               }}
-              className="cursor-pointer rounded p-0.5 text-gray-400 transition hover:bg-black/5 hover:text-gray-600"
+              className="cursor-pointer rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-foreground"
               title="新建分组"
             >
               <FolderPlusIcon className="h-3.5 w-3.5" />
@@ -266,14 +335,14 @@ export function Sidebar({
       {/* Thread list */}
       <div className="flex-1 overflow-y-auto pb-2">
         {showArchived ? (
-          <div className="space-y-px px-2">
+          <div className="space-y-1 px-3">
             {archivedSummaries.length === 0 ? (
-              <p className="px-2 py-4 text-center text-[11px] text-gray-400">没有已归档的线程</p>
+              <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">没有已归档的线程</p>
             ) : (
               archivedSummaries.map((summary) => (
                 <div
                   key={summary.id}
-                  className="group flex cursor-pointer items-center justify-between rounded-md px-2.5 py-1.5 transition hover:bg-black/[0.04]"
+                  className="group flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 transition hover:bg-shell-hover"
                 >
                   <button
                     type="button"
@@ -283,13 +352,13 @@ export function Sidebar({
                     }}
                     className="min-w-0 flex-1 cursor-pointer text-left"
                   >
-                    <span className="block truncate text-[12px] text-gray-600">{summary.title}</span>
+                    <span className="block truncate text-[12px] text-foreground">{summary.title}</span>
                   </button>
                   <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
                     <button
                       type="button"
                       onClick={() => onUnarchiveSession(summary.id)}
-                      className="cursor-pointer rounded p-0.5 text-gray-500 hover:bg-black/5 hover:text-gray-700"
+                      className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background hover:text-foreground"
                       title="恢复"
                     >
                       <ArrowUturnLeftIcon className="h-3 w-3" />
@@ -297,7 +366,7 @@ export function Sidebar({
                     <button
                       type="button"
                       onClick={() => onDeleteSession(summary.id)}
-                      className="cursor-pointer rounded p-0.5 text-gray-500 hover:bg-red-50 hover:text-red-500"
+                      className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       title="永久删除"
                     >
                       <TrashIcon className="h-3 w-3" />
@@ -308,14 +377,41 @@ export function Sidebar({
             )}
           </div>
         ) : (
-          <div className="px-2">
+          <div
+            className={`px-3 transition-colors ${dragOverUngrouped ? "rounded-2xl bg-shell-hover" : ""}`}
+            onDragOver={(e) => {
+              if (dragSessionIdRef.current) {
+                const sid = dragSessionIdRef.current;
+                const s = summaries.find((x) => x.id === sid);
+                if (s?.groupId) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setDragOverUngrouped(true);
+                  setDragOverGroupId(null);
+                }
+              }
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setDragOverUngrouped(false);
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const sid = dragSessionIdRef.current;
+              if (sid) onSetSessionGroup(sid, null);
+              setDragOverUngrouped(false);
+              setDragOverGroupId(null);
+              dragSessionIdRef.current = null;
+            }}
+          >
             {/* Create group input */}
             {creatingGroup && (
-              <div className="flex items-center rounded-md px-1.5 py-1">
+              <div className="mb-2 flex items-center rounded-xl border border-shell-border bg-shell-panel px-2 py-2">
                 <span className="shrink-0 text-transparent">
                   <ChevronRightIcon className="h-3 w-3" />
                 </span>
-                <FolderIcon className="h-3.5 w-3.5 shrink-0 text-gray-400 ml-1.5" />
+                <FolderIcon className="ml-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <input
                   ref={newGroupInputRef}
                   type="text"
@@ -330,7 +426,7 @@ export function Sidebar({
                   }}
                   onBlur={submitCreateGroup}
                   placeholder="分组名称..."
-                  className="min-w-0 flex-1 bg-transparent border-none p-0 text-[12px] text-gray-700 outline-none ml-1.5 placeholder:text-gray-400/70"
+                  className="ml-1.5 min-w-0 flex-1 border-none bg-transparent p-0 text-[12px] text-foreground outline-none placeholder:text-muted-foreground/70"
                 />
               </div>
             )}
@@ -345,8 +441,9 @@ export function Sidebar({
               return (
                 <div
                   key={group.id}
-                  className={`mb-1 rounded-md transition-colors ${isDragOver ? "bg-black/[0.04] ring-1 ring-inset ring-black/10" : ""}`}
+                  className={`mb-2 rounded-2xl border border-transparent transition-colors ${isDragOver ? "border-shell-border bg-shell-hover" : "bg-transparent"}`}
                   onDragOver={(e) => {
+                    e.stopPropagation();
                     e.preventDefault();
                     e.dataTransfer.dropEffect = "move";
                     setDragOverGroupId(group.id);
@@ -358,6 +455,7 @@ export function Sidebar({
                     }
                   }}
                   onDrop={(e) => {
+                    e.stopPropagation();
                     e.preventDefault();
                     const sid = dragSessionIdRef.current;
                     if (sid) onSetSessionGroup(sid, group.id);
@@ -366,18 +464,18 @@ export function Sidebar({
                   }}
                 >
                   {/* Group header */}
-                  <div className="group flex items-center rounded-md px-1.5 py-1 transition hover:bg-black/[0.04]">
+                  <div className="group flex items-center rounded-2xl px-2 py-2 transition hover:bg-shell-hover">
                     <button
                       type="button"
                       onClick={() => toggleGroupCollapse(group.id)}
                       className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5"
                     >
-                      <span className="shrink-0 text-gray-400">
+                      <span className="shrink-0 text-muted-foreground">
                         {collapsed
                           ? <ChevronRightIcon className="h-3 w-3" />
                           : <ChevronDownIcon className="h-3 w-3" />}
                       </span>
-                      <FolderIcon className={`h-3.5 w-3.5 shrink-0 transition-colors ${isDragOver ? "text-gray-600" : "text-gray-400"}`} />
+                      <FolderIcon className={`h-3.5 w-3.5 shrink-0 transition-colors ${isDragOver ? "text-foreground" : "text-muted-foreground"}`} />
                       {isRenaming ? (
                         <input
                           ref={renameInputRef}
@@ -390,10 +488,10 @@ export function Sidebar({
                             else if (e.key === "Escape") setRenamingGroupId(null);
                           }}
                           onBlur={submitRenameGroup}
-                          className="min-w-0 flex-1 bg-transparent border-none p-0 text-[12px] font-medium text-gray-700 outline-none"
+                          className="min-w-0 flex-1 border-none bg-transparent p-0 text-[12px] font-medium text-foreground outline-none"
                         />
                       ) : (
-                        <span className="truncate text-[12px] font-medium text-gray-600">{group.name}</span>
+                        <span className="truncate text-[12px] font-medium text-foreground">{group.name}</span>
                       )}
                     </button>
 
@@ -406,7 +504,7 @@ export function Sidebar({
                           setGroupMenuOpenFor(isGroupMenuOpen ? null : group.id);
                           setMovingSessionId(null);
                         }}
-                        className="cursor-pointer rounded p-0.5 text-gray-300 opacity-0 transition hover:bg-black/5 hover:text-gray-600 group-hover:opacity-100"
+                        className="cursor-pointer rounded-md p-1 text-muted-foreground opacity-0 transition hover:bg-shell-panel hover:text-foreground group-hover:opacity-100"
                         title="分组操作"
                       >
                         <EllipsisHorizontalIcon className="h-3.5 w-3.5" />
@@ -414,7 +512,7 @@ export function Sidebar({
                       {isGroupMenuOpen && (
                         <div
                           onClick={(e) => e.stopPropagation()}
-                          className="absolute right-0 top-full z-20 mt-0.5 min-w-[88px] rounded-md border border-black/8 bg-white py-1 shadow-md"
+                          className="absolute right-0 top-full z-20 mt-1 min-w-[88px] rounded-xl border border-shell-border bg-popover py-1 shadow-lg"
                         >
                           <button
                             type="button"
@@ -423,7 +521,7 @@ export function Sidebar({
                               setRenameValue(group.name);
                               setGroupMenuOpenFor(null);
                             }}
-                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-gray-600 hover:bg-black/[0.04]"
+                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-foreground hover:bg-accent"
                           >
                             重命名
                           </button>
@@ -433,7 +531,7 @@ export function Sidebar({
                               onDeleteGroup(group.id);
                               setGroupMenuOpenFor(null);
                             }}
-                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-red-500 hover:bg-red-50"
+                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-destructive hover:bg-destructive/10"
                           >
                             删除分组
                           </button>
@@ -446,7 +544,7 @@ export function Sidebar({
                   {!collapsed && (
                     <div className="space-y-px">
                       {sessions.length === 0 ? (
-                        <p className={`py-1 pl-7 text-[11px] ${isDragOver ? "text-gray-400" : "text-gray-300"}`}>
+                        <p className={`py-1 pl-7 text-[11px] ${isDragOver ? "text-muted-foreground" : "text-muted-foreground/70"}`}>
                           {isDragOver ? "松开鼠标放入分组" : "暂无线程"}
                         </p>
                       ) : (
@@ -458,62 +556,34 @@ export function Sidebar({
               );
             })}
 
-            {/* Ungrouped sessions — also a drop target (to remove from group) */}
-            {ungroupedSessions.length > 0 && (
-              <div
-                className={`space-y-px transition-colors ${groupedSessions.length > 0 ? "mt-1 border-t border-black/4 pt-1" : ""} ${dragOverUngrouped ? "rounded-md bg-black/[0.03]" : ""}`}
-                onDragOver={(e) => {
-                  // Only accept sessions that are in a group
-                  if (dragSessionIdRef.current) {
-                    const sid = dragSessionIdRef.current;
-                    const s = summaries.find((x) => x.id === sid);
-                    if (s?.groupId) {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = "move";
-                      setDragOverUngrouped(true);
-                      setDragOverGroupId(null);
-                    }
-                  }
-                }}
-                onDragLeave={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                    setDragOverUngrouped(false);
-                  }
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const sid = dragSessionIdRef.current;
-                  if (sid) onSetSessionGroup(sid, null);
-                  setDragOverUngrouped(false);
-                  dragSessionIdRef.current = null;
-                }}
-              >
+            {ungroupedSessions.length > 0 ? (
+              <div className={`space-y-1 ${groupedSessions.length > 0 ? "mt-2 border-t border-border/70 pt-2" : ""}`}>
                 {ungroupedSessions.map((s) => renderThreadItem(s, false))}
               </div>
-            )}
+            ) : null}
           </div>
         )}
       </div>
 
       {/* Bottom: Archive entry + Settings */}
-      <div className="border-t border-black/8 px-2 py-1.5">
+      <div className="border-t border-border/70 px-3 py-3">
         {!showArchived ? (
           <button
             type="button"
             onClick={() => setShowArchived(true)}
-            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-[12px] text-gray-500 transition hover:bg-black/[0.04] hover:text-gray-700"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-[12px] text-muted-foreground transition hover:bg-accent hover:text-foreground"
           >
             <ArchiveBoxIcon className="h-3.5 w-3.5" />
             已归档
             {archivedSummaries.length > 0 ? (
-              <span className="ml-auto text-[10px] text-gray-400">{archivedSummaries.length}</span>
+              <span className="ml-auto text-[10px] text-muted-foreground">{archivedSummaries.length}</span>
             ) : null}
           </button>
         ) : null}
         <button
           type="button"
           onClick={onOpenSettings}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-[12px] text-gray-500 transition hover:bg-black/[0.04] hover:text-gray-700"
+          className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-[12px] text-muted-foreground transition hover:bg-accent hover:text-foreground"
         >
           <Cog6ToothIcon className="h-3.5 w-3.5" />
           设置

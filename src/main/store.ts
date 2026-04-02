@@ -296,3 +296,15 @@ export function setSessionGroup(sessionId: string, groupId: string | null): void
   }
   saveSession(session);
 }
+
+export function renameSession(sessionId: string, title: string): void {
+  const session = loadSession(sessionId);
+  if (!session) return;
+
+  const nextTitle = title.trim();
+  if (!nextTitle) return;
+
+  session.title = nextTitle;
+  session.updatedAt = new Date().toISOString();
+  saveSession(session);
+}

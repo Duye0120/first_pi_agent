@@ -14,6 +14,7 @@ import {
   listSessions,
   loadSession,
   renameGroup,
+  renameSession,
   saveSession,
   setRightPanelOpen,
   setSessionGroup,
@@ -69,6 +70,24 @@ function createMainWindow() {
 
   mainWindow.on("maximize", notifyWindowState);
   mainWindow.on("unmaximize", notifyWindowState);
+  mainWindow.webContents.on("before-input-event", (_event, input) => {
+    const isDevToolsShortcut =
+      input.type === "keyDown" &&
+      (
+        input.key === "F12" ||
+        ((input.control || input.meta) && input.shift && input.key.toUpperCase() === "I")
+      );
+
+    if (!isDevToolsShortcut) {
+      return;
+    }
+
+    if (mainWindow?.webContents.isDevToolsOpened()) {
+      mainWindow.webContents.closeDevTools();
+    } else {
+      mainWindow?.webContents.openDevTools({ mode: "detach" });
+    }
+  });
 
   if (process.env.VITE_DEV_SERVER_URL) {
     void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -98,6 +117,7 @@ function registerIpcHandlers() {
   ipcMain.handle(IPC_CHANNELS.sessionsListArchived, async () => listArchivedSessions());
   ipcMain.handle(IPC_CHANNELS.sessionsDelete, async (_event, sessionId: string) => deleteSession(sessionId));
   ipcMain.handle(IPC_CHANNELS.sessionsSetGroup, async (_event, sessionId: string, groupId: string | null) => setSessionGroup(sessionId, groupId));
+  ipcMain.handle(IPC_CHANNELS.sessionsRename, async (_event, sessionId: string, title: string) => renameSession(sessionId, title));
 
   ipcMain.handle(IPC_CHANNELS.groupsList, async () => listGroups());
   ipcMain.handle(IPC_CHANNELS.groupsCreate, async (_event, name: string) => createGroup(name));

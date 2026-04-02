@@ -84,17 +84,17 @@ export function TerminalDrawer({ open, onToggle }: Props) {
 
   return (
     <div
-      className="flex flex-col border-l border-t border-black/8 bg-white"
+      className="flex flex-col border-t border-shell-border bg-shell-terminal"
       style={{ height: drawerHeight }}
     >
       {/* Resize handle */}
       <div
-        className="h-1 cursor-ns-resize bg-transparent hover:bg-accent-400/20 transition"
+        className="h-1 cursor-ns-resize bg-transparent transition hover:bg-shell-toolbar-hover"
         onMouseDown={handleMouseDown}
       />
 
       {/* Tab bar */}
-      <div className="flex items-center border-b border-black/6 px-2">
+      <div className="flex items-center border-b border-shell-border px-3 py-1.5">
         <div className="flex flex-1 items-center gap-0.5 overflow-x-auto">
           {tabs.map((tab) => (
             <button
@@ -103,18 +103,17 @@ export function TerminalDrawer({ open, onToggle }: Props) {
               onClick={() => setActiveTabId(tab.id)}
               className={`group flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs transition ${
                 tab.id === activeTabId
-                  ? "bg-code-bg text-shell-200"
-                  : "text-shell-500 hover:text-shell-300"
+                  ? "bg-shell-panel text-foreground shadow-sm ring-1 ring-shell-border"
+                  : "text-muted-foreground hover:bg-shell-hover hover:text-foreground"
               }`}
             >
               <span>{tab.label}</span>
-              <button
-                type="button"
+              <span
                 onClick={(e) => { e.stopPropagation(); void closeTab(tab.id); }}
                 className="rounded p-0.5 opacity-0 transition group-hover:opacity-100 hover:bg-black/10"
               >
                 <XMarkIcon className="h-3 w-3" />
-              </button>
+              </span>
             </button>
           ))}
         </div>
@@ -124,7 +123,7 @@ export function TerminalDrawer({ open, onToggle }: Props) {
             isIconOnly
             variant="ghost"
             onClick={() => void createTab()}
-            className="h-6 min-w-6 rounded-md p-0 text-shell-500"
+            className="h-7 min-w-7 rounded-md p-0 text-muted-foreground"
           >
             <PlusIcon className="h-3.5 w-3.5" />
           </Button>
@@ -132,7 +131,7 @@ export function TerminalDrawer({ open, onToggle }: Props) {
             isIconOnly
             variant="ghost"
             onClick={onToggle}
-            className="h-6 min-w-6 rounded-md p-0 text-shell-500"
+            className="h-7 min-w-7 rounded-md p-0 text-muted-foreground"
           >
             <XMarkIcon className="h-3.5 w-3.5" />
           </Button>
@@ -151,7 +150,7 @@ export function TerminalDrawer({ open, onToggle }: Props) {
         ))}
 
         {tabs.length === 0 && (
-          <div className="flex h-full items-center justify-center text-xs text-shell-500">
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             暂无终端
           </div>
         )}

@@ -9,16 +9,16 @@ type TitleBarProps = {
 
 export function TitleBar({ isMaximized, onMinimize, onToggleMaximize, onClose }: TitleBarProps) {
   return (
-    <header className="app-drag flex h-8 items-center bg-[#f0f0f0] pl-3 pr-0 text-[11px] text-gray-500">
+    <header className="app-drag flex h-10 items-center bg-transparent pl-4 pr-1 text-[11px] text-muted-foreground">
       <div className="app-drag flex-1" />
       <div className="no-drag flex">
-        <button type="button" onClick={onMinimize} className="titlebar-control h-8 w-8 hover:text-gray-700" title="最小化" aria-label="最小化">
+        <button type="button" onClick={onMinimize} className="titlebar-control h-8 w-8 rounded-md hover:bg-accent hover:text-foreground" title="最小化" aria-label="最小化">
           <MinusIcon className="h-4 w-4" />
         </button>
         <button
           type="button"
           onClick={onToggleMaximize}
-          className="titlebar-control h-8 w-8 hover:text-gray-700"
+          className="titlebar-control h-8 w-8 rounded-md hover:bg-accent hover:text-foreground"
           title={isMaximized ? "还原" : "最大化"}
           aria-label={isMaximized ? "还原" : "最大化"}
         >
@@ -27,7 +27,7 @@ export function TitleBar({ isMaximized, onMinimize, onToggleMaximize, onClose }:
         <button
           type="button"
           onClick={onClose}
-          className="titlebar-control h-8 w-8 hover:bg-rose-500 hover:text-white"
+          className="titlebar-control h-8 w-8 rounded-md hover:bg-destructive hover:text-destructive-foreground"
           title="关闭"
           aria-label="关闭"
         >

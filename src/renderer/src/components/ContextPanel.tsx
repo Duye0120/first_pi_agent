@@ -1,9 +1,9 @@
 import { Card, CardContent, CardHeader, Tabs } from "@heroui/react";
 import { ClockIcon, DocumentTextIcon, RectangleGroupIcon } from "@heroicons/react/24/outline";
 import { AnimatePresence, motion } from "framer-motion";
-import type { ChatSession, SelectedFile } from "@shared/contracts";
+import type { AgentStep, ChatSession, SelectedFile } from "@shared/contracts";
 import { formatRelativeTime } from "@renderer/lib/session";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type ContextPanelProps = {
   open: boolean;
@@ -12,28 +12,28 @@ type ContextPanelProps = {
 
 function EmptyPanelState({ title, description }: { title: string; description: string }) {
   return (
-    <Card className="heroui-soft-card rounded-2xl border-dashed px-4 py-5 shadow-none">
-      <p className="text-sm font-medium text-shell-200">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-shell-500">{description}</p>
+    <Card className="rounded-2xl border border-dashed border-border bg-card px-4 py-5 shadow-none">
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
     </Card>
   );
 }
 
 function AttachmentCard({ attachment }: { attachment: SelectedFile }) {
   return (
-    <Card className="heroui-soft-card rounded-2xl p-4 shadow-none">
+    <Card className="rounded-2xl border border-border bg-card p-4 shadow-none">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-shell-100">{attachment.name}</p>
-          <p className="mt-1 text-xs text-shell-500">
+          <p className="truncate text-sm font-medium text-foreground">{attachment.name}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
             {attachment.kind} · {(attachment.size / 1024).toFixed(1)} KB
           </p>
         </div>
-        <div className="rounded-xl border border-black/8 bg-white px-2 py-1 text-[11px] uppercase tracking-[0.2em] text-accent-500">
+        <div className="rounded-xl border border-border bg-muted px-2 py-1 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
           {attachment.extension || "file"}
         </div>
       </div>
-      <div className="mt-3 rounded-xl border border-black/6 bg-shell-950/70 p-3 text-xs leading-6 text-shell-400">
+      <div className="mt-3 rounded-xl border border-border bg-muted/50 p-3 text-xs leading-6 text-muted-foreground">
         {attachment.previewText ? (
           <pre className="max-h-52 overflow-auto whitespace-pre-wrap font-sans">{attachment.previewText}</pre>
         ) : (
@@ -44,8 +44,75 @@ function AttachmentCard({ attachment }: { attachment: SelectedFile }) {
   );
 }
 
+function flattenSteps(steps: AgentStep[]): AgentStep[] {
+  return steps.flatMap((step) => [step, ...(step.children ? flattenSteps(step.children) : [])]);
+}
+
+function getStepTitle(step: AgentStep) {
+  if (step.kind === "thinking") {
+    return "思考";
+  }
+
+  return step.toolName || "工具调用";
+}
+
+function getStepSummary(step: AgentStep) {
+  if (step.kind === "thinking") {
+    return step.thinkingText?.trim() || "正在组织推理内容。";
+  }
+
+  if (step.toolError) {
+    return step.toolError;
+  }
+
+  if (typeof step.streamOutput === "string" && step.streamOutput.trim()) {
+    return step.streamOutput.trim();
+  }
+
+  if (typeof step.toolResult === "string" && step.toolResult.trim()) {
+    return step.toolResult.trim();
+  }
+
+  return "已记录本次工具调用。";
+}
+
+function getStepStatusLabel(status: AgentStep["status"]) {
+  switch (status) {
+    case "success":
+      return "完成";
+    case "error":
+      return "失败";
+    case "cancelled":
+      return "已取消";
+    default:
+      return "进行中";
+  }
+}
+
+function getStepStatusClass(status: AgentStep["status"]) {
+  switch (status) {
+    case "success":
+      return "border-emerald-400/20 bg-emerald-400/10 text-emerald-600";
+    case "error":
+      return "border-rose-400/20 bg-rose-400/10 text-rose-500";
+    case "cancelled":
+      return "border-border bg-muted text-muted-foreground";
+    default:
+      return "border-primary/15 bg-primary/10 text-primary";
+  }
+}
+
 export function ContextPanel({ open, session }: ContextPanelProps) {
   const [selectedTab, setSelectedTab] = useState("attachments");
+  const recentSteps = useMemo(() => {
+    if (!session) {
+      return [];
+    }
+
+    return session.messages
+      .flatMap((message) => flattenSteps(message.steps ?? []))
+      .sort((left, right) => right.startedAt - left.startedAt);
+  }, [session]);
 
   return (
     <AnimatePresence initial={false}>
@@ -55,11 +122,11 @@ export function ContextPanel({ open, session }: ContextPanelProps) {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 16 }}
           transition={{ duration: 0.18, ease: "easeOut" }}
-          className="h-full border-l border-black/6 bg-[#f5f7fb]/88 px-4 py-4 backdrop-blur-sm"
+          className="h-full border-l border-shell-border bg-shell-panel-muted px-4 py-4"
         >
         <div className="mb-4">
-          <p className="text-xs uppercase tracking-[0.24em] text-shell-500">Context</p>
-          <h3 className="mt-2 text-lg font-semibold text-shell-100">上下文</h3>
+          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Context</p>
+          <h3 className="mt-2 text-lg font-semibold text-foreground">上下文</h3>
         </div>
 
         <div className="flex h-[calc(100%-2rem)] flex-col">
@@ -70,19 +137,19 @@ export function ContextPanel({ open, session }: ContextPanelProps) {
             className="flex h-full flex-col"
           >
             <Tabs.List>
-              <Tabs.Tab id="attachments" className="rounded-2xl border border-black/8 bg-white/78 px-3 py-2 text-shell-400">
+              <Tabs.Tab id="attachments" className="rounded-2xl border border-border bg-shell-panel px-3 py-2 text-muted-foreground">
                 <span className="flex items-center justify-center gap-2">
                   <DocumentTextIcon className="h-4 w-4" />
                   附件
                 </span>
               </Tabs.Tab>
-              <Tabs.Tab id="session" className="rounded-2xl border border-black/8 bg-white/78 px-3 py-2 text-shell-400">
+              <Tabs.Tab id="session" className="rounded-2xl border border-border bg-shell-panel px-3 py-2 text-muted-foreground">
                 <span className="flex items-center justify-center gap-2">
                   <ClockIcon className="h-4 w-4" />
                   会话
                 </span>
               </Tabs.Tab>
-              <Tabs.Tab id="steps" className="rounded-2xl border border-black/8 bg-white/78 px-3 py-2 text-shell-400">
+              <Tabs.Tab id="steps" className="rounded-2xl border border-border bg-shell-panel px-3 py-2 text-muted-foreground">
                 <span className="flex items-center justify-center gap-2">
                   <RectangleGroupIcon className="h-4 w-4" />
                   步骤
@@ -104,9 +171,9 @@ export function ContextPanel({ open, session }: ContextPanelProps) {
               <div className="space-y-3 outline-none">
                 {session ? (
                   <>
-                    <Card className="heroui-soft-card rounded-2xl p-4 shadow-none">
-                      <CardHeader className="p-0 text-sm font-medium text-shell-100">{session.title}</CardHeader>
-                      <CardContent className="mt-3 space-y-2 p-0 text-sm text-shell-400">
+                    <Card className="rounded-2xl border border-border bg-card p-4 shadow-none">
+                      <CardHeader className="p-0 text-sm font-medium text-foreground">{session.title}</CardHeader>
+                      <CardContent className="mt-3 space-y-2 p-0 text-sm text-muted-foreground">
                         <p>消息数：{session.messages.length}</p>
                         <p>附件数：{session.attachments.length}</p>
                         <p>最后更新：{formatRelativeTime(session.updatedAt)}</p>
@@ -124,20 +191,34 @@ export function ContextPanel({ open, session }: ContextPanelProps) {
             </Tabs.Panel>
 
             <Tabs.Panel id="steps" className="mt-4 flex-1 overflow-y-auto px-0">
-              <Card className="heroui-soft-card rounded-2xl p-4 shadow-none">
-                <CardHeader className="p-0 text-sm font-medium text-shell-100">Agent 通路预留中</CardHeader>
-                <CardContent className="mt-3 space-y-3 p-0 text-sm text-shell-400">
-                  <div className="rounded-xl border border-lime-400/20 bg-lime-400/10 px-3 py-3 text-lime-400">
-                    本地桌面壳：ready
-                  </div>
-                  <div className="rounded-xl border border-accent-400/20 bg-accent-500/10 px-3 py-3 text-accent-300">
-                    文件选择与预览：ready
-                  </div>
-                  <div className="rounded-xl border border-black/8 bg-shell-950/70 px-3 py-3 text-shell-500">
-                    真实模型 / tool 步骤流：pending
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="space-y-3 outline-none">
+                {recentSteps.length > 0 ? (
+                  recentSteps.map((step) => (
+                    <Card key={step.id} className="rounded-2xl border border-border bg-card p-4 shadow-none">
+                      <CardHeader className="flex items-start justify-between gap-3 p-0">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">{getStepTitle(step)}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {new Date(step.startedAt).toLocaleString("zh-CN")}
+                          </p>
+                        </div>
+                        <div className={`rounded-full border px-2 py-1 text-[11px] ${getStepStatusClass(step.status)}`}>
+                          {getStepStatusLabel(step.status)}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="mt-3 p-0">
+                        <div className="rounded-xl border border-border bg-muted/40 px-3 py-3 text-xs leading-6 text-muted-foreground">
+                          <pre className="max-h-52 overflow-auto whitespace-pre-wrap font-sans">
+                            {getStepSummary(step)}
+                          </pre>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <EmptyPanelState title="还没有步骤" description="先发起一次对话，assistant-ui 线程里的思考和工具调用会同步展示到这里。" />
+                )}
+              </div>
             </Tabs.Panel>
           </Tabs.Root>
         </div>

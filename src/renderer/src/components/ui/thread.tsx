@@ -58,16 +58,16 @@ export const Thread: FC<ThreadProps> = ({
 }) => {
   return (
     <ThreadPrimitive.Root
-      className="aui-root aui-thread-root @container flex h-full flex-col bg-background"
+      className="aui-root aui-thread-root @container flex h-full flex-col bg-white"
       style={{
-        ["--thread-max-width" as string]: "44rem",
-        ["--composer-radius" as string]: "24px",
-        ["--composer-padding" as string]: "10px",
+        ["--thread-max-width" as string]: "56rem",
+        ["--composer-radius" as string]: "22px",
+        ["--composer-padding" as string]: "12px",
       }}
     >
       <ThreadPrimitive.Viewport
         turnAnchor="top"
-        className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth px-4 pt-4"
+        className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth px-8 pt-3"
       >
         <AuiIf condition={(s) => s.thread.isEmpty}>
           <ThreadWelcome />
@@ -77,7 +77,7 @@ export const Thread: FC<ThreadProps> = ({
           {() => <ThreadMessage />}
         </ThreadPrimitive.Messages>
 
-        <ThreadPrimitive.ViewportFooter className="aui-thread-viewport-footer sticky bottom-0 mx-auto mt-auto flex w-full max-w-(--thread-max-width) flex-col gap-4 overflow-visible rounded-t-(--composer-radius) bg-background pb-4 md:pb-6">
+        <ThreadPrimitive.ViewportFooter className="aui-thread-viewport-footer sticky bottom-0 mx-auto mt-auto flex w-full max-w-(--thread-max-width) flex-col gap-3 overflow-visible bg-gradient-to-t from-white via-white to-transparent pb-6 pt-10 md:pb-7">
           <ThreadScrollToBottom />
           <Composer
             attachments={attachments}
@@ -119,11 +119,11 @@ const ThreadWelcome: FC = () => {
   return (
     <div className="aui-thread-welcome-root mx-auto my-auto flex w-full max-w-(--thread-max-width) grow flex-col">
       <div className="aui-thread-welcome-center flex w-full grow flex-col items-center justify-center">
-        <div className="aui-thread-welcome-message flex size-full flex-col justify-center px-4">
-          <h1 className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both font-semibold text-2xl duration-200">
+        <div className="aui-thread-welcome-message flex size-full max-w-xl flex-col justify-center px-6 text-center">
+          <h1 className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both font-semibold text-[2.2rem] tracking-[-0.03em] text-slate-900 duration-200">
             开始构建
           </h1>
-          <p className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-muted-foreground text-xl delay-75 duration-200">
+          <p className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-base text-slate-500 delay-75 duration-200">
             first_pi_agent
           </p>
         </div>
@@ -146,7 +146,7 @@ const Composer: FC<ThreadResolvedProps> = ({
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
       <div
         data-slot="composer-shell"
-        className="flex w-full flex-col gap-2 rounded-(--composer-radius) border bg-background p-(--composer-padding) transition-shadow focus-within:border-ring/75 focus-within:ring-2 focus-within:ring-ring/20"
+        className="flex w-full flex-col gap-2 rounded-(--composer-radius) border border-black/8 bg-white p-(--composer-padding) shadow-[0_8px_26px_rgba(15,23,42,0.08)] transition-shadow focus-within:border-ring/30 focus-within:ring-2 focus-within:ring-ring/8"
       >
         {attachments.length > 0 ? (
           <div className="flex flex-wrap gap-1.5 px-1">
@@ -172,7 +172,7 @@ const Composer: FC<ThreadResolvedProps> = ({
 
         <ComposerPrimitive.Input
           placeholder="向 Pi Agent 提问..."
-          className="aui-composer-input max-h-32 min-h-10 w-full resize-none bg-transparent px-1.75 py-1 text-sm outline-none placeholder:text-muted-foreground/80"
+          className="aui-composer-input max-h-32 min-h-0 w-full resize-none bg-transparent px-1 py-1 text-[15px] leading-6 outline-none placeholder:text-muted-foreground/80"
           rows={1}
           autoFocus
           aria-label="消息输入框"
@@ -204,7 +204,7 @@ const ComposerAction: FC<ComposerActionProps> = ({
   onThinkingLevelChange,
 }) => {
   return (
-    <div className="aui-composer-action-wrapper relative flex items-center justify-between">
+    <div className="aui-composer-action-wrapper relative flex items-center justify-between border-t border-border/70 pt-2">
       <div className="flex items-center gap-1.5">
         <button
           type="button"
@@ -224,15 +224,15 @@ const ComposerAction: FC<ComposerActionProps> = ({
       </div>
       <AuiIf condition={(s) => !s.thread.isRunning}>
         <ComposerPrimitive.Send asChild>
-          <TooltipIconButton
-            tooltip="发送"
-            side="bottom"
-            type="button"
-            variant="default"
-            size="icon"
-            className="aui-composer-send size-8 rounded-full"
-            aria-label="Send message"
-          >
+            <TooltipIconButton
+              tooltip="发送"
+              side="bottom"
+              type="button"
+              variant="default"
+              size="icon"
+              className="aui-composer-send size-9 rounded-full border border-slate-900 bg-slate-900 shadow-none hover:bg-slate-800"
+              aria-label="Send message"
+            >
             <ArrowUpIcon className="aui-composer-send-icon size-4" />
           </TooltipIconButton>
         </ComposerPrimitive.Send>
@@ -267,16 +267,16 @@ const MessageError: FC = () => {
 const AssistantMessage: FC = () => {
   return (
     <MessagePrimitive.Root
-      className="aui-assistant-message-root fade-in slide-in-from-bottom-1 relative mx-auto w-full max-w-(--thread-max-width) animate-in py-3 duration-150"
+      className="aui-assistant-message-root fade-in slide-in-from-bottom-1 relative mx-auto w-full max-w-(--thread-max-width) animate-in py-4 duration-150"
       data-role="assistant"
     >
-      <div className="aui-assistant-message-content wrap-break-word px-2 text-foreground leading-relaxed">
+      <div className="aui-assistant-message-content wrap-break-word px-1 py-1 text-[15px] leading-7 text-foreground">
         <MessagePrimitive.Parts>
           {({ part }) => {
             if (part.type === "text") return <MarkdownText />;
             if (part.type === "reasoning") {
               return (
-                <div className="mb-2 rounded-xl border border-dashed border-border/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                <div className="mb-3 rounded-2xl border border-dashed border-border/70 bg-slate-50 px-3 py-2 text-sm text-muted-foreground">
                   {part.text}
                 </div>
               );
@@ -289,7 +289,7 @@ const AssistantMessage: FC = () => {
         <MessageError />
       </div>
 
-      <div className="aui-assistant-message-footer mt-1 ml-2 flex min-h-6 items-center">
+      <div className="aui-assistant-message-footer mt-2 ml-3 flex min-h-6 items-center">
         <AssistantActionBar />
       </div>
     </MessagePrimitive.Root>
@@ -324,7 +324,7 @@ const UserMessage: FC = () => {
       data-role="user"
     >
       <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
-        <div className="aui-user-message-content wrap-break-word peer rounded-2xl bg-muted px-4 py-2.5 text-foreground empty:hidden">
+        <div className="aui-user-message-content wrap-break-word peer rounded-[26px] bg-slate-900 px-4 py-3 text-white shadow-sm empty:hidden">
           <MessagePrimitive.Parts />
         </div>
       </div>
