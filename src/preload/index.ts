@@ -18,6 +18,10 @@ const desktopApi: DesktopApi = {
     load: (sessionId: string) => ipcRenderer.invoke(IPC_CHANNELS.sessionsLoad, sessionId),
     save: (session: ChatSession) => ipcRenderer.invoke(IPC_CHANNELS.sessionsSave, session),
     create: () => ipcRenderer.invoke(IPC_CHANNELS.sessionsCreate),
+    archive: (sessionId: string) => ipcRenderer.invoke(IPC_CHANNELS.sessionsArchive, sessionId),
+    unarchive: (sessionId: string) => ipcRenderer.invoke(IPC_CHANNELS.sessionsUnarchive, sessionId),
+    listArchived: () => ipcRenderer.invoke(IPC_CHANNELS.sessionsListArchived),
+    delete: (sessionId: string) => ipcRenderer.invoke(IPC_CHANNELS.sessionsDelete, sessionId),
   },
   chat: {
     send: (input: SendMessageInput) => ipcRenderer.invoke(IPC_CHANNELS.chatSend, input),

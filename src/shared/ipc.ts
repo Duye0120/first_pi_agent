@@ -8,6 +8,10 @@ export const IPC_CHANNELS = {
   sessionsLoad: "sessions:load",
   sessionsSave: "sessions:save",
   sessionsCreate: "sessions:create",
+  sessionsArchive: "sessions:archive",
+  sessionsUnarchive: "sessions:unarchive",
+  sessionsListArchived: "sessions:list-archived",
+  sessionsDelete: "sessions:delete",
 
   // Chat
   chatSend: "chat:send",

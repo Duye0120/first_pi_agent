@@ -1,7 +1,7 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { RectangleGroupIcon } from "@heroicons/react/24/outline";
 import { Button } from "@heroui/react";
-import type { ChatMessage, ChatSession, ChatSessionSummary, ModelSelection, SelectedFile, Settings, ThinkingLevel, WindowFrameState } from "@shared/contracts";
+import type { ChatMessage, ChatSession, ChatSessionSummary, ModelSelection, SelectedFile, ThinkingLevel, WindowFrameState } from "@shared/contracts";
 import { Composer } from "@renderer/components/Composer";
 import { ContextPanel } from "@renderer/components/ContextPanel";
 import { MessageList } from "@renderer/components/MessageList";
@@ -37,8 +37,9 @@ export default function App() {
   const [isSending, setIsSending] = useState(false);
   const [isPickingFiles, setIsPickingFiles] = useState(false);
   const [summaries, setSummaries] = useState<ChatSessionSummary[]>([]);
+  const [archivedSummaries, setArchivedSummaries] = useState<ChatSessionSummary[]>([]);
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
-  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [frameState, setFrameState] = useState<WindowFrameState>({ isMaximized: false });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -48,6 +49,16 @@ export default function App() {
   const activeSessionId = activeSession?.id ?? null;
   const { currentResponse, isAgentRunning, cancel, buildAssistantMessage } = useAgentEvents();
   const prevResponseRef = useRef(currentResponse);
+  const summariesRef = useRef<ChatSessionSummary[]>([]);
+  const activeSessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    summariesRef.current = summaries;
+  }, [summaries]);
+
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
 
   const hydrateSession = useCallback((session: ChatSession) => {
     startTransition(() => {
@@ -59,11 +70,33 @@ export default function App() {
   const persistSession = useCallback(
     (session: ChatSession) => {
       setActiveSession(session);
-      setSummaries((current) => upsertSummary(current, session));
+      if (session.archived) {
+        setArchivedSummaries((current) => upsertSummary(current, session));
+        setSummaries((current) => current.filter((summary) => summary.id !== session.id));
+      } else {
+        setSummaries((current) => upsertSummary(current, session));
+        setArchivedSummaries((current) => current.filter((summary) => summary.id !== session.id));
+      }
       void desktopApi?.sessions.save(session);
     },
     [desktopApi],
   );
+
+  const refreshSessionLists = useCallback(async () => {
+    if (!desktopApi) {
+      return { sessionSummaries: [], archivedList: [] };
+    }
+
+    const [sessionSummaries, archivedList] = await Promise.all([
+      desktopApi.sessions.list(),
+      desktopApi.sessions.listArchived(),
+    ]);
+
+    setSummaries(sessionSummaries);
+    setArchivedSummaries(archivedList);
+
+    return { sessionSummaries, archivedList };
+  }, [desktopApi]);
 
   const bootApp = useCallback(async () => {
     if (!desktopApi) {
@@ -73,16 +106,18 @@ export default function App() {
     }
 
     try {
-      const [uiState, frame, sessionSummaries, settings] = await Promise.all([
+      const [uiState, frame, sessionSummaries, archivedList, settings] = await Promise.all([
         desktopApi.ui.getState(),
         desktopApi.window.getState(),
         desktopApi.sessions.list(),
+        desktopApi.sessions.listArchived(),
         desktopApi.settings.get(),
       ]);
 
       setRightPanelOpen(uiState.rightPanelOpen);
       setFrameState(frame);
       setSummaries(sessionSummaries);
+      setArchivedSummaries(archivedList);
       if (settings) {
         setCurrentModel(settings.defaultModel);
         setThinkingLevel(settings.thinkingLevel);
@@ -185,6 +220,67 @@ export default function App() {
     },
     [desktopApi, hydrateSession],
   );
+
+  const archiveSession = useCallback(async (sessionId: string) => {
+    if (!desktopApi) {
+      return;
+    }
+
+    const remaining = summariesRef.current.filter((summary) => summary.id !== sessionId);
+
+    await desktopApi.sessions.archive(sessionId);
+    await refreshSessionLists();
+
+    if (activeSessionIdRef.current !== sessionId) {
+      return;
+    }
+
+    if (remaining.length > 0) {
+      void selectSession(remaining[0].id);
+      return;
+    }
+
+    void createNewSession();
+  }, [createNewSession, desktopApi, refreshSessionLists, selectSession]);
+
+  const unarchiveSession = useCallback(async (sessionId: string) => {
+    if (!desktopApi) {
+      return;
+    }
+
+    await desktopApi.sessions.unarchive(sessionId);
+    await refreshSessionLists();
+
+    if (activeSessionIdRef.current !== sessionId) {
+      return;
+    }
+
+    const session = await desktopApi.sessions.load(sessionId);
+    if (session) {
+      hydrateSession(session);
+    }
+  }, [desktopApi, hydrateSession, refreshSessionLists]);
+
+  const deleteSessionPermanently = useCallback(async (sessionId: string) => {
+    if (!desktopApi) {
+      return;
+    }
+
+    const wasActive = activeSessionIdRef.current === sessionId;
+    await desktopApi.sessions.delete(sessionId);
+    const { sessionSummaries } = await refreshSessionLists();
+
+    if (!wasActive) {
+      return;
+    }
+
+    if (sessionSummaries[0]) {
+      void selectSession(sessionSummaries[0].id);
+      return;
+    }
+
+    void createNewSession();
+  }, [createNewSession, desktopApi, refreshSessionLists, selectSession]);
 
   const updateDraft = useCallback(
     (draft: string) => {
@@ -342,11 +438,11 @@ export default function App() {
 
   if (booting) {
     return (
-      <main className="grid h-screen place-items-center bg-[#e8ecf2] text-shell-300">
-        <div className="rounded-[28px] border border-black/8 bg-white/82 px-8 py-7 shadow-glow">
-          <p className="text-xs uppercase tracking-[0.24em] text-shell-500">Booting</p>
-          <h1 className="mt-3 text-2xl font-semibold text-shell-100">正在拉起桌面聊天壳…</h1>
-          <p className="mt-2 text-sm text-shell-400">会话状态、窗口状态和本地文件能力正在就位。</p>
+      <main className="grid h-screen place-items-center bg-[#f0f0f0] text-gray-400">
+        <div className="rounded-xl border border-black/6 bg-white/80 px-6 py-4 shadow-sm">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400">Booting</p>
+          <h1 className="mt-2 text-lg font-medium text-gray-800">正在拉起桌面聊天壳…</h1>
+          <p className="mt-1 text-xs text-gray-400">会话状态、窗口状态和本地文件能力正在就位。</p>
         </div>
       </main>
     );
@@ -354,43 +450,47 @@ export default function App() {
 
   if (bootError) {
     return (
-      <main className="grid h-screen place-items-center bg-[#e8ecf2] px-8 text-shell-300">
-        <div className="max-w-2xl rounded-[28px] border border-rose-400/25 bg-rose-50 px-8 py-7 shadow-glow">
-          <p className="text-xs uppercase tracking-[0.24em] text-rose-200">Renderer Error</p>
-          <h1 className="mt-3 text-2xl font-semibold text-shell-100">界面初始化失败</h1>
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-shell-300">{bootError}</p>
-          <p className="mt-4 text-sm text-shell-400">现在就算 preload 出问题，也不会再整窗发黑，而是直接显示诊断信息。</p>
+      <main className="grid h-screen place-items-center bg-[#f0f0f0] px-6 text-gray-400">
+        <div className="max-w-lg rounded-xl border border-rose-400/20 bg-rose-50 px-6 py-4 shadow-sm">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-rose-300">Renderer Error</p>
+          <h1 className="mt-2 text-lg font-medium text-gray-800">界面初始化失败</h1>
+          <p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-gray-500">{bootError}</p>
+          <p className="mt-2 text-xs text-gray-400">现在就算 preload 出问题，也不会再整窗发黑，而是直接显示诊断信息。</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="flex h-screen flex-col bg-[#e8ecf2] text-shell-100">
+    <main className="flex h-screen flex-col bg-[#f0f0f0] text-gray-800">
       <TitleBar
         isMaximized={frameState.isMaximized}
         onMinimize={() => desktopApi?.window.minimize()}
         onToggleMaximize={() => desktopApi?.window.toggleMaximize()}
         onClose={() => desktopApi?.window.close()}
       />
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-[200px_minmax(0,1fr)]">
         <Sidebar
           summaries={summaries}
           activeSessionId={activeSessionId}
           onSelectSession={selectSession}
           onNewSession={createNewSession}
           onOpenSettings={() => setSettingsOpen(true)}
+          onArchiveSession={archiveSession}
+          onUnarchiveSession={unarchiveSession}
+          onDeleteSession={deleteSessionPermanently}
+          archivedSummaries={archivedSummaries}
         />
 
         <section className="flex min-h-0 flex-col overflow-hidden">
-          <div className="floating-workspace flex min-h-0 flex-1 flex-col overflow-hidden rounded-tl-2xl border-l border-black/8 bg-white">
-            <div className="flex items-center justify-between border-b border-black/6 px-5 py-3">
-              <h1 className="text-sm font-medium text-shell-300">{activeSession?.title ?? "新线程"}</h1>
+          <div className="floating-workspace flex min-h-0 flex-1 flex-col overflow-hidden rounded-tl-xl border-l border-black/8 bg-white">
+            <div className="flex items-center justify-between border-b border-black/6 px-4 py-2">
+              <h1 className="truncate text-[13px] font-medium text-gray-500">{activeSession?.title ?? "新线程"}</h1>
               <Button
                 isIconOnly
                 variant="ghost"
                 onClick={toggleRightPanel}
-                className="heroui-ghost-button h-8 min-w-8 rounded-lg"
+                className="heroui-ghost-button h-7 min-w-7 rounded-md"
                 aria-label={rightPanelOpen ? "收起右侧上下文" : "展开右侧上下文"}
               >
                 <RectangleGroupIcon className="h-4 w-4" />

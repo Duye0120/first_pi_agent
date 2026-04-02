@@ -40,7 +40,7 @@ export function ModelSelector({ currentModel, thinkingLevel, onModelChange, onTh
   }, []);
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       {/* Model selector */}
       <div className="relative">
         <button
@@ -49,7 +49,7 @@ export function ModelSelector({ currentModel, thinkingLevel, onModelChange, onTh
           className="status-pill inline-flex items-center gap-1"
         >
           {modelLabel(currentModel)}
-          <ChevronDownIcon className="h-3.5 w-3.5" />
+          <ChevronDownIcon className="h-3 w-3" />
         </button>
 
         {modelOpen && (
@@ -65,7 +65,7 @@ export function ModelSelector({ currentModel, thinkingLevel, onModelChange, onTh
                       onModelChange({ provider: m.provider, model: m.model });
                       setModelOpen(false);
                     }}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-black/4 ${
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-black/4 ${
                       m.provider === currentModel.provider && m.model === currentModel.model
                         ? "text-accent-500 font-medium"
                         : "text-shell-300"
@@ -77,7 +77,7 @@ export function ModelSelector({ currentModel, thinkingLevel, onModelChange, onTh
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-2 text-xs text-shell-500">
+                <div className="px-3 py-2 text-[12px] text-shell-500">
                   <p>暂无可用模型</p>
                   <p className="mt-1">请先在设置中配置 API Key</p>
                 </div>
@@ -95,7 +95,7 @@ export function ModelSelector({ currentModel, thinkingLevel, onModelChange, onTh
           className="status-pill inline-flex items-center gap-1"
         >
           思考: {THINKING_LEVELS.find((l) => l.value === thinkingLevel)?.label ?? "关闭"}
-          <ChevronDownIcon className="h-3.5 w-3.5" />
+          <ChevronDownIcon className="h-3 w-3" />
         </button>
 
         {thinkingOpen && (
@@ -110,7 +110,7 @@ export function ModelSelector({ currentModel, thinkingLevel, onModelChange, onTh
                     onThinkingLevelChange(level.value);
                     setThinkingOpen(false);
                   }}
-                  className={`flex w-full items-center px-3 py-2 text-left text-sm transition hover:bg-black/4 ${
+                  className={`flex w-full items-center px-3 py-2 text-left text-[12px] transition hover:bg-black/4 ${
                     level.value === thinkingLevel ? "text-accent-500 font-medium" : "text-shell-300"
                   }`}
                 >

@@ -41,7 +41,7 @@ export function FinalReply({ text, isStreaming }: Props) {
   if (!text) return null;
 
   return (
-    <div className="prose prose-sm max-w-none text-[15px] leading-8 text-shell-200 prose-headings:text-shell-100 prose-code:rounded prose-code:bg-[var(--color-bg-tertiary)] prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[13px] prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-pre:p-0 prose-a:text-pi-accent">
+    <div className="prose prose-sm max-w-none text-[13px] leading-7 text-gray-700 prose-headings:text-gray-800 prose-code:rounded prose-code:bg-[var(--color-bg-tertiary)] prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[12px] prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-pre:p-0 prose-a:text-pi-accent">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

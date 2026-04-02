@@ -137,6 +137,7 @@ export type ChatSession = {
   draft: string;
   createdAt: string;
   updatedAt: string;
+  archived?: boolean;
 };
 
 export type ChatSessionSummary = {
@@ -144,6 +145,7 @@ export type ChatSessionSummary = {
   title: string;
   updatedAt: string;
   messageCount: number;
+  archived?: boolean;
 };
 
 export type SendMessageInput = {
@@ -175,6 +177,10 @@ export type DesktopApi = {
     load: (sessionId: string) => Promise<ChatSession | null>;
     save: (session: ChatSession) => Promise<void>;
     create: () => Promise<ChatSession>;
+    archive: (sessionId: string) => Promise<void>;
+    unarchive: (sessionId: string) => Promise<void>;
+    listArchived: () => Promise<ChatSessionSummary[]>;
+    delete: (sessionId: string) => Promise<void>;
   };
   chat: {
     /** Phase 0: returns mock reply. Phase 1+: returns void, response comes via agent.onEvent */
@@ -243,5 +249,6 @@ export function summarizeSession(session: ChatSession): ChatSessionSummary {
     title: session.title,
     updatedAt: session.updatedAt,
     messageCount: session.messages.length,
+    archived: session.archived,
   };
 }

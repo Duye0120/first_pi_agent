@@ -130,7 +130,9 @@ function writeIndex(index: SessionIndex): void {
 
 export function listSessions(): ChatSessionSummary[] {
   const index = readIndex();
-  return [...index.summaries].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return [...index.summaries]
+    .filter((s) => !s.archived)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export function loadSession(sessionId: string): ChatSession | null {
@@ -181,6 +183,27 @@ export function deleteSession(sessionId: string): void {
   writeIndex(index);
 }
 
+export function listArchivedSessions(): ChatSessionSummary[] {
+  const index = readIndex();
+  return [...index.summaries]
+    .filter((s) => s.archived === true)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export function archiveSession(sessionId: string): void {
+  const session = loadSession(sessionId);
+  if (!session) return;
+  session.archived = true;
+  saveSession(session);
+}
+
+export function unarchiveSession(sessionId: string): void {
+  const session = loadSession(sessionId);
+  if (!session) return;
+  session.archived = false;
+  saveSession(session);
+}
+
 export function getUiState(): WindowUiState {
   const path = getUiStatePath();
   ensureDir(getDataDir());
@@ -192,7 +215,7 @@ export function getUiState(): WindowUiState {
     } catch { /* fall through */ }
   }
 
-  return { rightPanelOpen: true };
+  return { rightPanelOpen: false };
 }
 
 export function setRightPanelOpen(open: boolean): void {

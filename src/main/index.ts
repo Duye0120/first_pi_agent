@@ -2,7 +2,18 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { pickFiles, readFilePreview } from "./files.js";
-import { createSession, getUiState, listSessions, loadSession, saveSession, setRightPanelOpen } from "./store.js";
+import {
+  archiveSession,
+  createSession,
+  deleteSession,
+  getUiState,
+  listArchivedSessions,
+  listSessions,
+  loadSession,
+  saveSession,
+  setRightPanelOpen,
+  unarchiveSession,
+} from "./store.js";
 import { IPC_CHANNELS } from "../shared/ipc.js";
 import type { ChatSession, SendMessageInput } from "../shared/contracts.js";
 import { ElectronAdapter } from "./adapter.js";
@@ -41,7 +52,7 @@ function createMainWindow() {
     minWidth: 1120,
     minHeight: 720,
     frame: false,
-    backgroundColor: "#e8ecf2",
+    backgroundColor: "#f0f0f0",
     title: "first_pi_agent",
     webPreferences: {
       preload: getPreloadPath(),
@@ -77,6 +88,10 @@ function registerIpcHandlers() {
   ipcMain.handle(IPC_CHANNELS.sessionsLoad, async (_event, sessionId: string) => loadSession(sessionId));
   ipcMain.handle(IPC_CHANNELS.sessionsSave, async (_event, session: ChatSession) => saveSession(session));
   ipcMain.handle(IPC_CHANNELS.sessionsCreate, async () => createSession());
+  ipcMain.handle(IPC_CHANNELS.sessionsArchive, async (_event, sessionId: string) => archiveSession(sessionId));
+  ipcMain.handle(IPC_CHANNELS.sessionsUnarchive, async (_event, sessionId: string) => unarchiveSession(sessionId));
+  ipcMain.handle(IPC_CHANNELS.sessionsListArchived, async () => listArchivedSessions());
+  ipcMain.handle(IPC_CHANNELS.sessionsDelete, async (_event, sessionId: string) => deleteSession(sessionId));
 
   ipcMain.handle(IPC_CHANNELS.chatSend, async (_event, input: SendMessageInput) => {
     if (!adapter) return;

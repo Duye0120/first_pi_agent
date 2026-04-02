@@ -1,10 +1,12 @@
-# UI Redesign — Codex-Style Compact & Clean
+# UI Redesign — 1:1 复刻 Codex 设计语言
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **Design spec:** `docs/superpowers/specs/2026-04-01-ui-redesign-design.md` — 每个组件的字号、间距、圆角、配色都在 spec 里写死了，照着来。
 
-**Goal:** Transform the current loose, oversized UI into a Codex-style compact, clean interface with archive feature.
+**Goal:** 把当前松散、粗糙的 UI 1:1 改造成 Codex 风格的紧凑、干净、精致界面，并新增归档功能。
 
-**Architecture:** Pure frontend restyling (7 components) + archive feature (data layer → IPC → UI). No changes to agent engine, MCP, or terminal logic.
+**Architecture:** 数据层（归档 CRUD） → 全局样式 → 逐组件重写。不改 agent/MCP/terminal 逻辑。
 
 **Tech Stack:** React 19, Tailwind CSS 4, HeroUI, Heroicons, Framer Motion, Electron IPC
 
@@ -14,18 +16,18 @@
 
 | File | Action | Responsibility |
 |------|--------|----------------|
-| `src/shared/contracts.ts` | Modify | Add `archived` field to ChatSession/ChatSessionSummary, add archive methods to DesktopApi |
+| `src/shared/contracts.ts` | Modify | Add `archived` field, add archive methods to DesktopApi |
 | `src/shared/ipc.ts` | Modify | Add 4 archive IPC channel names |
-| `src/main/store.ts` | Modify | Add archiveSession, unarchiveSession, listArchivedSessions; filter archived from listSessions |
-| `src/main/index.ts` | Modify | Register 4 archive IPC handlers, update backgroundColor |
-| `src/preload/index.ts` | Modify | Expose 4 archive methods via contextBridge |
-| `src/renderer/index.html` | Modify | Change body bg color |
-| `src/renderer/src/styles/theme.css` | Modify | Change `--color-bg-shell` |
-| `src/renderer/src/styles.css` | Modify | Scrollbar width, floating-workspace border-radius |
-| `src/renderer/src/App.tsx` | Modify | rightPanelOpen default, padding/font sizes on boot/error screens, sidebar width |
-| `src/renderer/src/components/Sidebar.tsx` | Rewrite | Compact layout, archive entry, archive list view |
-| `src/renderer/src/components/Composer.tsx` | Modify | Tighten padding, merge toolbar rows |
-| `src/renderer/src/components/MessageList.tsx` | Modify | User msg right-align gray bubble, assistant msg no label |
+| `src/main/store.ts` | Modify | Archive/unarchive/listArchived functions, filter archived from listSessions, getUiState default |
+| `src/main/index.ts` | Modify | Register archive IPC handlers, update backgroundColor |
+| `src/preload/index.ts` | Modify | Expose archive methods via contextBridge |
+| `src/renderer/index.html` | Modify | Body bg color `#f0f0f0` |
+| `src/renderer/src/styles/theme.css` | Modify | `--color-bg-shell: #f0f0f0` |
+| `src/renderer/src/styles.css` | Modify | Scrollbar 6px |
+| `src/renderer/src/App.tsx` | Modify | rightPanelOpen=false, layout padding, boot/error compact, archive callbacks |
+| `src/renderer/src/components/Sidebar.tsx` | Rewrite | Compact Codex-style, archive UI |
+| `src/renderer/src/components/Composer.tsx` | Rewrite | Compact card, merged toolbar |
+| `src/renderer/src/components/MessageList.tsx` | Modify | Right-aligned user bubbles, no labels, compact padding |
 
 ---
 
@@ -40,17 +42,9 @@
 
 - [ ] **Step 1: Add `archived` field to contracts.ts**
 
-In `src/shared/contracts.ts`, add `archived?: boolean` to both `ChatSession` and `ChatSessionSummary`:
+In `src/shared/contracts.ts`, add `archived?: boolean` to both `ChatSession` (after `updatedAt: string;`) and `ChatSessionSummary` (after `messageCount: number;`).
 
-```ts
-// ChatSession — add after `updatedAt: string;`
-  archived?: boolean;
-
-// ChatSessionSummary — add after `messageCount: number;`
-  archived?: boolean;
-```
-
-Update `summarizeSession` to include archived:
+Update `summarizeSession`:
 
 ```ts
 export function summarizeSession(session: ChatSession): ChatSessionSummary {
@@ -92,8 +86,6 @@ In `src/shared/ipc.ts`, add after `sessionsCreate`:
 
 - [ ] **Step 3: Add store functions in store.ts**
 
-In `src/main/store.ts`:
-
 Update `listSessions` to filter out archived:
 
 ```ts
@@ -105,7 +97,7 @@ export function listSessions(): ChatSessionSummary[] {
 }
 ```
 
-Add three new functions after `deleteSession`:
+Add three new exports after `deleteSession`:
 
 ```ts
 export function listArchivedSessions(): ChatSessionSummary[] {
@@ -130,17 +122,17 @@ export function unarchiveSession(sessionId: string): void {
 }
 ```
 
-Update import in `src/main/index.ts` — will be done in next step.
+Update `getUiState()` default return to `{ rightPanelOpen: false }`.
 
 - [ ] **Step 4: Register IPC handlers in main/index.ts**
 
-In `src/main/index.ts`, update the import from `./store.js`:
+Update import:
 
 ```ts
 import { archiveSession, createSession, deleteSession, getUiState, listArchivedSessions, listSessions, loadSession, saveSession, setRightPanelOpen, unarchiveSession } from "./store.js";
 ```
 
-Add after the `sessionsCreate` handler (line ~79):
+Add after `sessionsCreate` handler:
 
 ```ts
   ipcMain.handle(IPC_CHANNELS.sessionsArchive, async (_event, sessionId: string) => archiveSession(sessionId));
@@ -149,9 +141,11 @@ Add after the `sessionsCreate` handler (line ~79):
   ipcMain.handle(IPC_CHANNELS.sessionsDelete, async (_event, sessionId: string) => deleteSession(sessionId));
 ```
 
+Update `backgroundColor` in `createMainWindow()` to `"#f0f0f0"`.
+
 - [ ] **Step 5: Expose archive methods in preload/index.ts**
 
-In `src/preload/index.ts`, add to the `sessions` object after `create`:
+Add to `sessions` object after `create`:
 
 ```ts
     archive: (sessionId: string) => ipcRenderer.invoke(IPC_CHANNELS.sessionsArchive, sessionId),
@@ -163,7 +157,6 @@ In `src/preload/index.ts`, add to the `sessions` object after `create`:
 - [ ] **Step 6: Type-check**
 
 Run: `pnpm check`
-Expected: No errors
 
 - [ ] **Step 7: Commit**
 
@@ -180,78 +173,36 @@ git commit -m "feat: add session archive/unarchive/delete data layer"
 - Modify: `src/renderer/src/styles/theme.css`
 - Modify: `src/renderer/src/styles.css`
 - Modify: `src/renderer/index.html`
-- Modify: `src/main/index.ts` (backgroundColor)
 
-- [ ] **Step 1: Update theme.css shell background**
+- [ ] **Step 1: Update theme.css**
 
-In `src/renderer/src/styles/theme.css`, change:
+Change `--color-bg-shell` to `#f0f0f0` (from `#e8ecf2`).
 
-```css
-  --color-bg-shell:          #f0f0f0;
-```
+- [ ] **Step 2: Update styles.css scrollbar**
 
-(from `#e8ecf2`)
+Change scrollbar width/height to `6px` (from `10px`).
 
-- [ ] **Step 2: Update styles.css scrollbar and floating-workspace**
+- [ ] **Step 3: Update index.html**
 
-In `src/renderer/src/styles.css`, change scrollbar width:
+Change body class to `bg-[#f0f0f0]` (from `bg-[#e8ecf2]`).
 
-```css
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-```
-
-(from `10px`)
-
-- [ ] **Step 3: Update index.html body background**
-
-In `src/renderer/index.html`, change:
-
-```html
-  <body class="bg-[#f0f0f0]">
-```
-
-(from `bg-[#e8ecf2]`)
-
-- [ ] **Step 4: Update Electron window backgroundColor**
-
-In `src/main/index.ts`, in `createMainWindow()`, change:
-
-```ts
-    backgroundColor: "#f0f0f0",
-```
-
-(from `#e8ecf2`)
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add src/renderer/src/styles/theme.css src/renderer/src/styles.css src/renderer/index.html src/main/index.ts
-git commit -m "style: update shell background to neutral gray, slim scrollbar"
+git add src/renderer/src/styles/theme.css src/renderer/src/styles.css src/renderer/index.html
+git commit -m "style: neutral gray shell background, slim scrollbar"
 ```
 
 ---
 
-### Task 3: App.tsx — Default Panel State, Boot/Error Screens, Sidebar Width
+### Task 3: App.tsx — Layout, Boot/Error, Panel Default, Archive Wiring
 
 **Files:**
 - Modify: `src/renderer/src/App.tsx`
 
-- [ ] **Step 1: Change rightPanelOpen default to false**
-
-In `src/renderer/src/App.tsx`, line 41, change:
-
-```ts
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
-```
-
-(from `true`)
+- [ ] **Step 1: Change rightPanelOpen default to `false`**
 
 - [ ] **Step 2: Compact the booting screen**
-
-Replace the booting return block (lines 344-353) with:
 
 ```tsx
   if (booting) {
@@ -269,8 +220,6 @@ Replace the booting return block (lines 344-353) with:
 
 - [ ] **Step 3: Compact the error screen**
 
-Replace the bootError return block (lines 355-366) with:
-
 ```tsx
   if (bootError) {
     return (
@@ -286,38 +235,95 @@ Replace the bootError return block (lines 355-366) with:
   }
 ```
 
-- [ ] **Step 4: Shrink sidebar width and tighten main layout**
+- [ ] **Step 4: Tighten main layout**
 
-In the main return, change the grid from `grid-cols-[220px_minmax(0,1fr)]` to `grid-cols-[200px_minmax(0,1fr)]`:
+- Main bg: `bg-[#f0f0f0] text-gray-800`
+- Sidebar grid: `grid-cols-[200px_minmax(0,1fr)]` (from 220px)
+- Floating workspace: `rounded-tl-xl` (from `rounded-tl-2xl`)
+- Header: `px-4 py-2` (from `px-5 py-3`), title `text-[13px] font-medium text-gray-500`
 
-```tsx
-      <div className="grid min-h-0 flex-1 grid-cols-[200px_minmax(0,1fr)]">
-```
+- [ ] **Step 5: Add archived state and callbacks**
 
-Change the floating-workspace rounded corner from `rounded-tl-2xl` to `rounded-tl-xl`:
-
-```tsx
-          <div className="floating-workspace flex min-h-0 flex-1 flex-col overflow-hidden rounded-tl-xl border-l border-black/8 bg-white">
-```
-
-Tighten the thread title header padding from `px-5 py-3` to `px-4 py-2`:
+Add state:
 
 ```tsx
-            <div className="flex items-center justify-between border-b border-black/6 px-4 py-2">
-              <h1 className="text-[13px] font-medium text-gray-500">{activeSession?.title ?? "新线程"}</h1>
+const [archivedSummaries, setArchivedSummaries] = useState<ChatSessionSummary[]>([]);
 ```
 
-Change `bg-[#e8ecf2]` to `bg-[#f0f0f0]` in the main return:
+In `bootApp`, after `setSummaries(sessionSummaries)`:
 
 ```tsx
-    <main className="flex h-screen flex-col bg-[#f0f0f0] text-gray-800">
+const archivedList = await desktopApi.sessions.listArchived();
+setArchivedSummaries(archivedList);
 ```
 
-- [ ] **Step 5: Commit**
+Add callbacks:
+
+```tsx
+const archiveSession = useCallback(async (sessionId: string) => {
+  if (!desktopApi) return;
+  await desktopApi.sessions.archive(sessionId);
+
+  let archivedItem: ChatSessionSummary | undefined;
+  setSummaries((current) => {
+    archivedItem = current.find((s) => s.id === sessionId);
+    return current.filter((s) => s.id !== sessionId);
+  });
+
+  if (archivedItem) {
+    setArchivedSummaries((prev) => [{ ...archivedItem!, archived: true }, ...prev]);
+  }
+
+  if (sessionId === activeSessionId) {
+    const remaining = summaries.filter((s) => s.id !== sessionId);
+    if (remaining.length > 0) {
+      void selectSession(remaining[0].id);
+    } else {
+      void createNewSession();
+    }
+  }
+}, [desktopApi, activeSessionId, summaries, selectSession, createNewSession]);
+
+const unarchiveSession = useCallback(async (sessionId: string) => {
+  if (!desktopApi) return;
+  await desktopApi.sessions.unarchive(sessionId);
+  setArchivedSummaries((current) => current.filter((s) => s.id !== sessionId));
+  const freshList = await desktopApi.sessions.list();
+  setSummaries(freshList);
+}, [desktopApi]);
+
+const deleteSessionPermanently = useCallback(async (sessionId: string) => {
+  if (!desktopApi) return;
+  await desktopApi.sessions.delete(sessionId);
+  setArchivedSummaries((current) => current.filter((s) => s.id !== sessionId));
+}, [desktopApi]);
+```
+
+- [ ] **Step 6: Update Sidebar props**
+
+```tsx
+<Sidebar
+  summaries={summaries}
+  activeSessionId={activeSessionId}
+  onSelectSession={selectSession}
+  onNewSession={createNewSession}
+  onOpenSettings={() => setSettingsOpen(true)}
+  onArchiveSession={archiveSession}
+  onUnarchiveSession={unarchiveSession}
+  onDeleteSession={deleteSessionPermanently}
+  archivedSummaries={archivedSummaries}
+/>
+```
+
+- [ ] **Step 7: Type-check**
+
+Run: `pnpm check`
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/renderer/src/App.tsx
-git commit -m "style: compact App layout, default right panel closed"
+git commit -m "style: compact App layout + archive wiring"
 ```
 
 ---
@@ -325,12 +331,9 @@ git commit -m "style: compact App layout, default right panel closed"
 ### Task 4: Sidebar Rewrite
 
 **Files:**
-- Modify: `src/renderer/src/components/Sidebar.tsx`
-- Modify: `src/renderer/src/App.tsx` (add archive callbacks)
+- Rewrite: `src/renderer/src/components/Sidebar.tsx`
 
-- [ ] **Step 1: Rewrite Sidebar.tsx**
-
-Replace the entire content of `src/renderer/src/components/Sidebar.tsx`:
+- [ ] **Step 1: Replace Sidebar.tsx entirely**
 
 ```tsx
 import { useState } from "react";
@@ -511,127 +514,27 @@ export function Sidebar({
 }
 ```
 
-- [ ] **Step 2: Wire archive callbacks in App.tsx**
-
-In `src/renderer/src/App.tsx`, add state and callbacks. After the `summaries` state (line 39), add:
-
-```tsx
-  const [archivedSummaries, setArchivedSummaries] = useState<ChatSessionSummary[]>([]);
-```
-
-In `bootApp`, after `setSummaries(sessionSummaries)` add:
-
-```tsx
-      const archivedList = await desktopApi.sessions.listArchived();
-      setArchivedSummaries(archivedList);
-```
-
-Add these callbacks before the `return` block (near the other callbacks):
-
-```tsx
-  const archiveSession = useCallback(async (sessionId: string) => {
-    if (!desktopApi) return;
-    await desktopApi.sessions.archive(sessionId);
-    setSummaries((current) => current.filter((s) => s.id !== sessionId));
-    const archived = current.find((s) => s.id === sessionId);
-    if (archived) {
-      setArchivedSummaries((prev) => [{ ...archived, archived: true }, ...prev]);
-    }
-    // If we archived the active session, switch to another
-    if (sessionId === activeSessionId) {
-      const remaining = summaries.filter((s) => s.id !== sessionId);
-      if (remaining.length > 0) {
-        void selectSession(remaining[0].id);
-      } else {
-        void createNewSession();
-      }
-    }
-  }, [desktopApi, activeSessionId, summaries, selectSession, createNewSession]);
-```
-
-Wait — the closure over `current` won't work like that. Let me write it correctly:
-
-```tsx
-  const archiveSession = useCallback(async (sessionId: string) => {
-    if (!desktopApi) return;
-    await desktopApi.sessions.archive(sessionId);
-
-    let archivedItem: ChatSessionSummary | undefined;
-    setSummaries((current) => {
-      archivedItem = current.find((s) => s.id === sessionId);
-      return current.filter((s) => s.id !== sessionId);
-    });
-
-    if (archivedItem) {
-      setArchivedSummaries((prev) => [{ ...archivedItem!, archived: true }, ...prev]);
-    }
-
-    if (sessionId === activeSessionId) {
-      const remaining = summaries.filter((s) => s.id !== sessionId);
-      if (remaining.length > 0) {
-        void selectSession(remaining[0].id);
-      } else {
-        void createNewSession();
-      }
-    }
-  }, [desktopApi, activeSessionId, summaries, selectSession, createNewSession]);
-
-  const unarchiveSession = useCallback(async (sessionId: string) => {
-    if (!desktopApi) return;
-    await desktopApi.sessions.unarchive(sessionId);
-    setArchivedSummaries((current) => current.filter((s) => s.id !== sessionId));
-    // Reload active list
-    const freshList = await desktopApi.sessions.list();
-    setSummaries(freshList);
-  }, [desktopApi]);
-
-  const deleteSessionPermanently = useCallback(async (sessionId: string) => {
-    if (!desktopApi) return;
-    await desktopApi.sessions.delete(sessionId);
-    setArchivedSummaries((current) => current.filter((s) => s.id !== sessionId));
-  }, [desktopApi]);
-```
-
-Update the `<Sidebar>` component usage to pass the new props:
-
-```tsx
-        <Sidebar
-          summaries={summaries}
-          activeSessionId={activeSessionId}
-          onSelectSession={selectSession}
-          onNewSession={createNewSession}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onArchiveSession={archiveSession}
-          onUnarchiveSession={unarchiveSession}
-          onDeleteSession={deleteSessionPermanently}
-          archivedSummaries={archivedSummaries}
-        />
-```
-
-Remove the unused imports that the old Sidebar used: `AdjustmentsHorizontalIcon`, `BoltIcon`, `Squares2X2Icon` — these are no longer imported by Sidebar.
-
-- [ ] **Step 3: Type-check**
+- [ ] **Step 2: Type-check**
 
 Run: `pnpm check`
-Expected: No errors
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add src/renderer/src/components/Sidebar.tsx src/renderer/src/App.tsx
-git commit -m "feat: rewrite Sidebar with compact layout and archive feature"
+git add src/renderer/src/components/Sidebar.tsx
+git commit -m "feat: rewrite Sidebar — Codex-style compact layout with archive"
 ```
 
 ---
 
-### Task 5: Composer — Tighten Padding, Merge Toolbar
+### Task 5: Composer Rewrite
 
 **Files:**
-- Modify: `src/renderer/src/components/Composer.tsx`
+- Rewrite: `src/renderer/src/components/Composer.tsx`
 
-- [ ] **Step 1: Rewrite Composer layout**
+- [ ] **Step 1: Replace Composer return JSX**
 
-Replace the entire `return` in `Composer.tsx` (from line 51 `<section>` to end `</section>`) with:
+Replace the entire `return` block (the `<section>` element) with:
 
 ```tsx
     <section className="px-6 pb-4 pt-1">
@@ -718,18 +621,17 @@ Replace the entire `return` in `Composer.tsx` (from line 51 `<section>` to end `
     </section>
 ```
 
-Remove unused `Button` import from `@heroui/react` (keep `Chip` and `TextArea`). Remove the `composer-ghost-button` class usage — we're using plain buttons now.
+Remove unused `Button` import from `@heroui/react` (keep `Chip` and `TextArea`).
 
 - [ ] **Step 2: Type-check**
 
 Run: `pnpm check`
-Expected: No errors
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add src/renderer/src/components/Composer.tsx
-git commit -m "style: compact Composer with merged toolbar"
+git commit -m "style: compact Composer — Codex-style merged toolbar"
 ```
 
 ---
@@ -741,7 +643,7 @@ git commit -m "style: compact Composer with merged toolbar"
 
 - [ ] **Step 1: Update empty state**
 
-Replace the empty state return (lines 93-109) with:
+Replace the empty state return (`items.length === 0` block) with:
 
 ```tsx
   if (items.length === 0) {
@@ -759,9 +661,9 @@ Replace the empty state return (lines 93-109) with:
   }
 ```
 
-- [ ] **Step 2: Update user message rendering**
+- [ ] **Step 2: Update user message**
 
-Replace the user message block (inside `renderItem`, the `message.role === "user"` branch) with:
+Replace the `message.role === "user"` branch:
 
 ```tsx
     if (message.role === "user") {
@@ -775,9 +677,9 @@ Replace the user message block (inside `renderItem`, the `message.role === "user
     }
 ```
 
-- [ ] **Step 3: Update assistant message rendering**
+- [ ] **Step 3: Update assistant message (no steps)**
 
-Replace the assistant message fallback block (the last return in renderItem, lines 81-89) with:
+Replace the fallback assistant return:
 
 ```tsx
     return (
@@ -787,9 +689,7 @@ Replace the assistant message fallback block (the last return in renderItem, lin
     );
 ```
 
-- [ ] **Step 4: Update system message padding**
-
-Change the system message padding from `px-12 py-4` to `px-8 py-2`:
+- [ ] **Step 4: Update system message**
 
 ```tsx
         <div className="px-8 py-2">
@@ -799,95 +699,44 @@ Change the system message padding from `px-12 py-4` to `px-8 py-2`:
         </div>
 ```
 
-- [ ] **Step 5: Update streaming and agent response padding**
+- [ ] **Step 5: Update streaming/agent response wrappers**
 
-Change the streaming response wrapper from `max-w-4xl px-12 py-4` to `px-8 py-2`:
+All `<AgentResponseBlock>` wrappers: change to `<div className="px-8 py-2">`.
 
-```tsx
-        <div className="px-8 py-2">
-          <AgentResponseBlock response={item.response} onCancel={onCancelAgent} />
-        </div>
-```
+- [ ] **Step 6: Update Virtuoso container**
 
-Same for the persisted assistant with steps:
-
-```tsx
-        <div className="px-8 py-2">
-          <AgentResponseBlock
-            response={{...}}
-          />
-        </div>
-```
-
-- [ ] **Step 6: Update Virtuoso container class**
-
-Change from `max-w-4xl` to `max-w-3xl`:
-
-```tsx
-      className="mx-auto w-full max-w-3xl"
-```
+Change to `className="mx-auto w-full max-w-3xl"`.
 
 - [ ] **Step 7: Remove unused imports**
 
-Remove `ChevronDownIcon` from the heroicons import (was used in the old empty state button).
-
-Remove `formatTime` import if no longer used (we removed timestamp display from user messages).
+Remove `ChevronDownIcon`. Remove `formatTime` if no longer used.
 
 - [ ] **Step 8: Type-check**
 
 Run: `pnpm check`
-Expected: No errors
 
 - [ ] **Step 9: Commit**
 
 ```bash
 git add src/renderer/src/components/MessageList.tsx
-git commit -m "style: compact message list with right-aligned user bubbles"
+git commit -m "style: compact messages — right-aligned user bubbles, no labels"
 ```
 
 ---
 
-### Task 7: Visual QA — Launch, Screenshot, Fix
+### Task 7: Visual QA
 
-- [ ] **Step 1: Launch dev server**
-
-Run: `pnpm dev`
-
-Open the app in browser at `http://localhost:5173` (or in Electron window).
-
-- [ ] **Step 2: Visual check — empty state**
-
-Verify:
-- Sidebar is compact with single-line thread items
-- "新线程" button is small
-- Empty state shows small icon + "开始构建" in 18px
-- Right panel is hidden by default
-- Background is neutral gray `#f0f0f0`
-
-- [ ] **Step 3: Visual check — composer**
-
-Verify:
-- Composer card is narrower (max-w-3xl)
-- Attachment button is icon-only
-- Model selector and send button are on the same row
-- Send button is 28px circle
-
-- [ ] **Step 4: Visual check — archive**
-
-Verify:
-- Sidebar shows "已归档" entry above settings
-- Hovering a thread shows archive icon
-- Clicking archive moves thread to archive list
-- Archive view shows restore and delete buttons
-- "← 返回" button works
-
-- [ ] **Step 5: Fix any visual issues found**
-
-Address any spacing, alignment, or overflow issues discovered during QA.
-
-- [ ] **Step 6: Final commit**
+- [ ] **Step 1:** Run `pnpm dev`, open in Electron
+- [ ] **Step 2:** Verify sidebar: compact items, "新线程" small, "已归档" entry, hover archive icon
+- [ ] **Step 3:** Verify empty state: small icon + "开始构建" 18px
+- [ ] **Step 4:** Verify composer: narrow card, merged toolbar, 28px send button
+- [ ] **Step 5:** Verify messages: user right-aligned gray bubble, no labels
+- [ ] **Step 6:** Verify right panel hidden by default
+- [ ] **Step 7:** Verify archive: archive → appears in archive list → restore/delete works
+- [ ] **Step 8:** Fix any visual issues found
+- [ ] **Step 9:** Final commit
 
 ```bash
 git add -A
-git commit -m "fix: visual QA adjustments for compact UI"
+git commit -m "fix: visual QA adjustments"
 ```

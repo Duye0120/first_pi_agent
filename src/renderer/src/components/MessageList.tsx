@@ -1,8 +1,7 @@
 import { useCallback, useRef } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { ChevronDownIcon, CloudIcon } from "@heroicons/react/24/outline";
+import { CloudIcon } from "@heroicons/react/24/outline";
 import type { ChatMessage, AgentResponse } from "@shared/contracts";
-import { formatTime } from "@renderer/lib/session";
 import { AgentResponseBlock } from "./AgentResponseBlock";
 import { FinalReply } from "./FinalReply";
 
@@ -28,7 +27,7 @@ export function MessageList({ messages, streamingResponse, onCancelAgent }: Mess
   const renderItem = useCallback((_index: number, item: ListItem) => {
     if (item.type === "streaming") {
       return (
-        <div className="max-w-4xl px-12 py-4">
+        <div className="px-8 py-2">
           <AgentResponseBlock response={item.response} onCancel={onCancelAgent} />
         </div>
       );
@@ -38,8 +37,8 @@ export function MessageList({ messages, streamingResponse, onCancelAgent }: Mess
 
     if (message.role === "system") {
       return (
-        <div className="max-w-4xl px-12 py-4">
-          <div className="rounded-2xl border border-amber-400/25 bg-amber-100 px-4 py-3 text-sm text-amber-900">
+        <div className="px-8 py-2">
+          <div className="rounded-xl border border-amber-400/20 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
             {message.content}
           </div>
         </div>
@@ -48,12 +47,8 @@ export function MessageList({ messages, streamingResponse, onCancelAgent }: Mess
 
     if (message.role === "user") {
       return (
-        <article className="max-w-4xl px-12 py-4">
-          <div className="mb-3 flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-shell-500">
-            <span>You</span>
-            <span className="tracking-normal">{formatTime(message.timestamp)}</span>
-          </div>
-          <div className="inline-flex rounded-2xl border border-accent-400/20 bg-accent-500/8 px-4 py-3 text-sm leading-7 text-shell-200">
+        <article className="flex justify-end px-8 py-2">
+          <div className="max-w-[75%] rounded-2xl bg-gray-100 px-3.5 py-2 text-[13px] leading-7 text-gray-800">
             {message.content}
           </div>
         </article>
@@ -63,7 +58,7 @@ export function MessageList({ messages, streamingResponse, onCancelAgent }: Mess
     // Assistant message
     if (message.steps && message.steps.length > 0) {
       return (
-        <div className="max-w-4xl px-12 py-4">
+        <div className="px-8 py-2">
           <AgentResponseBlock
             response={{
               id: message.id,
@@ -79,11 +74,7 @@ export function MessageList({ messages, streamingResponse, onCancelAgent }: Mess
     }
 
     return (
-      <article className="max-w-4xl px-12 py-4">
-        <div className="mb-3 flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-shell-500">
-          <span>Assistant</span>
-          <span className="tracking-normal">{formatTime(message.timestamp)}</span>
-        </div>
+      <article className="px-8 py-2">
         <FinalReply text={message.content} />
       </article>
     );
@@ -91,19 +82,13 @@ export function MessageList({ messages, streamingResponse, onCancelAgent }: Mess
 
   if (items.length === 0) {
     return (
-      <section className="flex min-h-full flex-col items-center justify-center px-12 py-10">
-        <div className="flex max-w-4xl flex-col items-center text-center">
-          <div className="grid h-16 w-16 place-items-center rounded-full border border-black/6 bg-[#f3f6fb] text-shell-500">
-            <CloudIcon className="h-8 w-8" />
+      <section className="flex min-h-full flex-col items-center justify-center px-8 py-8">
+        <div className="flex flex-col items-center text-center">
+          <div className="grid h-10 w-10 place-items-center rounded-full border border-black/6 bg-gray-50 text-gray-400">
+            <CloudIcon className="h-5 w-5" />
           </div>
-          <h2 className="mt-6 text-[34px] font-semibold tracking-[-0.03em] text-shell-100">Let&apos;s build</h2>
-          <button
-            type="button"
-            className="mt-4 inline-flex items-center gap-1 rounded-full border border-black/8 bg-white/80 px-3 py-1.5 text-sm text-shell-500"
-          >
-            first_pi_agent
-            <ChevronDownIcon className="h-4 w-4" />
-          </button>
+          <h2 className="mt-4 text-lg font-medium text-gray-700">开始构建</h2>
+          <p className="mt-1 text-[13px] text-gray-300">first_pi_agent</p>
         </div>
       </section>
     );
@@ -116,7 +101,7 @@ export function MessageList({ messages, streamingResponse, onCancelAgent }: Mess
       itemContent={renderItem}
       followOutput="smooth"
       initialTopMostItemIndex={items.length - 1}
-      className="mx-auto w-full max-w-4xl"
+      className="mx-auto w-full max-w-3xl"
       style={{ height: "100%" }}
     />
   );
