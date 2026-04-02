@@ -5,3 +5,5 @@ dist
 build
 out
 .electron-vite
+.superpowers/
+.tmp-dev-*.log
