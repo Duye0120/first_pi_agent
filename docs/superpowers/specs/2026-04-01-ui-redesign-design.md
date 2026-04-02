@@ -1,172 +1,285 @@
-# UI Redesign — Codex-Style Compact & Clean
+# UI Redesign — 1:1 复刻 Codex 设计语言
 
 **Date:** 2026-04-01
-**Reference:** Codex desktop app (screenshots provided by user)
-**Goal:** 把当前"密度低、元素大、间距松"的 UI 改造成 Codex 风格的紧凑、干净、精致界面。
+**Reference:** Codex desktop app（用户提供的多张截图）
+**Goal:** 以 Codex app 为唯一设计参考，1:1 复刻其设计语言、密度、配色、交互细节。底层保持 pi-mono agent 架构不变。
 
 ## Design Principles
 
-1. **紧凑密度** — 字号小、间距紧、信息密度高
-2. **灰白中性** — 配色暂用灰白系，后期再调强调色
-3. **最小改动骨架** — 保持侧边栏+主区域的布局结构，只改样式和组件内容
-4. **YAGNI** — 删掉没用的占位功能（技能、自动化按钮）
+1. **照抄 Codex** — 不创新，不自由发挥，每个细节对齐 Codex
+2. **灰白中性** — 配色先用灰白系（Codex 的薄荷绿色调后期再调）
+3. **紧凑密度** — Codex 的字号 13px 正文、11px 辅助、紧凑间距
+4. **YAGNI** — 只做当前能用的功能，占位按钮全删
 
-## Scope
+---
 
-### 改的
+## 全局视觉规范（对标 Codex）
 
-| 区域 | 改动 |
+### 配色
+
+| Token | 值 | 用途 |
+|-------|------|------|
+| `--color-bg-shell` | `#f0f0f0` | 窗口底色（后期可调为 Codex 的薄荷灰绿） |
+| `--color-bg-primary` | `#ffffff` | 主内容区白底 |
+| `--color-bg-sidebar` | `transparent`（继承 shell） | 侧边栏透底 |
+| `--color-text-primary` | `#1f2937` (gray-800) | 正文 |
+| `--color-text-secondary` | `#6b7280` (gray-500) | 次要文字 |
+| `--color-text-muted` | `#9ca3af` (gray-400) | 辅助/时间戳 |
+| `--color-text-faint` | `#d1d5db` (gray-300) | placeholder、极弱文字 |
+| `--color-border` | `rgba(0,0,0,0.06)` | 通用边框 |
+| `--color-border-light` | `rgba(0,0,0,0.04)` | 极淡分隔线 |
+
+### 字号
+
+| 用途 | 大小 | 字重 |
+|------|------|------|
+| 页面标题（空状态"开始构建"） | 18px | medium (500) |
+| 区域标题（"线程"） | 11px | medium (500) |
+| 正文 / 消息内容 | 13px | normal (400) |
+| 线程标题 | 13px | normal (400) |
+| 辅助文字（时间、计数） | 11px | normal (400) |
+| 极小标签 | 10px | normal (400) |
+| Composer placeholder | 13px | normal (400) |
+| 模型选择器 pill | 11px | normal (400) |
+
+### 间距密度
+
+| 元素 | Codex 参考值 |
+|------|-------------|
+| 侧边栏按钮 padding | `py-1.5 px-2` |
+| 线程 item padding | `py-1.5 px-2.5` |
+| 线程 item 间距 | `1px`（space-y-px） |
+| 区域标题 padding | `px-3 py-1.5` |
+| Composer 外层 padding | `px-6 pb-4 pt-1` |
+| Composer 内层 padding | `px-4 py-3` |
+| 消息 padding | `px-8 py-2` |
+| 发送按钮 | 28px 圆形 |
+| 图标大小 | 14px (3.5) 通用，12px (3) 极小 |
+
+### 圆角
+
+| 元素 | 圆角 |
 |------|------|
-| **theme.css** | 只调 `--color-bg-shell` 为中性灰（`#f0f0f0`），其他变量保持灰白系 |
-| **全局字号** | 标题 34px→18px，正文 15px→13px，辅助文字 12px→11px，标签 11px→10px |
-| **全局间距** | padding/gap/margin 全面收紧约 40%（如 `px-8`→`px-4`，`py-7`→`py-3`） |
-| **Sidebar** | 删除"技能""自动化"按钮；线程 item 改为单行（标题+时间同一行）；去掉"X 条消息"副文本 |
-| **空状态** | 图标 64px→40px，标题 34px→18px，去掉 `first_pi_agent` 按钮或改为小号文字 |
-| **Composer** | 整体 padding 缩小；模型选择器和工具栏合到一行；发送按钮缩小（40px→28px）；去掉独立的 border-top 分隔线，模型选择器和附件按钮在同一行 |
-| **MessageList 用户消息** | 改为右对齐灰色气泡（`bg-gray-100`，`rounded-2xl`，无蓝色背景），Codex 风格 |
-| **MessageList 助手消息** | 去掉 uppercase "ASSISTANT" 标签，改为小头像+名称，内容左对齐纯文本 |
-| **TitleBar** | 无改动（已经够紧凑） |
-| **ContextPanel** | `rightPanelOpen` 默认值从 `true` 改为 `false` |
-| **styles.css** | `.floating-workspace` 圆角从 `rounded-tl-2xl` 缩小为 `rounded-tl-xl`；scrollbar thumb 更细 |
-| **SettingsModal** | 不在本次范围（后续单独优化） |
+| 主内容区左上角 | `rounded-tl-xl` (12px) |
+| Composer 卡片 | `rounded-xl` (12px) |
+| 消息气泡（用户） | `rounded-2xl` (16px) |
+| 按钮/线程 item | `rounded-md` (6px) |
+| 系统消息 | `rounded-xl` (12px) |
+| 模型选择器 pill | `rounded-[5px]` |
 
-### 不改的
+### 滚动条
 
-- Electron 主进程、preload、IPC 通信
-- 状态持久化（store.ts）
-- Agent 引擎（agent.ts）
-- MCP 集成（src/mcp/）
-- 终端抽屉（TerminalDrawer/TerminalTab）功能逻辑
-- 组件库选择（继续用 HeroUI）
-- StepCard / AgentResponseBlock / DiffView 等 agent 步骤展示组件（样式微调随间距一起收紧即可）
+- 宽度：6px（从 10px 缩小）
+- 颜色、圆角保持不变
 
-## Component-Level Spec
+---
 
-### 1. Sidebar (`Sidebar.tsx`)
+## 逐组件 Spec
 
-**Before:**
-- 顶部 3 个按钮（新线程 / 技能 / 自动化）
-- 线程 item 两行：标题行 + "X 条消息"行
-- 间距松散（`px-3 pb-4 pt-3`，item `py-2.5`）
+### 1. TitleBar（`TitleBar.tsx`）
 
-**After:**
-- 顶部只保留"新线程"按钮，样式改为小号图标+文字（`py-1.5 px-2 text-[13px]`）
-- 线程标题区"线程"标签保留，去掉筛选按钮
-- 线程 item 单行：`标题...` + `时间`（flex justify-between），`py-1.5 px-2.5 text-[12px]`
-- 选中态：`bg-white/50` 轻微高亮，无边框
-- 底部"设置"按钮尺寸缩小
+**Codex 参考：** 顶部菜单栏有 File/Edit/View/Window/Help 原生菜单。
 
-### 2. Empty State (`MessageList.tsx` — items.length === 0)
+**我们的方案：** 保持 frameless + 自定义标题栏不变。窗口控制按钮（最小化/最大化/关闭）样式不变——已经足够紧凑。
 
-**Before:**
-- 64px 圆形图标 + 34px 粗体 "Let's build" + 下拉按钮
+**不改。**
 
-**After:**
-- 40px 图标（保持云朵或改为对话气泡）
-- 18px `font-medium` 标题 "开始构建"
-- 下方小号 `text-[13px] text-gray-400` 显示 "first_pi_agent"（纯文本，不带边框按钮）
+### 2. Sidebar（`Sidebar.tsx`）— 重写
 
-### 3. Composer (`Composer.tsx`)
+**Codex 参考（从截图精确提取）：**
 
-**Before:**
-- `px-8 pb-6 pt-2` 大 padding
-- 三层结构：输入框 / 工具栏 / 模型选择器（各有 border-top 分隔）
-- 发送按钮 40px 圆形
+```
+┌─────────────────────┐
+│ ✏ 新线程              │  ← 图标+文字，py-1.5 px-2，hover:bg-white/50
+│                       │
+│ 线程          ⇅ 📁+  │  ← "线程"标签 + 排序按钮 + 新建分组按钮
+│                       │
+│ 📁 C:                 │  ← 分组/项目（可展开/收缩）
+│ 📁 .openclaw          │
+│ ▼ 📁 first_pi_agent   │  ← 展开状态，hover 显示 ... 和 ✏ 按钮
+│   ⟳ 我刚刚创建了sp... 3天│  ← 线程 item：缩进，标题+时间同行
+│     开发 ChatGPT A... 6天│
+│     说明如何兼容by... 3周│
+│ 📁 bhdcm-html         │
+│                       │
+│ ⚙ 设置                │  ← 底部，点击直接跳设置页（不弹菜单）
+└─────────────────────┘
+```
 
-**After:**
-- `px-6 pb-4 pt-1` 收紧 padding
-- 两层结构：输入框 / 底部工具栏（附件按钮 + 模型选择器 + 发送按钮 同一行）
-- 去掉模型选择器独立分隔行，合并到底部工具栏
-- 发送按钮 28px 圆形
-- `max-w-3xl`（从 `max-w-4xl` 缩小）
-- 模型选择器改为更小的 pill：`text-[11px] py-0.5 px-2 rounded-[5px]`
+**当前这次实现（不含分组/项目功能，放下一个 spec）：**
 
-### 4. MessageList 消息样式
+```
+┌─────────────────────┐
+│ ✏ 新线程              │
+│                       │
+│ 线程                  │
+│                       │
+│  我刚刚创建了sp... 3天 │  ← 单行紧凑 item
+│  开发 ChatGPT A... 6天 │     hover 显示归档图标
+│  说明如何兼容by... 3周 │     选中态 bg-white/50
+│  update          3周  │
+│                       │
+│ 📦 已归档         (2) │  ← 归档入口，显示数量
+│ ⚙ 设置                │  ← 点击直接跳设置页
+└─────────────────────┘
+```
 
-**用户消息 — Before:**
-- 左对齐，uppercase "YOU" 标签 + 时间，蓝色半透明气泡 `bg-accent-500/8`
+**细节规范：**
 
-**用户消息 — After:**
-- 右对齐（`flex justify-end`）
-- 灰色气泡 `bg-gray-100 rounded-2xl px-3 py-2 text-[13px]`
-- 去掉 "YOU" 标签和时间（或改为 hover 时才显示时间）
-- `max-w-[75%]` 限制宽度
+- **"新线程"按钮：** `PlusIcon` (14px) + 文字 "新线程"，`text-[13px] text-gray-600`，`py-1.5 px-2 rounded-md`，hover `bg-white/50`
+- **"线程"标签：** `text-[11px] font-medium text-gray-400`，左侧 `px-3`
+- **线程 item：**
+  - 单行 flex：标题（truncate，`text-[13px]`，选中 `text-gray-800`，未选中 `text-gray-500`）+ 时间（`text-[11px] text-gray-300`）
+  - padding: `py-1.5 px-2.5 rounded-md`
+  - 选中态：`bg-white/60`
+  - hover：`bg-white/40` + 右侧显示归档图标（`ArchiveBoxIcon` 12px，灰色，hover 变深）
+  - 间距：`space-y-px`
+- **"已归档"入口：** `ArchiveBoxIcon` (14px) + "已归档" + 数量徽章（`text-[10px] text-gray-300`），`text-[12px] text-gray-400`
+- **"设置"按钮：** `Cog6ToothIcon` (14px) + "设置"，`text-[12px] text-gray-400`，点击直接跳设置页（不弹出菜单/popover）
+- **归档视图：** 点击"已归档"后，线程列表区域替换为归档列表，顶部有 `← 返回` 按钮。归档 item hover 显示恢复+删除按钮。
 
-**助手消息 — Before:**
-- 左对齐，uppercase "ASSISTANT" 标签 + 时间
+### 3. 顶部内容栏（`App.tsx` 中的 header）
 
-**助手消息 — After:**
-- 左对齐，无标签/无头像（直接显示文本内容）
-- `text-[13px] leading-relaxed text-gray-700`
-- Agent steps 保持 StepCard 组件，间距随全局收紧
+**Codex 参考：**
+```
+线程标题  项目名  ...    [模型图标v] [⇋移至工作树] [⊙提交v] [>_] [📋] [+343 -1] [📋]
+```
 
-### 5. Context Panel 默认状态
+**当前这次实现（终端按钮+diff 统计放下一个 spec）：**
+```
+线程标题                                              [📐 右面板切换]
+```
 
-- `App.tsx` 中 `rightPanelOpen` 初始值从 `true` 改为 `false`
-- `bootApp` 中从 `uiState.rightPanelOpen` 读取仍保留（用户手动开过的会恢复）
+- 标题：`text-[13px] font-medium text-gray-500`
+- padding：`px-4 py-2`（从 `px-5 py-3` 收紧）
+- 右面板切换按钮保持，但缩小为 `h-7 min-w-7`
 
-### 6. Global Styles
+### 4. Empty State（`MessageList.tsx` — 空状态）
 
-**theme.css:**
-- `--color-bg-shell: #f0f0f0`（中性灰，从 `#e8ecf2` 蓝灰调整）
-- 其他变量保持不变
+**Codex 参考：** 居中显示对话气泡图标 + "开始构建" + 项目名（带下拉箭头）
 
-**styles.css:**
-- 滚动条 thumb 宽度从 10px 缩小到 6px
-- `.floating-workspace` 圆角从 `2xl` 缩至 `xl`
-- body 背景色跟随 `--color-bg-shell`
+**我们的实现：**
+- 图标：对话气泡 SVG，40px，`text-gray-400`，浅灰圆形背景 `h-10 w-10 bg-gray-50 border border-black/6`
+- 标题：`text-lg font-medium text-gray-700`，内容"开始构建"
+- 副标题：`text-[13px] text-gray-400`，内容"first_pi_agent"（纯文本，不带边框/下拉）
 
-**index.html:**
-- `body class` 的 `bg-[#e8ecf2]` 改为 `bg-[#f0f0f0]`
+### 5. Composer（`Composer.tsx`）— 重写布局
 
-### 7. Archive Feature（归档线程）
+**Codex 参考：**
+```
+┌──────────────────────────────────────────┐
+│ Ask Codex anything, 📎 to add files...    │  ← placeholder
+│                                            │
+│ + │ GPT-5.4 v │ 高 v │            │ [⬆] │  ← 底部工具栏
+└──────────────────────────────────────────┘
+  □ 本地 v │ ⚙ 自定义(config.toml) v        ← 外部状态栏（我们暂不做）
+```
 
-**概念：** 线程不能直接删除。主列表里只能"归档"，归档后的线程从主列表消失，进入归档列表。只有在归档列表里才能永久删除。
+**我们的实现：**
+```
+┌──────────────────────────────────────────┐
+│ 向 Pi Agent 提问...                        │
+│                                            │
+│ 📎 │ Claude Sonnet-4 v │ 思考:关闭 v │ [⬆]│  ← 合并为一行
+└──────────────────────────────────────────┘
+```
+
+- 外层：`px-6 pb-4 pt-1`
+- 卡片：`max-w-3xl mx-auto rounded-xl border border-black/8 bg-white px-4 py-3 shadow-[0_2px_8px_rgba(99,117,145,0.04)]`
+- 输入区：`text-[13px] leading-7 text-gray-800 placeholder:text-gray-300`，无边框
+- 底部工具栏：`border-t border-black/4 pt-2 mt-2`，flex 一行
+  - 左侧：附件按钮（图标 only，`PaperClipIcon` 14px）+ 模型选择器 pills（`text-[11px] py-0.5 px-2 border rounded-[5px]`）
+  - 右侧：发送按钮 28px 圆形 `bg-gray-800 text-white`，disabled `bg-gray-200 text-gray-400`
+- 附件 chips：如有附件，显示在输入区上方，`text-[11px]`
+- **去掉**独立的模型选择器分隔行
+
+### 6. MessageList 消息样式（`MessageList.tsx`）
+
+**Codex 参考：**
+- 用户消息：右对齐，灰色圆角气泡，无标签
+- 助手消息：左对齐，纯文本，无标签/头像
+
+**用户消息：**
+- `flex justify-end px-8 py-2`
+- 气泡：`max-w-[75%] bg-gray-100 rounded-2xl px-3.5 py-2 text-[13px] leading-7 text-gray-800`
+- 无 "YOU" 标签，无时间戳（hover 也不显示——保持干净）
+
+**助手消息（无 agent steps 时）：**
+- `px-8 py-2`
+- 直接渲染 `<FinalReply>`，`text-[13px] leading-relaxed text-gray-700`
+- 无 "ASSISTANT" 标签，无时间戳
+
+**助手消息（有 agent steps 时）：**
+- `px-8 py-2`
+- 渲染 `<AgentResponseBlock>`，步骤卡片间距随全局收紧
+
+**系统消息：**
+- `px-8 py-2`
+- `rounded-xl border border-amber-400/20 bg-amber-50 px-3 py-2 text-[12px] text-amber-800`
+
+**Virtuoso 容器：** `max-w-3xl`（从 `max-w-4xl` 缩小）
+
+### 7. Context Panel 默认状态
+
+- `rightPanelOpen` 初始值改为 `false`
+- `store.ts` 的 `getUiState()` 默认值也改为 `{ rightPanelOpen: false }`
+- 已保存的用户偏好仍会从文件恢复
+
+### 8. Boot/Error 页面（`App.tsx`）
+
+**启动页：**
+- `rounded-xl`（从 `rounded-[28px]` 缩小）
+- 标题：`text-lg font-medium`（从 `text-2xl font-semibold`）
+- padding：`px-6 py-4`（从 `px-8 py-7`）
+- 背景色：`bg-[#f0f0f0]`
+
+**错误页：**
+- 同样收紧，`max-w-lg`（从 `max-w-2xl`），`rounded-xl`，`px-6 py-4`
+
+### 9. Archive Feature（归档线程）
 
 **数据层（contracts.ts + store.ts）：**
 
-- `ChatSession` 新增 `archived?: boolean` 字段（可选，默认 `false`）
-- `ChatSessionSummary` 新增 `archived?: boolean` 字段
-- `store.ts` 新增：
-  - `archiveSession(sessionId: string)` — 将 session 的 `archived` 设为 `true` 并保存
-  - `unarchiveSession(sessionId: string)` — 将 session 的 `archived` 设为 `false` 并保存
-  - `listSessions()` — 只返回 `archived !== true` 的 sessions
-  - `listArchivedSessions()` — 只返回 `archived === true` 的 sessions
-  - `deleteSession()` — 已存在，保持不变（归档页面调用）
+- `ChatSession` 新增 `archived?: boolean`
+- `ChatSessionSummary` 新增 `archived?: boolean`
+- `summarizeSession()` 包含 `archived`
+- `listSessions()` 过滤 `archived !== true`
+- 新增 `listArchivedSessions()` / `archiveSession()` / `unarchiveSession()`
+- `deleteSession()` 已存在，保持不变
 
-**IPC 层（ipc.ts + preload + main/index.ts）：**
+**IPC 层：**
 
-- 新增 IPC channels：
-  - `sessions:archive` — 归档指定 session
-  - `sessions:unarchive` — 取消归档
-  - `sessions:list-archived` — 列出已归档 sessions
-  - `sessions:delete` — 永久删除（仅归档页面使用）
-- `DesktopApi.sessions` 新增：
-  - `archive(sessionId: string): Promise<void>`
-  - `unarchive(sessionId: string): Promise<void>`
-  - `listArchived(): Promise<ChatSessionSummary[]>`
-  - `delete(sessionId: string): Promise<void>`
+- 新增 channels：`sessions:archive` / `sessions:unarchive` / `sessions:list-archived` / `sessions:delete`
+- `DesktopApi.sessions` 新增：`archive()` / `unarchive()` / `listArchived()` / `delete()`
+- preload 暴露对应方法
+- main/index.ts 注册对应 handler
 
-**Sidebar UI：**
+**Sidebar UI：** 见上面 Sidebar 组件 spec。
 
-- 线程列表底部（设置按钮上方）新增"已归档"入口，样式为小号图标+文字（类似 Codex 的 `归档线程` 按钮）
-- 点击后侧边栏线程列表区域切换为归档列表视图：
-  - 顶部显示 `← 已归档` 返回按钮
-  - 列出所有已归档线程（同样的单行紧凑样式）
-  - 每个归档线程 hover 时显示两个操作：恢复（取消归档） / 删除（永久）
-- 主列表中线程 hover 时显示归档图标按钮（`ArchiveBoxIcon`），点击归档该线程
+---
+
+## 下一个 Spec 预留
+
+以下功能不在本次范围，放到下一个 spec：
+
+1. **项目/分组**：侧边栏项目树（项目 → 线程），项目绑定工作目录，分组展开/收缩，`...` 菜单
+2. **顶部工具栏**：终端切换按钮、diff 统计徽章（`+343 -1`）
+3. **设置页面**：Codex 风格的全页设置（常规/外观/配置/MCP 等分类导航）
+4. **Codex 薄荷绿色调**：等功能稳定后统一调色
+
+---
 
 ## Files to Modify
 
-1. `src/renderer/src/styles/theme.css` — 修改 shell 背景色变量
-2. `src/renderer/src/styles.css` — 滚动条、floating-workspace 圆角
-3. `src/renderer/src/App.tsx` — rightPanelOpen 默认值、grid cols padding、booting/error 页面字号
-4. `src/renderer/src/components/Sidebar.tsx` — 删按钮、重写线程 item、新增归档入口和归档列表视图
-5. `src/renderer/src/components/Composer.tsx` — 收紧间距、合并工具栏行
-6. `src/renderer/src/components/MessageList.tsx` — 用户消息右对齐灰泡、助手消息去标签
+1. `src/renderer/src/styles/theme.css` — shell 背景色 + 新增 CSS 变量
+2. `src/renderer/src/styles.css` — 滚动条、floating-workspace
+3. `src/renderer/src/App.tsx` — rightPanelOpen 默认值、layout padding、boot/error 页面
+4. `src/renderer/src/components/Sidebar.tsx` — 完全重写
+5. `src/renderer/src/components/Composer.tsx` — 重写布局
+6. `src/renderer/src/components/MessageList.tsx` — 消息样式重写
 7. `src/renderer/index.html` — body 背景色
-8. `src/shared/contracts.ts` — ChatSession/ChatSessionSummary 加 `archived` 字段，DesktopApi 加归档方法
-9. `src/shared/ipc.ts` — 新增归档相关 IPC channel
-10. `src/main/store.ts` — 新增 archiveSession/unarchiveSession/listArchivedSessions
-11. `src/main/index.ts` — 注册归档相关 IPC handler
-12. `src/preload/index.ts` — 暴露归档相关 desktopApi 方法
+8. `src/shared/contracts.ts` — archived 字段、DesktopApi 归档方法
+9. `src/shared/ipc.ts` — 归档 IPC channels
+10. `src/main/store.ts` — 归档函数、listSessions 过滤、getUiState 默认值
+11. `src/main/index.ts` — 归档 IPC handler、backgroundColor
+12. `src/preload/index.ts` — 归档 desktopApi 方法
