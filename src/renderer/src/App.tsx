@@ -1,13 +1,13 @@
 import { startTransition, useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { CommandLineIcon, RectangleGroupIcon } from "@heroicons/react/24/outline";
-import type { ChatSession, ChatSessionSummary, ModelSelection, SessionGroup, ThinkingLevel, WindowFrameState } from "@shared/contracts";
-import { AssistantThreadPanel } from "@renderer/components/AssistantThreadPanel";
-import { ContextPanel } from "@renderer/components/ContextPanel";
-import { Sidebar } from "@renderer/components/Sidebar";
-import { TitleBar } from "@renderer/components/TitleBar";
-import { SettingsModal } from "@renderer/components/SettingsModal";
-import { TerminalDrawer } from "@renderer/components/TerminalDrawer";
-import { Button } from "@renderer/components/ui/button";
+import type { ChatSession, ChatSessionSummary, ModelSelection, SelectedFile, SessionGroup, ThinkingLevel, WindowFrameState } from "@shared/contracts";
+import { AssistantThreadPanel } from "@renderer/components/assistant-ui/assistant-thread-panel";
+import { Button } from "@renderer/components/assistant-ui/button";
+import { ContextPanel } from "@renderer/components/assistant-ui/context-panel";
+import { SettingsModal } from "@renderer/components/assistant-ui/settings-modal";
+import { Sidebar } from "@renderer/components/assistant-ui/sidebar";
+import { TerminalDrawer } from "@renderer/components/assistant-ui/terminal-drawer";
+import { TitleBar } from "@renderer/components/assistant-ui/title-bar";
 import { mergeAttachments, upsertSummary } from "@renderer/lib/session";
 
 const ACTIVE_SESSION_STORAGE_KEY = "first-pi-agent.active-session-id";
@@ -45,6 +45,7 @@ export default function App() {
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("off");
 
   const activeSessionId = activeSession?.id ?? null;
+  const threadGridColumns = rightPanelOpen ? "minmax(0,1fr) 360px" : "minmax(0,1fr) 0px";
   const summariesRef = useRef<ChatSessionSummary[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
   const sidebarWidthRef = useRef(sidebarWidth);
@@ -331,17 +332,14 @@ export default function App() {
     );
   }, [desktopApi]);
 
-  const attachFiles = useCallback(async () => {
-    if (!activeSession || !desktopApi) {
-      return;
-    }
+  const enrichSelectedFiles = useCallback(
+    async (files: SelectedFile[]) => {
+      if (!desktopApi) {
+        return files;
+      }
 
-    setIsPickingFiles(true);
-
-    try {
-      const pickedFiles = await desktopApi.files.pick();
-      const enrichedFiles = await Promise.all(
-        pickedFiles.map(async (file) => {
+      return Promise.all(
+        files.map(async (file) => {
           if (file.kind !== "text") {
             return file;
           }
@@ -355,7 +353,17 @@ export default function App() {
           };
         }),
       );
+    },
+    [desktopApi],
+  );
 
+  const appendAttachmentsToSession = useCallback(
+    async (files: SelectedFile[]) => {
+      if (!activeSession || !desktopApi || files.length === 0) {
+        return;
+      }
+
+      const enrichedFiles = await enrichSelectedFiles(files);
       const nextSession: ChatSession = {
         ...activeSession,
         attachments: mergeAttachments(activeSession.attachments, enrichedFiles),
@@ -368,10 +376,57 @@ export default function App() {
         setRightPanelOpen(true);
         void desktopApi.ui.setRightPanelOpen(true);
       }
+    },
+    [
+      activeSession,
+      desktopApi,
+      enrichSelectedFiles,
+      persistSession,
+      rightPanelOpen,
+    ],
+  );
+
+  const attachFiles = useCallback(async () => {
+    if (!activeSession || !desktopApi) {
+      return;
+    }
+
+    setIsPickingFiles(true);
+
+    try {
+      const pickedFiles = await desktopApi.files.pick();
+      await appendAttachmentsToSession(pickedFiles);
     } finally {
       setIsPickingFiles(false);
     }
-  }, [activeSession, desktopApi, persistSession, rightPanelOpen]);
+  }, [activeSession, appendAttachmentsToSession, desktopApi]);
+
+  const pasteFiles = useCallback(
+    async (files: File[]) => {
+      if (!activeSession || !desktopApi || files.length === 0) {
+        return;
+      }
+
+      setIsPickingFiles(true);
+
+      try {
+        const pastedFiles = await Promise.all(
+          files.map(async (file) =>
+            desktopApi.files.saveFromClipboard({
+              name: file.name,
+              mimeType: file.type,
+              buffer: await file.arrayBuffer(),
+            }),
+          ),
+        );
+
+        await appendAttachmentsToSession(pastedFiles);
+      } finally {
+        setIsPickingFiles(false);
+      }
+    },
+    [activeSession, appendAttachmentsToSession, desktopApi],
+  );
 
   const removeAttachment = useCallback(
     (attachmentId: string) => {
@@ -460,7 +515,7 @@ export default function App() {
   }
 
   return (
-    <main className="flex h-screen flex-col bg-shell-window text-foreground">
+    <main className="flex h-screen flex-col overflow-hidden rounded-[var(--radius-shell)] border border-shell-border bg-shell-window text-foreground">
       <TitleBar
         isMaximized={frameState.isMaximized}
         onMinimize={() => desktopApi?.window.minimize()}
@@ -501,14 +556,14 @@ export default function App() {
         </aside>
 
         <section className="relative flex min-h-0 flex-col overflow-hidden bg-shell-window">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[30px] border border-shell-border border-r-0 border-b-0 bg-shell-panel shadow-none">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] border border-shell-border border-r-0 border-b-0 bg-shell-panel shadow-none">
             <div className="flex items-center justify-end gap-2 px-5 pb-3 pt-4">
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
                 onClick={() => setTerminalOpen((prev) => !prev)}
-                className={`h-9 w-9 rounded-xl border-shell-border bg-shell-toolbar text-muted-foreground shadow-none hover:bg-shell-toolbar-hover hover:text-foreground ${terminalOpen ? "border-shell-border bg-shell-panel text-foreground" : ""}`}
+                className={`h-9 w-9 rounded-[var(--radius-shell)] border-shell-border bg-shell-toolbar text-muted-foreground shadow-none hover:bg-shell-toolbar-hover hover:text-foreground ${terminalOpen ? "border-shell-border bg-shell-panel text-foreground" : ""}`}
                 aria-label={terminalOpen ? "收起终端" : "展开终端"}
               >
                 <CommandLineIcon className="h-4 w-4" />
@@ -518,14 +573,17 @@ export default function App() {
                 variant="outline"
                 size="icon"
                 onClick={toggleRightPanel}
-                className={`h-9 w-9 rounded-xl border-shell-border bg-shell-toolbar text-muted-foreground shadow-none hover:bg-shell-toolbar-hover hover:text-foreground ${rightPanelOpen ? "border-shell-border bg-shell-panel text-foreground" : ""}`}
+                className={`h-9 w-9 rounded-[var(--radius-shell)] border-shell-border bg-shell-toolbar text-muted-foreground shadow-none hover:bg-shell-toolbar-hover hover:text-foreground ${rightPanelOpen ? "border-shell-border bg-shell-panel text-foreground" : ""}`}
                 aria-label={rightPanelOpen ? "收起右侧上下文" : "展开右侧上下文"}
               >
                 <RectangleGroupIcon className="h-4 w-4" />
               </Button>
             </div>
 
-            <div className={`grid min-h-0 flex-1 bg-shell-panel ${rightPanelOpen ? "grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-[minmax(0,1fr)]"}`}>
+            <div
+              className="grid min-h-0 flex-1 bg-shell-panel transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+              style={{ gridTemplateColumns: threadGridColumns }}
+            >
               <section className="flex min-h-0 flex-col bg-shell-panel">
                 {activeSession && desktopApi ? (
                   <AssistantThreadPanel
@@ -534,8 +592,10 @@ export default function App() {
                     onPersistSession={persistSession}
                     currentModel={currentModel}
                     thinkingLevel={thinkingLevel}
+                    terminalOpen={terminalOpen}
                     isPickingFiles={isPickingFiles}
                     onAttachFiles={attachFiles}
+                    onPasteFiles={pasteFiles}
                     onRemoveAttachment={removeAttachment}
                     onModelChange={handleModelChange}
                     onThinkingLevelChange={handleThinkingLevelChange}
@@ -547,7 +607,9 @@ export default function App() {
                 )}
               </section>
 
-              {rightPanelOpen ? <ContextPanel open={rightPanelOpen} session={activeSession} /> : null}
+              <div className={`min-h-0 overflow-hidden ${rightPanelOpen ? "" : "pointer-events-none"}`}>
+                <ContextPanel open={rightPanelOpen} session={activeSession} />
+              </div>
             </div>
 
             <TerminalDrawer

@@ -1,5 +1,6 @@
 # CLAUDE.md
 
+alwasy resopnse in chinese.
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
@@ -60,3 +61,4 @@ Sessions, messages, drafts, attachments, and UI state are stored as JSON at `${a
 - Renderer has no Node.js access (context isolation) — all system calls go through `window.desktopApi`
 - UI component library: HeroUI + Headless UI + Heroicons
 - commit 时不要带上 Co-Authored-By
+- 如果没有明确要求，不要build

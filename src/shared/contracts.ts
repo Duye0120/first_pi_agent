@@ -117,6 +117,12 @@ export type FilePreviewResult = {
   error?: string;
 };
 
+export type ClipboardFilePayload = {
+  name?: string;
+  mimeType?: string;
+  buffer: ArrayBuffer;
+};
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
@@ -178,6 +184,9 @@ export type DesktopApi = {
   files: {
     pick: () => Promise<SelectedFile[]>;
     readPreview: (filePath: string) => Promise<FilePreviewResult>;
+    saveFromClipboard: (
+      payload: ClipboardFilePayload,
+    ) => Promise<SelectedFile>;
   };
   sessions: {
     list: () => Promise<ChatSessionSummary[]>;

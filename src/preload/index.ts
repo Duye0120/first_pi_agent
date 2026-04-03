@@ -13,6 +13,7 @@ const desktopApi: DesktopApi = {
   files: {
     pick: () => ipcRenderer.invoke(IPC_CHANNELS.filesPick),
     readPreview: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.filesReadPreview, filePath),
+    saveFromClipboard: (payload) => ipcRenderer.invoke(IPC_CHANNELS.filesSaveFromClipboard, payload),
   },
   sessions: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.sessionsList),

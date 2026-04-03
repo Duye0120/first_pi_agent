@@ -22,7 +22,6 @@
     "@assistant-ui/react-markdown": "^0.12.7",
     "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.2.0",
-    "@heroui/react": "3.0.1",
     "@mariozechner/pi-agent-core": "0.56.2",
     "@mariozechner/pi-ai": "0.56.2",
     "@modelcontextprotocol/ext-apps": "^1.0.1",

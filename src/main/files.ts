@@ -1,7 +1,12 @@
-import { basename, extname } from "node:path";
-import { readFile, stat } from "node:fs/promises";
-import { dialog, type BrowserWindow } from "electron";
-import type { FileKind, FilePreviewResult, SelectedFile } from "../shared/contracts.js";
+import { basename, extname, join } from "node:path";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { app, dialog, type BrowserWindow } from "electron";
+import type {
+  ClipboardFilePayload,
+  FileKind,
+  FilePreviewResult,
+  SelectedFile,
+} from "../shared/contracts.js";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico"]);
 const TEXT_EXTENSIONS = new Set([
@@ -32,6 +37,18 @@ const TEXT_EXTENSIONS = new Set([
   "env",
 ]);
 const MAX_PREVIEW_CHARACTERS = 6_000;
+const MIME_EXTENSION_MAP = new Map<string, string>([
+  ["image/png", "png"],
+  ["image/jpeg", "jpg"],
+  ["image/webp", "webp"],
+  ["image/gif", "gif"],
+  ["image/bmp", "bmp"],
+  ["image/svg+xml", "svg"],
+  ["text/plain", "txt"],
+  ["text/markdown", "md"],
+  ["application/json", "json"],
+  ["application/pdf", "pdf"],
+]);
 
 function getExtension(filePath: string) {
   return extname(filePath).replace(/^\./, "").toLowerCase();
@@ -51,6 +68,26 @@ function inferFileKind(extension: string): FileKind {
   }
 
   return "binary";
+}
+
+function getAttachmentsDir() {
+  return join(app.getPath("userData"), "data", "attachments");
+}
+
+function inferExtensionFromMimeType(mimeType?: string) {
+  if (!mimeType) return "";
+  return MIME_EXTENSION_MAP.get(mimeType.toLowerCase()) ?? "";
+}
+
+function sanitizeFileName(name: string) {
+  return basename(name)
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "-")
+    .trim();
+}
+
+function stripExtension(fileName: string) {
+  const extension = extname(fileName);
+  return extension ? fileName.slice(0, -extension.length) : fileName;
 }
 
 export async function pickFiles(browserWindow: BrowserWindow) {
@@ -80,6 +117,35 @@ export async function pickFiles(browserWindow: BrowserWindow) {
   );
 
   return selectedFiles;
+}
+
+export async function saveClipboardFile(
+  payload: ClipboardFilePayload,
+): Promise<SelectedFile> {
+  const safeName = sanitizeFileName(payload.name ?? "");
+  const extension = getExtension(safeName) || inferExtensionFromMimeType(payload.mimeType);
+  const baseName =
+    stripExtension(safeName) ||
+    (payload.mimeType?.startsWith("image/") ? "pasted-image" : "pasted-file");
+  const displayName =
+    safeName || (extension ? `${baseName}.${extension}` : baseName);
+  const storedFileName = `${baseName}-${Date.now()}-${crypto.randomUUID()}${
+    extension ? `.${extension}` : ""
+  }`;
+  const filePath = join(getAttachmentsDir(), storedFileName);
+  const fileBuffer = Buffer.from(payload.buffer);
+
+  await mkdir(getAttachmentsDir(), { recursive: true });
+  await writeFile(filePath, fileBuffer);
+
+  return {
+    id: crypto.randomUUID(),
+    name: displayName,
+    path: filePath,
+    size: fileBuffer.byteLength,
+    extension,
+    kind: inferFileKind(extension),
+  };
 }
 
 export async function readFilePreview(filePath: string): Promise<FilePreviewResult> {

@@ -39,6 +39,7 @@
   --color-shell-panel:       #ffffff;
   --color-shell-panel-muted: #f8fafc;
   --color-shell-border:      #dbe2ea;
+  --radius-shell:            8px;
   --color-shell-toolbar:     #f8fafc;
   --color-shell-toolbar-hover:#eef2f7;
   --color-shell-hover:       rgba(255, 255, 255, 0.72);

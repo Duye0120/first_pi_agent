@@ -20,7 +20,12 @@ import type {
   ThinkingLevel,
 } from "@shared/contracts";
 import { deriveSessionTitle } from "@renderer/lib/session";
-import { Thread } from "@renderer/components/ui/thread";
+import { Thread } from "@renderer/components/assistant-ui/thread";
+import {
+  selectedFileToCompleteAttachment,
+  toPersistedMessageAttachment,
+  type PersistedMessageAttachment,
+} from "@renderer/lib/assistant-ui-attachments";
 
 type AssistantThreadPanelProps = {
   session: ChatSession;
@@ -28,8 +33,10 @@ type AssistantThreadPanelProps = {
   onPersistSession: (session: ChatSession) => void;
   currentModel: ModelSelection;
   thinkingLevel: ThinkingLevel;
+  terminalOpen?: boolean;
   isPickingFiles: boolean;
   onAttachFiles: () => void;
+  onPasteFiles: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
   onModelChange: (model: ModelSelection) => void;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
@@ -66,6 +73,7 @@ function buildUserMessage(text: string, attachments: SelectedFile[]): ChatMessag
     status: "done",
     meta: {
       attachmentIds: attachments.map((attachment) => attachment.id),
+      attachments: attachments.map(toPersistedMessageAttachment),
     },
   };
 }
@@ -133,6 +141,21 @@ function buildAssistantParts(steps: AgentStep[], finalText: string): ThreadAssis
 
 function toThreadMessage(message: ChatMessage): ThreadMessageLike {
   const createdAt = new Date(message.timestamp);
+  const persistedAttachments = Array.isArray(message.meta?.attachments)
+    ? message.meta.attachments.filter((attachment): attachment is PersistedMessageAttachment => {
+        if (!attachment || typeof attachment !== "object") return false;
+
+        const candidate = attachment as Partial<PersistedMessageAttachment>;
+        return (
+          typeof candidate.id === "string" &&
+          typeof candidate.name === "string" &&
+          typeof candidate.size === "number" &&
+          typeof candidate.kind === "string" &&
+          typeof candidate.extension === "string" &&
+          typeof candidate.path === "string"
+        );
+      })
+    : [];
 
   if (message.role === "assistant") {
     return {
@@ -171,6 +194,7 @@ function toThreadMessage(message: ChatMessage): ThreadMessageLike {
     role: "user",
     createdAt,
     content: message.content,
+    attachments: persistedAttachments.map(selectedFileToCompleteAttachment),
     metadata: {
       custom: {
         rawMessageId: message.id,
@@ -254,8 +278,10 @@ function SessionRuntime({
   onPersistSession,
   currentModel,
   thinkingLevel,
+  terminalOpen = false,
   isPickingFiles,
   onAttachFiles,
+  onPasteFiles,
   onRemoveAttachment,
   onModelChange,
   onThinkingLevelChange,
@@ -438,7 +464,9 @@ function SessionRuntime({
       <Thread
         attachments={session.attachments}
         isPickingFiles={isPickingFiles}
+        terminalOpen={terminalOpen}
         onAttachFiles={onAttachFiles}
+        onPasteFiles={onPasteFiles}
         onRemoveAttachment={onRemoveAttachment}
         currentModel={currentModel}
         thinkingLevel={thinkingLevel}

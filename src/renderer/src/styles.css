@@ -27,7 +27,7 @@
 :root {
   color-scheme: light;
   font-family: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei UI", sans-serif;
-  background: hsl(var(--background));
+  background: transparent;
 }
 
 html,
@@ -40,7 +40,12 @@ body,
 body {
   overflow: hidden;
   color: hsl(var(--foreground));
-  background: var(--color-shell-window);
+  background: transparent;
+}
+
+#root {
+  overflow: hidden;
+  border-radius: var(--radius-shell);
 }
 
 * {
@@ -53,7 +58,7 @@ input {
   font: inherit;
 }
 
-/* ── Override HeroUI/browser focus ring on plain inputs ── */
+/* ── Override browser focus ring on plain inputs ── */
 @layer base {
   input:focus,
   input:focus-visible,
@@ -138,18 +143,6 @@ input {
     color: hsl(var(--muted-foreground));
   }
 
-  .heroui-soft-card {
-    border: 1px solid rgba(15, 23, 42, 0.06);
-    background: rgba(255, 255, 255, 0.78);
-    box-shadow: 0 8px 24px rgba(90, 109, 139, 0.08);
-  }
-
-  .heroui-ghost-button {
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    background: rgba(255, 255, 255, 0.78);
-    color: #526171;
-  }
-
   /* Streaming cursor blink */
   .streaming-cursor::after {
     content: "▎";
@@ -173,11 +166,22 @@ input {
   50% { opacity: 0.4; }
 }
 
-/* Focus ring for keyboard navigation */
-:focus-visible {
+/* Fallback focus ring for elements without component-level focus styling */
+:where(button:not([role="combobox"]), [role="button"], a, input, textarea):focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+:where(
+  [role="combobox"],
+  [role="option"],
+  [data-slot="select-trigger"],
+  [data-slot="select-item"],
+  [data-slot="model-selector-trigger"],
+  [data-slot="model-selector-item"]
+):focus-visible {
+  outline: none;
 }
 
 /* Smooth transitions for theme changes */
