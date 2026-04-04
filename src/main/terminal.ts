@@ -1,5 +1,7 @@
 import * as pty from "node-pty";
 import type { BrowserWindow } from "electron";
+import fs from "node:fs";
+import path from "node:path";
 import { IPC_CHANNELS } from "../shared/ipc.js";
 import { getSettings } from "./settings.js";
 
@@ -16,21 +18,110 @@ export function setTerminalWindow(window: BrowserWindow): void {
   mainWindow = window;
 }
 
-function getShell(): string {
-  const settings = getSettings();
-  if (settings.terminal.shell !== "default") return settings.terminal.shell;
+type ResolvedShell = {
+  command: string;
+  args: string[];
+  label: string;
+};
 
-  if (process.platform === "win32") return "powershell.exe";
-  return process.env.SHELL ?? "/bin/zsh";
+function findExecutableOnPath(executableNames: string[]): string | null {
+  const pathValue = process.env.PATH;
+  if (!pathValue) {
+    return null;
+  }
+
+  const directories = pathValue.split(path.delimiter).filter(Boolean);
+  for (const directory of directories) {
+    for (const executableName of executableNames) {
+      const fullPath = path.join(directory, executableName);
+      if (fs.existsSync(fullPath)) {
+        return fullPath;
+      }
+    }
+  }
+
+  return null;
+}
+
+function findGitBash(): string | null {
+  const candidates = [
+    "C:\\Program Files\\Git\\bin\\bash.exe",
+    "C:\\Program Files\\Git\\usr\\bin\\bash.exe",
+    "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+    "C:\\Program Files (x86)\\Git\\usr\\bin\\bash.exe",
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return findExecutableOnPath(["bash.exe", "git-bash.exe"]);
+}
+
+function resolveWindowsShell(selection: string): ResolvedShell {
+  switch (selection) {
+    case "powershell": {
+      const command =
+        findExecutableOnPath(["powershell.exe", "pwsh.exe"]) ??
+        "powershell.exe";
+      return { command, args: [], label: "PowerShell" };
+    }
+    case "cmd": {
+      const command = findExecutableOnPath(["cmd.exe"]) ?? "cmd.exe";
+      return { command, args: [], label: "Command Prompt" };
+    }
+    case "git-bash": {
+      const command = findGitBash();
+      if (command) {
+        return { command, args: ["--login", "-i"], label: "Git Bash" };
+      }
+      break;
+    }
+    case "wsl": {
+      const command = findExecutableOnPath(["wsl.exe"]) ?? "wsl.exe";
+      return { command, args: [], label: "WSL" };
+    }
+    default:
+      break;
+  }
+
+  const fallback = findExecutableOnPath(["powershell.exe", "pwsh.exe"]);
+  return {
+    command: fallback ?? "powershell.exe",
+    args: [],
+    label: "PowerShell",
+  };
+}
+
+function resolveShell(selection: string): ResolvedShell {
+  if (process.platform === "win32") {
+    return resolveWindowsShell(selection);
+  }
+
+  if (selection !== "default") {
+    return {
+      command: selection,
+      args: [],
+      label: selection,
+    };
+  }
+
+  return {
+    command: process.env.SHELL ?? "/bin/zsh",
+    args: [],
+    label: "System Shell",
+  };
 }
 
 export function createTerminal(options?: { cwd?: string }): string {
   const id = crypto.randomUUID();
   const settings = getSettings();
   const cwd = options?.cwd ?? settings.workspace;
-  const shell = getShell();
+  const shell = resolveShell(settings.terminal.shell);
 
-  const ptyProcess = pty.spawn(shell, [], {
+  const ptyProcess = pty.spawn(shell.command, shell.args, {
     name: "xterm-256color",
     cols: 80,
     rows: 24,

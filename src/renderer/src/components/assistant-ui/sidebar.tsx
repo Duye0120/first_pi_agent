@@ -17,7 +17,7 @@ import {
 } from "@heroicons/react/24/outline";
 import type { ChatSessionSummary, SessionGroup } from "@shared/contracts";
 import { formatRelativeTime } from "@renderer/lib/session";
-import type { SettingsSection } from "@renderer/components/assistant-ui/settings-modal";
+import type { SettingsSection } from "@renderer/components/assistant-ui/settings/types";
 
 type SidebarProps = {
   summaries: ChatSessionSummary[];
@@ -183,8 +183,8 @@ export function Sidebar({
                   onClick={() => onSelectSettingsSection?.(id)}
                   className={`flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-3 py-2 text-left text-[12px] transition ${
                     active
-                      ? "border border-shell-border bg-shell-panel text-foreground"
-                      : "border border-transparent text-muted-foreground hover:bg-shell-hover hover:text-foreground"
+                      ? "bg-shell-panel-elevated text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+                      : "text-muted-foreground hover:bg-shell-hover hover:text-foreground"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -195,7 +195,7 @@ export function Sidebar({
           </div>
         </div>
 
-        <div className="border-t border-border/70 px-3 py-3">
+        <div className="px-3 py-3">
           <button
             type="button"
             onClick={onExitSettings}
@@ -239,7 +239,7 @@ export function Sidebar({
           }}
           className={`group flex cursor-pointer items-center rounded-[var(--radius-shell)] py-2 transition ${
             indented ? "pl-6 pr-2.5" : "px-3"
-          } ${active ? "border border-shell-border bg-shell-panel" : "border border-transparent hover:bg-shell-hover"}`}
+          } ${active ? "bg-shell-panel-elevated shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]" : "hover:bg-shell-hover"}`}
         >
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
@@ -289,7 +289,7 @@ export function Sidebar({
             {isThreadMenuOpen ? (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 top-full z-20 mt-1 min-w-[132px] rounded-[var(--radius-shell)] border border-shell-border bg-popover py-1 shadow-lg"
+                className="absolute right-0 top-full z-20 mt-1 min-w-[132px] rounded-[var(--radius-shell)] bg-shell-panel-elevated py-1 shadow-[0_18px_40px_rgba(0,0,0,0.32)]"
               >
                 <button
                   type="button"
@@ -333,7 +333,7 @@ export function Sidebar({
         {isMoving && (
           <div
             onClick={(e) => e.stopPropagation()}
-            className={`mx-2 mb-2 rounded-[var(--radius-shell)] border border-shell-border bg-popover py-1 shadow-lg ${indented ? "ml-6" : ""}`}
+            className={`mx-2 mb-2 rounded-[var(--radius-shell)] bg-shell-panel-elevated py-1 shadow-[0_18px_40px_rgba(0,0,0,0.32)] ${indented ? "ml-6" : ""}`}
           >
             {summary.groupId && (
               <button
@@ -383,7 +383,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={onNewSession}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] border border-shell-border bg-shell-panel px-3 py-2.5  font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] bg-shell-panel-elevated px-3 py-2.5 font-medium text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:bg-shell-panel-contrast"
         >
           <PlusIcon className="h-4 w-4" />
           <span className="text-[12px]">新线程</span>
@@ -502,7 +502,7 @@ export function Sidebar({
           >
             {/* Create group input */}
             {creatingGroup && (
-              <div className="mb-2 flex items-center rounded-[var(--radius-shell)] border border-shell-border bg-shell-panel px-2 py-2">
+              <div className="mb-2 flex items-center rounded-[var(--radius-shell)] bg-shell-panel-elevated px-2 py-2">
                 <span className="shrink-0 text-transparent">
                   <ChevronRightIcon className="h-3 w-3" />
                 </span>
@@ -536,7 +536,7 @@ export function Sidebar({
               return (
                 <div
                   key={group.id}
-                  className={`mb-2 rounded-[var(--radius-shell)] border border-transparent transition-colors ${isDragOver ? "border-shell-border bg-shell-hover" : "bg-transparent"}`}
+                  className={`mb-2 rounded-[var(--radius-shell)] transition-colors ${isDragOver ? "bg-shell-panel-muted" : "bg-transparent"}`}
                   onDragOver={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
@@ -616,7 +616,7 @@ export function Sidebar({
                       {isGroupMenuOpen && (
                         <div
                           onClick={(e) => e.stopPropagation()}
-                          className="absolute right-0 top-full z-20 mt-1 min-w-[88px] rounded-[var(--radius-shell)] border border-shell-border bg-popover py-1 shadow-lg"
+                          className="absolute right-0 top-full z-20 mt-1 min-w-[88px] rounded-[var(--radius-shell)] bg-shell-panel-elevated py-1 shadow-[0_18px_40px_rgba(0,0,0,0.32)]"
                         >
                           <button
                             type="button"
@@ -664,7 +664,7 @@ export function Sidebar({
 
             {ungroupedSessions.length > 0 ? (
               <div
-                className={`space-y-1 ${groupedSessions.length > 0 ? "mt-2 border-t border-border/70 pt-2" : ""}`}
+                className={`space-y-1 ${groupedSessions.length > 0 ? "mt-3 pt-2" : ""}`}
               >
                 {ungroupedSessions.map((s) => renderThreadItem(s, false))}
               </div>
@@ -674,7 +674,7 @@ export function Sidebar({
       </div>
 
       {/* Bottom: Archive entry + Settings */}
-      <div className="border-t border-border/70 px-3 py-3">
+      <div className="px-3 py-3">
         <button
           type="button"
           onClick={onOpenSettings}

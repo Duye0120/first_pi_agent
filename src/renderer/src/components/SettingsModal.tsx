@@ -1,4 +1,4 @@
 export {
   SettingsView,
   SettingsView as SettingsModal,
-} from "@renderer/components/assistant-ui/settings-modal";
+} from "@renderer/components/assistant-ui/settings-view";

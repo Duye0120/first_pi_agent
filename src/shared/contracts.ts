@@ -65,6 +65,7 @@ export type Settings = {
     scrollback: number;
   };
   ui: {
+    fontFamily: string;
     fontSize: number;
     codeFontSize: number;
     codeFontFamily: string;
@@ -249,7 +250,7 @@ export type DesktopApi = {
   window: {
     getState: () => Promise<WindowFrameState>;
     minimize: () => void;
-    toggleMaximize: () => void;
+    toggleMaximize: () => Promise<WindowFrameState>;
     close: () => void;
     onStateChange: (listener: (state: WindowFrameState) => void) => () => void;
   };

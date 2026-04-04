@@ -24,7 +24,7 @@ const CONTEXT_TABS: {
 
 function EmptyPanelState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="grid min-h-[220px] place-items-center rounded-[18px] border border-dashed border-border/80 bg-white/72 px-5 py-6 text-center shadow-[0_10px_28px_rgba(15,23,42,0.03)]">
+    <div className="grid min-h-[220px] place-items-center rounded-[18px] bg-shell-panel-elevated px-5 py-6 text-center shadow-[0_10px_28px_rgba(0,0,0,0.20)]">
       <div className="max-w-[240px]">
         <p className="text-sm font-medium text-foreground">{title}</p>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
@@ -43,7 +43,7 @@ function SectionCard({
   return (
     <section
       className={cn(
-        "rounded-[18px] border border-border/70 bg-white/88 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)] backdrop-blur-sm",
+        "rounded-[18px] bg-shell-panel-elevated p-4 shadow-[0_10px_28px_rgba(0,0,0,0.20)] backdrop-blur-sm",
         className,
       )}
     >
@@ -62,11 +62,11 @@ function AttachmentCard({ attachment }: { attachment: SelectedFile }) {
             {attachment.kind} · {(attachment.size / 1024).toFixed(1)} KB
           </p>
         </div>
-        <div className="rounded-full border border-border/70 bg-slate-50 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+        <div className="rounded-full bg-background px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           {attachment.extension || "file"}
         </div>
       </div>
-      <div className="mt-3 rounded-[14px] border border-border/60 bg-slate-50/80 px-3 py-2.5 text-xs leading-6 text-muted-foreground">
+      <div className="mt-3 rounded-[14px] bg-background px-3 py-2.5 text-xs leading-6 text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
         {attachment.previewText ? (
           <pre className="max-h-56 overflow-auto whitespace-pre-wrap font-sans">{attachment.previewText}</pre>
         ) : (
@@ -125,13 +125,13 @@ function getStepStatusLabel(status: AgentStep["status"]) {
 function getStepStatusClass(status: AgentStep["status"]) {
   switch (status) {
     case "success":
-      return "border-emerald-500/15 bg-emerald-50 text-emerald-600";
+      return "bg-emerald-500/14 text-emerald-300";
     case "error":
-      return "border-rose-500/15 bg-rose-50 text-rose-500";
+      return "bg-rose-500/14 text-rose-300";
     case "cancelled":
-      return "border-border/80 bg-slate-100 text-muted-foreground";
+      return "bg-background text-muted-foreground";
     default:
-      return "border-primary/15 bg-primary/8 text-primary";
+      return "bg-primary/12 text-primary";
   }
 }
 
@@ -141,22 +141,22 @@ function SessionOverview({ session }: { session: ChatSession }) {
       <SectionCard>
         <p className="truncate text-sm font-medium text-foreground">{session.title}</p>
         <div className="mt-4 grid grid-cols-2 gap-2.5 text-sm">
-          <div className="rounded-[14px] border border-border/60 bg-slate-50/80 px-3 py-2.5">
+          <div className="rounded-[14px] bg-background px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">消息</p>
             <p className="mt-2 text-lg font-semibold text-foreground">{session.messages.length}</p>
           </div>
-          <div className="rounded-[14px] border border-border/60 bg-slate-50/80 px-3 py-2.5">
+          <div className="rounded-[14px] bg-background px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">附件</p>
             <p className="mt-2 text-lg font-semibold text-foreground">{session.attachments.length}</p>
           </div>
         </div>
-        <div className="mt-3 rounded-[14px] border border-border/60 bg-slate-50/80 px-3 py-2.5">
+        <div className="mt-3 rounded-[14px] bg-background px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">最后更新</p>
           <p className="mt-2 text-sm text-foreground">{formatRelativeTime(session.updatedAt)}</p>
         </div>
       </SectionCard>
 
-      <SectionCard className="bg-white/72">
+      <SectionCard className="bg-shell-panel/80">
         <p className="text-sm font-medium text-foreground">本地状态</p>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           会话、草稿和附件元信息都保存在本地，后面 agent 运行记录也会继续挂在这一侧。
@@ -187,12 +187,12 @@ function StepTimeline({ steps }: { steps: AgentStep[] }) {
                 {new Date(step.startedAt).toLocaleString("zh-CN")}
               </p>
             </div>
-            <div className={cn("rounded-full border px-2.5 py-1 text-[11px]", getStepStatusClass(step.status))}>
+            <div className={cn("rounded-full px-2.5 py-1 text-[11px]", getStepStatusClass(step.status))}>
               {getStepStatusLabel(step.status)}
             </div>
           </div>
 
-          <div className="mt-3 rounded-[14px] border border-border/60 bg-slate-50/80 px-3 py-2.5 text-xs leading-6 text-muted-foreground">
+          <div className="mt-3 rounded-[14px] bg-background px-3 py-2.5 text-xs leading-6 text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <pre className="max-h-56 overflow-auto whitespace-pre-wrap font-sans">
               {getStepSummary(step)}
             </pre>
@@ -260,12 +260,12 @@ export function ContextPanel({ open, session }: ContextPanelProps) {
       }}
       transition={{ duration: 0.2, ease: "easeOut" }}
       className={cn(
-        "flex h-full min-h-0 flex-col border-l border-shell-border/80 bg-shell-panel px-4 py-4",
+        "flex h-full min-h-0 flex-col bg-shell-panel-muted px-4 py-4 shadow-[inset_1px_0_0_rgba(255,255,255,0.03)]",
         !open && "pointer-events-none",
       )}
       aria-hidden={!open}
     >
-      <div className="border-b border-border/70 pb-3">
+      <div className="pb-3">
         <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Context</p>
         <div className="mt-2 flex items-end justify-between gap-3">
           <div>
@@ -274,7 +274,7 @@ export function ContextPanel({ open, session }: ContextPanelProps) {
           </div>
         </div>
 
-        <div className="mt-4 rounded-[16px] border border-border/70 bg-white/76 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.03)] backdrop-blur-sm">
+        <div className="mt-4 rounded-[16px] bg-shell-panel-elevated p-1 shadow-[0_10px_24px_rgba(0,0,0,0.24)] backdrop-blur-sm">
           <div className="grid grid-cols-3 gap-1">
             {CONTEXT_TABS.map((tab) => {
               const Icon = tab.icon;
@@ -288,8 +288,8 @@ export function ContextPanel({ open, session }: ContextPanelProps) {
                   className={cn(
                     "flex items-center justify-center gap-1.5 rounded-[12px] px-3 py-2 text-xs font-medium transition",
                     isActive
-                      ? "bg-slate-900 text-white shadow-sm"
-                      : "text-muted-foreground hover:bg-slate-100 hover:text-foreground",
+                      ? "bg-foreground text-background shadow-sm"
+                      : "text-muted-foreground hover:bg-background hover:text-foreground",
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />

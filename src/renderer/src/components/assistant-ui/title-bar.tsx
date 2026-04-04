@@ -9,9 +9,12 @@ type TitleBarProps = {
 
 export function TitleBar({ isMaximized, onMinimize, onToggleMaximize, onClose }: TitleBarProps) {
   return (
-    <header className="app-drag flex h-10 items-center bg-transparent pl-4 pr-1 text-[11px] text-muted-foreground">
+    <header
+      className="app-drag flex h-10 items-center bg-transparent pl-4 pr-1 text-[11px] text-muted-foreground"
+      onDoubleClick={onToggleMaximize}
+    >
       <div className="app-drag flex-1" />
-      <div className="no-drag flex">
+      <div className="no-drag flex" onDoubleClick={(event) => event.stopPropagation()}>
         <button type="button" onClick={onMinimize} className="titlebar-control h-8 w-8 rounded-[var(--radius-shell)] hover:bg-accent hover:text-foreground" title="最小化" aria-label="最小化">
           <MinusIcon className="h-4 w-4" />
         </button>

@@ -35,7 +35,7 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   };
 
   return (
-    <div className="aui-code-header-root mt-2.5 flex items-center justify-between rounded-t-lg border border-border/50 border-b-0 bg-muted/50 px-3 py-1.5 text-xs">
+    <div className="aui-code-header-root mt-2.5 flex items-center justify-between rounded-t-lg bg-muted/50 px-3 py-1.5 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <span className="aui-code-header-language font-medium text-muted-foreground lowercase">
         {language}
       </span>
@@ -220,7 +220,7 @@ const defaultComponents = memoizeMarkdownComponents({
   pre: ({ className, ...props }) => (
     <pre
       className={cn(
-        "aui-md-pre overflow-x-auto rounded-t-none rounded-b-lg border border-border/50 border-t-0 bg-muted/30 p-3 text-xs leading-relaxed",
+        "aui-md-pre overflow-x-auto rounded-t-none rounded-b-lg bg-muted/30 p-3 text-xs leading-relaxed shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
         className,
       )}
       {...props}
@@ -232,7 +232,7 @@ const defaultComponents = memoizeMarkdownComponents({
       <code
         className={cn(
           !isCodeBlock &&
-            "aui-md-inline-code rounded-md border border-border/50 bg-muted/50 px-1.5 py-0.5 font-mono text-[0.85em]",
+            "aui-md-inline-code rounded-md bg-muted/50 px-1.5 py-0.5 font-mono text-[0.85em] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
           className,
         )}
         {...props}

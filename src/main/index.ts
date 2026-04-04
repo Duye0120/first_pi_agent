@@ -54,6 +54,8 @@ import {
 let mainWindow: BrowserWindow | null = null;
 let adapter: ElectronAdapter | null = null;
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const MIN_WINDOW_WIDTH = 920;
+const MIN_WINDOW_HEIGHT = 600;
 
 function getPreloadPath() {
   return join(__dirname, "../preload/index.mjs");
@@ -67,25 +69,32 @@ function getDevServerUrl() {
   return process.env.ELECTRON_RENDERER_URL ?? process.env.VITE_DEV_SERVER_URL;
 }
 
+function computeWindowFrameState() {
+  const window = requireMainWindow();
+  return {
+    isMaximized: window.isMaximized(),
+  };
+}
+
 function notifyWindowState() {
   if (!mainWindow) {
     return;
   }
 
-  mainWindow.webContents.send(IPC_CHANNELS.windowStateChanged, {
-    isMaximized: mainWindow.isMaximized(),
-  });
+  mainWindow.webContents.send(
+    IPC_CHANNELS.windowStateChanged,
+    computeWindowFrameState(),
+  );
 }
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1480,
     height: 920,
-    minWidth: 1120,
-    minHeight: 720,
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     frame: false,
-    transparent: true,
-    backgroundColor: "#00000000",
+    backgroundColor: "#e8edf3",
     title: "first_pi_agent",
     webPreferences: {
       preload: getPreloadPath(),
@@ -97,6 +106,7 @@ function createMainWindow() {
 
   mainWindow.on("maximize", notifyWindowState);
   mainWindow.on("unmaximize", notifyWindowState);
+  mainWindow.on("ready-to-show", notifyWindowState);
   mainWindow.webContents.on("before-input-event", (event, input) => {
     if (input.type !== "keyDown") return;
 
@@ -347,11 +357,11 @@ function registerIpcHandlers() {
     async (_event, open: boolean) => setRightPanelOpen(open),
   );
 
-  ipcMain.handle(IPC_CHANNELS.windowGetState, async () => ({
-    isMaximized: requireMainWindow().isMaximized(),
-  }));
+  ipcMain.handle(IPC_CHANNELS.windowGetState, async () => {
+    return computeWindowFrameState();
+  });
   ipcMain.on(IPC_CHANNELS.windowMinimize, () => requireMainWindow().minimize());
-  ipcMain.on(IPC_CHANNELS.windowToggleMaximize, () => {
+  ipcMain.handle(IPC_CHANNELS.windowToggleMaximize, async () => {
     const window = requireMainWindow();
 
     if (window.isMaximized()) {
@@ -359,6 +369,8 @@ function registerIpcHandlers() {
     } else {
       window.maximize();
     }
+
+    return computeWindowFrameState();
   });
   ipcMain.on(IPC_CHANNELS.windowClose, () => requireMainWindow().close());
 }

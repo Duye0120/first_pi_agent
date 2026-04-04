@@ -100,7 +100,7 @@ const desktopApi: DesktopApi = {
   window: {
     getState: () => ipcRenderer.invoke(IPC_CHANNELS.windowGetState),
     minimize: () => ipcRenderer.send(IPC_CHANNELS.windowMinimize),
-    toggleMaximize: () => ipcRenderer.send(IPC_CHANNELS.windowToggleMaximize),
+    toggleMaximize: () => ipcRenderer.invoke(IPC_CHANNELS.windowToggleMaximize),
     close: () => ipcRenderer.send(IPC_CHANNELS.windowClose),
     onStateChange: (listener: (state: WindowFrameState) => void) => {
       const wrappedListener = (_event: Electron.IpcRendererEvent, state: WindowFrameState) => {

@@ -54,6 +54,8 @@ export default {
         "shell-window":  "var(--color-shell-window)",
         "shell-panel":   "var(--color-shell-panel)",
         "shell-panel-muted":"var(--color-shell-panel-muted)",
+        "shell-panel-elevated":"var(--color-shell-panel-elevated)",
+        "shell-panel-contrast":"var(--color-shell-panel-contrast)",
         "shell-border":  "var(--color-shell-border)",
         "shell-toolbar": "var(--color-shell-toolbar)",
         "shell-toolbar-hover":"var(--color-shell-toolbar-hover)",

@@ -192,7 +192,7 @@ export const Thread: FC<ThreadProps> = ({
 
   return (
     <ThreadPrimitive.Root
-      className="@container flex h-full flex-col bg-white"
+      className="@container flex h-full flex-col bg-shell-panel"
       style={{
         ["--thread-max-width" as string]: "56rem",
         ["--composer-radius" as string]: "8px",
@@ -214,8 +214,8 @@ export const Thread: FC<ThreadProps> = ({
         <ThreadPrimitive.ViewportFooter
           className={
             terminalOpen
-              ? "sticky bottom-0 mx-auto mt-auto flex w-full max-w-none flex-col gap-2 overflow-visible bg-gradient-to-t from-white/92 via-white/84 to-transparent pb-1 pt-4"
-              : "sticky bottom-0 mx-auto mt-auto flex w-full max-w-none flex-col gap-3 overflow-visible bg-gradient-to-t from-white via-white to-transparent pb-3 pt-9 md:pb-4"
+              ? "sticky bottom-0 mx-auto mt-auto flex w-full max-w-none flex-col gap-2 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel/85 to-transparent pb-1 pt-4"
+              : "sticky bottom-0 mx-auto mt-auto flex w-full max-w-none flex-col gap-3 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel to-transparent pb-3 pt-9 md:pb-4"
           }
         >
           <ThreadScrollToBottom />
@@ -261,10 +261,10 @@ const ThreadWelcome: FC = () => {
     <div className="mx-auto my-auto flex w-full max-w-(--thread-max-width) grow flex-col">
       <div className="flex w-full grow flex-col items-start justify-center">
         <div className="flex size-full max-w-xl flex-col justify-center px-6 text-left">
-          <h1 className="fade-in slide-in-from-bottom-1 animate-in fill-mode-both font-semibold text-[2.2rem] tracking-[-0.03em] text-slate-900 duration-200">
+          <h1 className="fade-in slide-in-from-bottom-1 animate-in fill-mode-both font-semibold text-[2.2rem] tracking-[-0.03em] text-foreground duration-200">
             你好
           </h1>
-          <p className="fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-base text-slate-500 delay-75 duration-200">
+          <p className="fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-base text-muted-foreground delay-75 duration-200">
             今天想让我帮你做什么？
           </p>
         </div>
@@ -305,7 +305,7 @@ const Composer: FC<ThreadResolvedProps> = ({
         attachments={attachments}
         onRemoveAttachment={onRemoveAttachment}
       />
-      <div className="flex w-full flex-col gap-2 rounded-(--composer-radius) border border-black/8 bg-white p-(--composer-padding) shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition-shadow focus-within:border-ring/30 focus-within:ring-2 focus-within:ring-ring/8">
+      <div className="flex w-full flex-col gap-2 rounded-(--composer-radius) bg-shell-panel-muted p-(--composer-padding) shadow-[0_10px_30px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.03)] transition-shadow focus-within:ring-2 focus-within:ring-ring/12">
         <ComposerAttachments />
 
         <ComposerPrimitive.Input
@@ -385,7 +385,7 @@ const ComposerAction: FC<
               </span>
             ),
           }))}
-          className="h-8 rounded-md border border-input bg-transparent text-[12px]"
+          className="h-8 rounded-md bg-shell-panel-elevated text-[12px]"
           placeholder="思考强度"
         />
       </div>
@@ -397,7 +397,7 @@ const ComposerAction: FC<
             type="button"
             variant="default"
             size="icon"
-            className="size-9 rounded-full border border-slate-900 bg-slate-900 shadow-none hover:bg-slate-800"
+            className="size-9 rounded-full bg-[var(--color-accent)] text-white shadow-none hover:bg-[var(--color-accent-hover)]"
             aria-label="Send message"
           >
             <ArrowUpIcon className="size-4" />
@@ -410,7 +410,7 @@ const ComposerAction: FC<
             type="button"
             variant="default"
             size="icon"
-            className="size-8 rounded-full"
+            className="size-8 rounded-full bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]"
             aria-label="停止生成"
           >
             <SquareIcon className="size-3 fill-current" />
@@ -424,7 +424,7 @@ const ComposerAction: FC<
 const MessageError: FC = () => {
   return (
     <MessagePrimitive.Error>
-      <ErrorPrimitive.Root className="mt-2 rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive dark:bg-destructive/5 dark:text-red-200">
+      <ErrorPrimitive.Root className="mt-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive dark:bg-destructive/5 dark:text-red-200">
         <ErrorPrimitive.Message className="line-clamp-2" />
       </ErrorPrimitive.Root>
     </MessagePrimitive.Error>

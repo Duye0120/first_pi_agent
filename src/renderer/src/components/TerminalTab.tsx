@@ -2,14 +2,49 @@ import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import type { Settings } from "@shared/contracts";
 import "@xterm/xterm/css/xterm.css";
 
 type Props = {
   terminalId: string;
   visible: boolean;
+  settings: Settings | null;
 };
 
-export function TerminalTab({ terminalId, visible }: Props) {
+function getCssVariable(name: string, fallback: string) {
+  return (
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim() ||
+    fallback
+  );
+}
+
+function getTerminalTheme() {
+  return {
+    background: getCssVariable("--color-shell-terminal", "#f8f9fc"),
+    foreground: getCssVariable("--color-terminal-text", "#1e293b"),
+    cursor: getCssVariable("--color-accent", "#3b82f6"),
+    selectionBackground: getCssVariable("--color-accent-subtle", "#bfdbfe"),
+    selectionForeground: getCssVariable("--color-terminal-text", "#1e293b"),
+    black: getCssVariable("--terminal-ansi-black", "#334155"),
+    red: getCssVariable("--terminal-ansi-red", "#ef4444"),
+    green: getCssVariable("--terminal-ansi-green", "#22c55e"),
+    yellow: getCssVariable("--terminal-ansi-yellow", "#eab308"),
+    blue: getCssVariable("--terminal-ansi-blue", "#3b82f6"),
+    magenta: getCssVariable("--terminal-ansi-magenta", "#a855f7"),
+    cyan: getCssVariable("--terminal-ansi-cyan", "#06b6d4"),
+    white: getCssVariable("--terminal-ansi-white", "#f1f5f9"),
+    brightBlack: getCssVariable("--terminal-ansi-bright-black", "#64748b"),
+    brightRed: getCssVariable("--terminal-ansi-bright-red", "#f87171"),
+    brightGreen: getCssVariable("--terminal-ansi-bright-green", "#4ade80"),
+    brightYellow: getCssVariable("--terminal-ansi-bright-yellow", "#facc15"),
+    brightBlue: getCssVariable("--terminal-ansi-bright-blue", "#60a5fa"),
+    brightMagenta: getCssVariable("--terminal-ansi-bright-magenta", "#c084fc"),
+    brightCyan: getCssVariable("--terminal-ansi-bright-cyan", "#22d3ee"),
+    brightWhite: getCssVariable("--terminal-ansi-bright-white", "#ffffff"),
+  };
+}
+
+export function TerminalTab({ terminalId, visible, settings }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -20,35 +55,14 @@ export function TerminalTab({ terminalId, visible }: Props) {
     if (!container || !terminalId) return;
 
     const term = new Terminal({
-      fontSize: 13,
-      fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace",
+      fontSize: settings?.terminal.fontSize ?? 13,
+      fontFamily:
+        settings?.terminal.fontFamily ??
+        "'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace",
       cursorBlink: true,
       cursorStyle: "bar",
-      // Light theme colors
-      theme: {
-        background: "#f8f9fc",
-        foreground: "#1e293b",
-        cursor: "#3b82f6",
-        selectionBackground: "#bfdbfe",
-        selectionForeground: "#1e293b",
-        black: "#334155",
-        red: "#ef4444",
-        green: "#22c55e",
-        yellow: "#eab308",
-        blue: "#3b82f6",
-        magenta: "#a855f7",
-        cyan: "#06b6d4",
-        white: "#f1f5f9",
-        brightBlack: "#64748b",
-        brightRed: "#f87171",
-        brightGreen: "#4ade80",
-        brightYellow: "#facc15",
-        brightBlue: "#60a5fa",
-        brightMagenta: "#c084fc",
-        brightCyan: "#22d3ee",
-        brightWhite: "#ffffff",
-      },
-      scrollback: 5000,
+      theme: getTerminalTheme(),
+      scrollback: settings?.terminal.scrollback ?? 5000,
       allowProposedApi: true,
     });
 
@@ -99,19 +113,49 @@ export function TerminalTab({ terminalId, visible }: Props) {
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [terminalId]);
+  }, [
+    settings?.terminal.fontFamily,
+    settings?.terminal.fontSize,
+    settings?.terminal.scrollback,
+    terminalId,
+  ]);
 
   // Re-fit when visibility changes
   useEffect(() => {
     if (visible && fitRef.current) {
       requestAnimationFrame(() => fitRef.current?.fit());
+      requestAnimationFrame(() => termRef.current?.focus());
     }
   }, [visible]);
+
+  useEffect(() => {
+    const terminal = termRef.current;
+    const container = containerRef.current;
+    if (!terminal || !container) {
+      return;
+    }
+
+    terminal.options.fontFamily =
+      settings?.terminal.fontFamily ?? terminal.options.fontFamily;
+    terminal.options.fontSize =
+      settings?.terminal.fontSize ?? terminal.options.fontSize;
+    terminal.options.theme = getTerminalTheme();
+    container.style.backgroundColor = getCssVariable(
+      "--color-shell-terminal",
+      "#f8f9fc",
+    );
+    fitRef.current?.fit();
+  }, [
+    settings?.terminal.fontFamily,
+    settings?.terminal.fontSize,
+    settings?.theme,
+    settings?.customTheme,
+  ]);
 
   return (
     <div
       ref={containerRef}
-      className="h-full w-full bg-[#f8f9fc]"
+      className="h-full w-full bg-shell-terminal"
       style={{ padding: "4px 0 0 4px" }}
     />
   );

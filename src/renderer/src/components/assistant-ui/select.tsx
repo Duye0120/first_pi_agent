@@ -19,8 +19,8 @@ const selectTriggerVariants = cva(
     variants: {
       variant: {
         outline:
-          "border border-input bg-transparent hover:bg-accent hover:text-accent-foreground",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+          "bg-shell-panel-elevated text-foreground hover:bg-shell-panel-contrast hover:text-foreground",
+        ghost: "hover:bg-shell-panel-contrast hover:text-foreground",
         muted: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
       },
       size: {
@@ -102,7 +102,7 @@ const SelectContent = ({
       position={position}
       sideOffset={6}
       className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl bg-white p-1.5 text-popover-foreground shadow-[0_4px_20px_rgba(15,23,42,0.08),0_0_0_1px_rgba(15,23,42,0.06)]",
+        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl bg-shell-panel-elevated p-1.5 text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.28)]",
         "data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in",
         "data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out",
         "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",

@@ -21,15 +21,15 @@ export const AssistantUIReasoning: FC = () => {
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="mb-3 overflow-hidden rounded-[var(--radius-shell)] border border-border/70 bg-slate-50/90"
+      className="mb-3 overflow-hidden rounded-[var(--radius-shell)] bg-shell-panel-muted/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
     >
       <CollapsibleTrigger
         className={cn(
-          "flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted-foreground transition hover:bg-slate-100/80",
-          open && "border-b border-border/70",
+          "flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted-foreground transition hover:bg-background",
+          open && "bg-background/40",
         )}
       >
-        <BrainCircuitIcon className="size-3.5 shrink-0 text-slate-500" />
+        <BrainCircuitIcon className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="flex-1 font-medium">Reasoning</span>
         <ChevronDownIcon
           className={cn(
@@ -39,7 +39,7 @@ export const AssistantUIReasoning: FC = () => {
         />
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-        <div className="px-3 py-2.5 text-sm leading-6 whitespace-pre-wrap text-slate-600">
+        <div className="px-3 py-2.5 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
           {reasoning.text}
         </div>
       </CollapsibleContent>

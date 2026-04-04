@@ -90,20 +90,23 @@ export function DiffView({ oldContent, newContent, fileName, maxHunks }: Props) 
 
   if (lines.length === 0) {
     return (
-      <div className="rounded-md border border-[var(--color-code-border)] bg-code-bg p-3 text-xs text-text-muted">
+      <div className="rounded-md bg-code-bg p-3 text-xs text-text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
         内容无变化
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-md border border-[var(--color-code-border)]">
-      <div className="max-h-72 overflow-auto font-mono text-xs leading-5">
+    <div className="overflow-hidden rounded-md bg-code-bg shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <div className="diff-view-code max-h-72 overflow-auto font-mono text-xs leading-5">
         {lines.map((line, i) => {
           // Hunk header
           if (line.type === "context" && line.content.startsWith("@@")) {
             return (
-              <div key={i} className="bg-blue-50 px-3 py-0.5 text-[11px] text-blue-500">
+              <div
+                key={i}
+                className="bg-[var(--color-diff-hunk-header)] px-3 py-0.5 text-[11px] text-[var(--color-accent)]"
+              >
                 {line.content}
               </div>
             );
@@ -130,7 +133,7 @@ export function DiffView({ oldContent, newContent, fileName, maxHunks }: Props) 
       </div>
 
       {maxHunks && totalHunks > shownHunks && (
-        <div className="border-t border-[var(--color-code-border)] bg-code-bg px-3 py-1.5 text-center text-[11px] text-text-muted">
+        <div className="bg-code-bg px-3 py-1.5 text-center text-[11px] text-text-muted">
           显示了 {shownHunks}/{totalHunks} 个变更块
         </div>
       )}

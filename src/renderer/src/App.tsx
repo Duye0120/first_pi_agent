@@ -26,7 +26,7 @@ import { ContextPanel } from "@renderer/components/assistant-ui/context-panel";
 import {
   SettingsView,
   type SettingsSection,
-} from "@renderer/components/assistant-ui/settings-modal";
+} from "@renderer/components/assistant-ui/settings-view";
 import { Sidebar } from "@renderer/components/assistant-ui/sidebar";
 import { TerminalDrawer } from "@renderer/components/assistant-ui/terminal-drawer";
 import { TitleBar } from "@renderer/components/assistant-ui/title-bar";
@@ -37,6 +37,28 @@ const SIDEBAR_WIDTH_STORAGE_KEY = "first-pi-agent.sidebar-width";
 const DEFAULT_SIDEBAR_WIDTH = 292;
 const MIN_SIDEBAR_WIDTH = 244;
 const MAX_SIDEBAR_WIDTH = 420;
+const ROOT_UI_THEME_DATASET = "theme";
+
+function applyCustomThemeVariables(
+  root: HTMLElement,
+  previousKeys: string[],
+  nextTheme: Record<string, string> | null,
+) {
+  previousKeys.forEach((key) => root.style.removeProperty(key));
+
+  const appliedKeys: string[] = [];
+  if (!nextTheme) {
+    return appliedKeys;
+  }
+
+  Object.entries(nextTheme).forEach(([rawKey, value]) => {
+    const key = rawKey.startsWith("--") ? rawKey : `--${rawKey}`;
+    root.style.setProperty(key, value);
+    appliedKeys.push(key);
+  });
+
+  return appliedKeys;
+}
 
 export default function App() {
   const desktopApi = window.desktopApi;
@@ -89,6 +111,7 @@ export default function App() {
   const summariesRef = useRef<ChatSessionSummary[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
   const sidebarWidthRef = useRef(sidebarWidth);
+  const appliedCustomThemeKeysRef = useRef<string[]>([]);
 
   useEffect(() => {
     summariesRef.current = summaries;
@@ -102,6 +125,31 @@ export default function App() {
     sidebarWidthRef.current = sidebarWidth;
     localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    if (!settings) {
+      return;
+    }
+
+    const root = document.documentElement;
+    root.dataset[ROOT_UI_THEME_DATASET] = settings.theme;
+    root.style.setProperty("--app-ui-font-family", settings.ui.fontFamily);
+    root.style.setProperty("--app-ui-font-size", `${settings.ui.fontSize}px`);
+    root.style.setProperty(
+      "--app-code-font-family",
+      settings.ui.codeFontFamily,
+    );
+    root.style.setProperty(
+      "--app-code-font-size",
+      `${settings.ui.codeFontSize}px`,
+    );
+
+    appliedCustomThemeKeysRef.current = applyCustomThemeVariables(
+      root,
+      appliedCustomThemeKeysRef.current,
+      settings.theme === "custom" ? settings.customTheme : null,
+    );
+  }, [settings]);
 
   const hydrateSession = useCallback((session: ChatSession) => {
     startTransition(() => {
@@ -221,8 +269,10 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === "j") {
-        e.preventDefault();
-        setTerminalOpen((prev) => !prev);
+        if (!terminalOpen) {
+          e.preventDefault();
+          setTerminalOpen(true);
+        }
       } else if (mod && e.key === "n") {
         e.preventDefault();
         void createNewSession();
@@ -245,7 +295,7 @@ export default function App() {
       cleanup();
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [bootApp, desktopApi, mainView]);
+  }, [bootApp, desktopApi, mainView, terminalOpen]);
 
   const createNewSession = useCallback(async () => {
     if (!desktopApi) {
@@ -566,6 +616,16 @@ export default function App() {
     void desktopApi?.ui.setRightPanelOpen(nextOpen);
   }, [desktopApi, rightPanelOpen]);
 
+  const handleToggleMaximize = useCallback(() => {
+    if (!desktopApi) {
+      return;
+    }
+
+    void desktopApi.window.toggleMaximize().then((nextState) => {
+      setFrameState(nextState);
+    });
+  }, [desktopApi]);
+
   const openSettingsView = useCallback((section: SettingsSection = "general") => {
     startTransition(() => {
       setSettingsSection(section);
@@ -691,11 +751,11 @@ export default function App() {
   }
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden rounded-[var(--radius-shell)] border border-shell-border bg-shell-window text-foreground">
+    <main className="flex h-screen flex-col overflow-hidden rounded-[var(--radius-shell)] bg-shell-window text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
       <TitleBar
         isMaximized={frameState.isMaximized}
         onMinimize={() => desktopApi?.window.minimize()}
-        onToggleMaximize={() => desktopApi?.window.toggleMaximize()}
+        onToggleMaximize={handleToggleMaximize}
         onClose={() => desktopApi?.window.close()}
       />
       <div
@@ -736,33 +796,35 @@ export default function App() {
         </aside>
 
         <section className="relative flex min-h-0 flex-col overflow-hidden bg-shell-window">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] border border-shell-border border-r-0 border-b-0 bg-shell-panel shadow-none">
-            {mainView === "thread" ? (
-              <div className="flex items-center justify-end gap-2 px-5 pb-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setTerminalOpen((prev) => !prev)}
-                  className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
-                  aria-label={terminalOpen ? "收起终端" : "展开终端"}
-                >
-                  <CommandLineIcon className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={toggleRightPanel}
-                  className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${rightPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
-                  aria-label={
-                    rightPanelOpen ? "收起右侧上下文" : "展开右侧上下文"
-                  }
-                >
-                  <RectangleGroupIcon className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : null}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] bg-shell-panel shadow-[inset_1px_0_0_rgba(255,255,255,0.03)]">
+            <div className="flex min-h-[52px] items-center justify-end gap-2 px-5 pb-3 pt-4">
+              {mainView === "thread" ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setTerminalOpen((prev) => !prev)}
+                    className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
+                    aria-label={terminalOpen ? "收起终端" : "展开终端"}
+                  >
+                    <CommandLineIcon className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={toggleRightPanel}
+                    className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${rightPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
+                    aria-label={
+                      rightPanelOpen ? "收起右侧上下文" : "展开右侧上下文"
+                    }
+                  >
+                    <RectangleGroupIcon className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : null}
+            </div>
 
             <div
               className="grid min-h-0 flex-1 bg-shell-panel transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
@@ -822,6 +884,7 @@ export default function App() {
               <TerminalDrawer
                 open={terminalOpen}
                 onToggle={() => setTerminalOpen((prev) => !prev)}
+                settings={settings}
               />
             ) : null}
           </div>
