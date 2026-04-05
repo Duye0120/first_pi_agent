@@ -1,10 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
-  DesktopApi,
-  WindowFrameState,
   ChatSession,
-  SendMessageInput,
+  DesktopApi,
   SessionGroup,
+  WindowFrameState,
+  SendMessageInput,
 } from "../shared/contracts.js";
 import type { AgentEvent, ConfirmationResponse } from "../shared/agent-events.js";
 import { IPC_CHANNELS } from "../shared/ipc.js";
@@ -56,17 +56,22 @@ const desktopApi: DesktopApi = {
     update: (partial) => ipcRenderer.invoke(IPC_CHANNELS.settingsUpdate, partial),
   },
 
-  // ── Credentials (wired in Phase 1) ────────────────────────
-  credentials: {
-    get: () => ipcRenderer.invoke(IPC_CHANNELS.credentialsGet),
-    set: (provider, apiKey) => ipcRenderer.invoke(IPC_CHANNELS.credentialsSet, provider, apiKey),
-    test: (provider, apiKey) => ipcRenderer.invoke(IPC_CHANNELS.credentialsTest, provider, apiKey),
-    delete: (provider) => ipcRenderer.invoke(IPC_CHANNELS.credentialsDelete, provider),
+  // ── Providers / Models ─────────────────────────────────────
+  providers: {
+    listSources: () => ipcRenderer.invoke(IPC_CHANNELS.providersListSources),
+    getSource: (sourceId) => ipcRenderer.invoke(IPC_CHANNELS.providersGetSource, sourceId),
+    saveSource: (draft) => ipcRenderer.invoke(IPC_CHANNELS.providersSaveSource, draft),
+    deleteSource: (sourceId) => ipcRenderer.invoke(IPC_CHANNELS.providersDeleteSource, sourceId),
+    testSource: (draft) => ipcRenderer.invoke(IPC_CHANNELS.providersTestSource, draft),
+    getCredentials: (sourceId) => ipcRenderer.invoke(IPC_CHANNELS.providersGetCredentials, sourceId),
+    setCredentials: (sourceId, apiKey) => ipcRenderer.invoke(IPC_CHANNELS.providersSetCredentials, sourceId, apiKey),
   },
-
-  // ── Models (wired in Phase 4) ─────────────────────────────
   models: {
-    listAvailable: () => ipcRenderer.invoke(IPC_CHANNELS.modelsListAvailable),
+    listEntries: () => ipcRenderer.invoke(IPC_CHANNELS.modelsListEntries),
+    listEntriesBySource: (sourceId) => ipcRenderer.invoke(IPC_CHANNELS.modelsListEntriesBySource, sourceId),
+    saveEntry: (draft) => ipcRenderer.invoke(IPC_CHANNELS.modelsSaveEntry, draft),
+    deleteEntry: (entryId) => ipcRenderer.invoke(IPC_CHANNELS.modelsDeleteEntry, entryId),
+    getEntry: (entryId) => ipcRenderer.invoke(IPC_CHANNELS.modelsGetEntry, entryId),
   },
 
   // ── Workspace (wired in Phase 5) ──────────────────────────
@@ -92,10 +97,14 @@ const desktopApi: DesktopApi = {
       return () => { ipcRenderer.removeListener(IPC_CHANNELS.terminalExit, handler); };
     },
   },
+  git: {
+    getSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.gitStatus),
+  },
 
   ui: {
     getState: () => ipcRenderer.invoke(IPC_CHANNELS.uiGetState),
-    setRightPanelOpen: (open: boolean) => ipcRenderer.invoke(IPC_CHANNELS.uiSetRightPanelOpen, open),
+    setDiffPanelOpen: (open: boolean) => ipcRenderer.invoke(IPC_CHANNELS.uiSetDiffPanelOpen, open),
+    setContextPanelOpen: (open: boolean) => ipcRenderer.invoke(IPC_CHANNELS.uiSetContextPanelOpen, open),
   },
   window: {
     getState: () => ipcRenderer.invoke(IPC_CHANNELS.windowGetState),

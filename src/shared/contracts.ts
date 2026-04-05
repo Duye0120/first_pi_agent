@@ -40,21 +40,107 @@ export type AgentResponse = {
   finalText: string;
   startedAt: number;
   endedAt?: number;
+  usage?: MessageUsage;
   totalTokens?: number;
   cost?: number;
 };
 
-// ── Settings & Credentials ─────────────────────────────────────
+// ── Settings & Providers ───────────────────────────────────────
 
-export type ModelSelection = {
-  provider: string;
-  model: string;
+export type ProviderType =
+  | "anthropic"
+  | "openai"
+  | "google"
+  | "openai-compatible";
+
+export type ProviderSourceKind = "builtin" | "custom";
+export type ProviderSourceMode = "native" | "custom";
+
+export type ModelCapabilities = {
+  vision: boolean | null;
+  imageOutput: boolean | null;
+  toolCalling: boolean | null;
+  reasoning: boolean | null;
+  embedding: boolean | null;
+};
+
+export type ModelCapabilitiesOverride = ModelCapabilities;
+
+export type ModelLimits = {
+  contextWindow: number | null;
+  maxOutputTokens: number | null;
+};
+
+export type ModelLimitsOverride = ModelLimits;
+
+export type ProviderSource = {
+  id: string;
+  name: string;
+  kind: ProviderSourceKind;
+  providerType: ProviderType;
+  mode: ProviderSourceMode;
+  enabled: boolean;
+  baseUrl: string | null;
+};
+
+export type ProviderSourceDraft = {
+  id?: string;
+  name: string;
+  providerType: ProviderType;
+  mode: ProviderSourceMode;
+  enabled: boolean;
+  baseUrl?: string | null;
+};
+
+export type ModelEntry = {
+  id: string;
+  sourceId: string;
+  name: string;
+  modelId: string;
+  enabled: boolean;
+  builtin: boolean;
+  capabilities: ModelCapabilitiesOverride;
+  limits: ModelLimitsOverride;
+  providerOptions: Record<string, unknown> | null;
+  detectedCapabilities: ModelCapabilities;
+  detectedLimits: ModelLimits;
+};
+
+export type ModelEntryDraft = {
+  id?: string;
+  sourceId: string;
+  name: string;
+  modelId: string;
+  enabled: boolean;
+  builtin?: boolean;
+  capabilities?: ModelCapabilitiesOverride;
+  limits?: ModelLimitsOverride;
+  providerOptions?: Record<string, unknown> | null;
+};
+
+export type ModelUsageConflict = {
+  scope: "settings" | "unknown";
+  referenceType: "default-model";
+  referenceId: string;
+  message: string;
+};
+
+export type SourceCredentials = {
+  sourceId: string;
+  masked: string;
+  hasKey: boolean;
+};
+
+export type SourceTestResult = {
+  success: boolean;
+  error?: string;
+  models?: string[];
 };
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export type Settings = {
-  defaultModel: ModelSelection;
+  defaultModelId: string;
   thinkingLevel: ThinkingLevel;
   theme: "light" | "dark" | "custom";
   customTheme: Record<string, string> | null;
@@ -71,26 +157,6 @@ export type Settings = {
     codeFontFamily: string;
   };
   workspace: string;
-};
-
-export type CredentialsSafe = {
-  [provider: string]: {
-    masked: string;
-    hasKey: boolean;
-  };
-};
-
-export type AvailableModel = {
-  provider: string;
-  model: string;
-  label: string;
-  available: boolean;
-};
-
-export type CredentialTestResult = {
-  success: boolean;
-  error?: string;
-  models?: string[];
 };
 
 export type SoulFilesStatus = {
@@ -125,12 +191,18 @@ export type ClipboardFilePayload = {
   buffer: ArrayBuffer;
 };
 
+export type MessageUsage = {
+  inputTokens: number;
+  outputTokens: number;
+};
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
   timestamp: string;
   status: ChatMessageStatus;
+  usage?: MessageUsage;
   meta?: Record<string, unknown>;
   steps?: AgentStep[];
 };
@@ -170,8 +242,43 @@ export type SendMessageInput = {
 };
 
 export type WindowUiState = {
-  rightPanelOpen: boolean;
+  diffPanelOpen: boolean;
+  contextPanelOpen: boolean;
 };
+
+export type GitBranchSummary = {
+  branchName: string | null;
+  isDetached: boolean;
+  hasChanges: boolean;
+};
+
+export type GitDiffSource = "unstaged" | "staged" | "all";
+
+export type GitDiffFile = {
+  path: string;
+  status: "modified" | "deleted" | "untracked";
+  patch: string;
+  kind: "text" | "image" | "binary";
+  additions: number;
+  deletions: number;
+  previewPath?: string;
+};
+
+export type GitDiffSourceSnapshot = {
+  files: GitDiffFile[];
+  totalFiles: number;
+  totalAdditions: number;
+  totalDeletions: number;
+};
+
+export type GitDiffOverview = {
+  isGitRepo: boolean;
+  generatedAt: number;
+  branch: GitBranchSummary;
+  sources: Record<GitDiffSource, GitDiffSourceSnapshot>;
+};
+
+export type GitDiffSnapshot = GitDiffOverview;
 
 export type WindowFrameState = {
   isMaximized: boolean;
@@ -222,14 +329,21 @@ export type DesktopApi = {
     get: () => Promise<Settings>;
     update: (partial: Partial<Settings>) => Promise<void>;
   };
-  credentials: {
-    get: () => Promise<CredentialsSafe>;
-    set: (provider: string, apiKey: string) => Promise<void>;
-    test: (provider: string, apiKey: string) => Promise<CredentialTestResult>;
-    delete: (provider: string) => Promise<void>;
+  providers: {
+    listSources: () => Promise<ProviderSource[]>;
+    getSource: (sourceId: string) => Promise<ProviderSource | null>;
+    saveSource: (draft: ProviderSourceDraft) => Promise<ProviderSource>;
+    deleteSource: (sourceId: string) => Promise<void>;
+    testSource: (draft: ProviderSourceDraft) => Promise<SourceTestResult>;
+    getCredentials: (sourceId: string) => Promise<SourceCredentials>;
+    setCredentials: (sourceId: string, apiKey: string) => Promise<void>;
   };
   models: {
-    listAvailable: () => Promise<AvailableModel[]>;
+    listEntries: () => Promise<ModelEntry[]>;
+    listEntriesBySource: (sourceId: string) => Promise<ModelEntry[]>;
+    saveEntry: (draft: ModelEntryDraft) => Promise<ModelEntry>;
+    deleteEntry: (entryId: string) => Promise<void>;
+    getEntry: (entryId: string) => Promise<ModelEntry | null>;
   };
   workspace: {
     change: (path: string) => Promise<void>;
@@ -243,9 +357,13 @@ export type DesktopApi = {
     onData: (callback: (terminalId: string, data: string) => void) => () => void;
     onExit: (callback: (terminalId: string, exitCode: number) => void) => () => void;
   };
+  git: {
+    getSnapshot: () => Promise<GitDiffOverview>;
+  };
   ui: {
     getState: () => Promise<WindowUiState>;
-    setRightPanelOpen: (open: boolean) => Promise<void>;
+    setDiffPanelOpen: (open: boolean) => Promise<void>;
+    setContextPanelOpen: (open: boolean) => Promise<void>;
   };
   window: {
     getState: () => Promise<WindowFrameState>;

@@ -1,18 +1,18 @@
-import type { ModelSelection, ThinkingLevel } from "@shared/contracts";
-import { getModelValue, THINKING_LEVELS } from "./constants";
+import type { ThinkingLevel } from "@shared/contracts";
+import { THINKING_LEVELS } from "./constants";
 import { FieldSelect, SettingsCard, SettingsRow } from "./shared";
 
 export function GeneralSection({
-  currentModel,
+  currentModelId,
   thinkingLevel,
   modelOptions,
   onModelChange,
   onThinkingLevelChange,
 }: {
-  currentModel: ModelSelection;
+  currentModelId: string;
   thinkingLevel: ThinkingLevel;
   modelOptions: { value: string; label: string; disabled?: boolean }[];
-  onModelChange: (model: ModelSelection) => void;
+  onModelChange: (modelEntryId: string) => void;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
 }) {
   return (
@@ -25,13 +25,8 @@ export function GeneralSection({
         hint="新会话和后续发送默认会使用这里选择的模型。"
       >
         <FieldSelect
-          value={getModelValue(currentModel)}
-          onChange={(value) => {
-            const [provider, ...modelParts] = value.split("/");
-            const model = modelParts.join("/");
-            if (!provider || !model) return;
-            onModelChange({ provider, model });
-          }}
+          value={currentModelId}
+          onChange={onModelChange}
           options={modelOptions}
         />
       </SettingsRow>

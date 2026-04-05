@@ -28,6 +28,13 @@
   color-scheme: light;
   font-family: var(--app-ui-font-family);
   background: var(--color-shell-window);
+  --scrollbar-size: 12px;
+  --scrollbar-thumb-rest: rgba(138, 150, 173, 0.16);
+  --scrollbar-thumb-pane-hover: rgba(138, 150, 173, 0.36);
+  --scrollbar-thumb-hover: rgba(100, 116, 139, 0.62);
+  --scrollbar-thumb-active: rgba(71, 85, 105, 0.8);
+  --scrollbar-track-pane-hover: rgba(148, 163, 184, 0.08);
+  --scrollbar-track-active: rgba(148, 163, 184, 0.12);
 }
 
 :root[data-theme="dark"] {
@@ -64,6 +71,16 @@ select,
 textarea,
 input {
   font: inherit;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
 }
 
 code,
@@ -131,18 +148,67 @@ samp,
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
 }
 
 ::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  border: 2px solid transparent;
-  background: rgba(138, 150, 173, 0.26);
+  border: 4px solid transparent;
+  min-height: 40px;
+  background: var(--scrollbar-thumb-rest);
   background-clip: content-box;
+  transition:
+    background-color 160ms ease,
+    border-width 160ms ease,
+    box-shadow 160ms ease;
 }
 
 ::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+  transition: background-color 160ms ease;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-rest) transparent;
+}
+
+*:hover,
+*:focus-within {
+  scrollbar-color:
+    var(--scrollbar-thumb-pane-hover)
+    var(--scrollbar-track-pane-hover);
+}
+
+*:hover::-webkit-scrollbar-thumb,
+*:focus-within::-webkit-scrollbar-thumb {
+  border-width: 3px;
+  background: var(--scrollbar-thumb-pane-hover);
+}
+
+*:hover::-webkit-scrollbar-track,
+*:focus-within::-webkit-scrollbar-track {
+  background: var(--scrollbar-track-pane-hover);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  border-width: 1px;
+  background: var(--scrollbar-thumb-hover);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+::-webkit-scrollbar-thumb:active {
+  border-width: 1px;
+  background: var(--scrollbar-thumb-active);
+}
+
+*:active::-webkit-scrollbar-track {
+  background: var(--scrollbar-track-active);
+}
+
+::-webkit-scrollbar-corner {
   background: transparent;
 }
 
@@ -231,8 +297,8 @@ samp,
 
 /* Fallback focus ring for elements without component-level focus styling */
 :where(button:not([role="combobox"]), [role="button"], a, input, textarea):focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
+  outline: 1px solid var(--color-shell-border);
+  outline-offset: 1px;
   border-radius: 4px;
 }
 

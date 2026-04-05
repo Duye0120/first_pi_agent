@@ -2,9 +2,9 @@ import {
   startTransition,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
 } from "react";
 import {
   CommandLineIcon,
@@ -13,7 +13,7 @@ import {
 import type {
   ChatSession,
   ChatSessionSummary,
-  ModelSelection,
+  GitDiffOverview,
   SelectedFile,
   Settings,
   SessionGroup,
@@ -22,7 +22,8 @@ import type {
 } from "@shared/contracts";
 import { AssistantThreadPanel } from "@renderer/components/assistant-ui/assistant-thread-panel";
 import { Button } from "@renderer/components/assistant-ui/button";
-import { ContextPanel } from "@renderer/components/assistant-ui/context-panel";
+import { ContextSidePanel } from "@renderer/components/assistant-ui/context-side-panel";
+import { DiffPanel } from "@renderer/components/assistant-ui/diff-panel";
 import {
   SettingsView,
   type SettingsSection,
@@ -30,14 +31,99 @@ import {
 import { Sidebar } from "@renderer/components/assistant-ui/sidebar";
 import { TerminalDrawer } from "@renderer/components/assistant-ui/terminal-drawer";
 import { TitleBar } from "@renderer/components/assistant-ui/title-bar";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@renderer/components/ui/resizable";
+import {
+  getContextUsageSummary,
+  resolveContextWindow,
+} from "@renderer/lib/context-usage";
 import { mergeAttachments, upsertSummary } from "@renderer/lib/session";
 
 const ACTIVE_SESSION_STORAGE_KEY = "first-pi-agent.active-session-id";
 const SIDEBAR_WIDTH_STORAGE_KEY = "first-pi-agent.sidebar-width";
-const DEFAULT_SIDEBAR_WIDTH = 292;
-const MIN_SIDEBAR_WIDTH = 244;
-const MAX_SIDEBAR_WIDTH = 420;
+const LEGACY_RIGHT_PANEL_SIZE_STORAGE_KEY = "first-pi-agent.right-panel-size";
+const DIFF_PANEL_SIZE_STORAGE_KEY = "first-pi-agent.diff-panel-size";
+const CONTEXT_PANEL_SIZE_STORAGE_KEY = "first-pi-agent.context-panel-size";
+const DEFAULT_SIDEBAR_SIZE = 18;
+const MIN_SIDEBAR_SIZE = 14;
+const MAX_SIDEBAR_SIZE = 28;
+const DEFAULT_DIFF_PANEL_SIZE = 28;
+const MIN_DIFF_PANEL_SIZE = 20;
+const MAX_DIFF_PANEL_SIZE = 44;
+const DEFAULT_CONTEXT_PANEL_SIZE = 18;
+const MIN_CONTEXT_PANEL_SIZE = 14;
+const MAX_CONTEXT_PANEL_SIZE = 28;
+const MIN_MAIN_PANEL_SIZE = 34;
 const ROOT_UI_THEME_DATASET = "theme";
+
+function clampSidebarSize(size: number) {
+  return Math.min(MAX_SIDEBAR_SIZE, Math.max(MIN_SIDEBAR_SIZE, size));
+}
+
+function clampDiffPanelSize(size: number) {
+  return Math.min(MAX_DIFF_PANEL_SIZE, Math.max(MIN_DIFF_PANEL_SIZE, size));
+}
+
+function clampContextPanelSize(size: number) {
+  return Math.min(MAX_CONTEXT_PANEL_SIZE, Math.max(MIN_CONTEXT_PANEL_SIZE, size));
+}
+
+function clampContextPanelSizeForDualLayout(size: number, diffPanelSize: number) {
+  const maxSize = Math.min(
+    MAX_CONTEXT_PANEL_SIZE,
+    100 - clampDiffPanelSize(diffPanelSize) - MIN_MAIN_PANEL_SIZE,
+  );
+
+  return Math.min(maxSize, Math.max(MIN_CONTEXT_PANEL_SIZE, size));
+}
+
+function toSidebarPercentageSize(size: number) {
+  return `${clampSidebarSize(size)}%`;
+}
+
+function toPercentageSize(size: number) {
+  return `${size}%`;
+}
+
+function migrateLegacySidebarWidth(storedWidth: number) {
+  if (storedWidth <= 100) {
+    return clampSidebarSize(storedWidth);
+  }
+
+  if (typeof window === "undefined" || window.innerWidth <= 0) {
+    return DEFAULT_SIDEBAR_SIZE;
+  }
+
+  return clampSidebarSize((storedWidth / window.innerWidth) * 100);
+}
+
+function readStoredPanelSize(
+  primaryKey: string,
+  fallbackKey: string | null,
+  defaultSize: number,
+  clamp: (size: number) => number,
+) {
+  if (typeof window === "undefined") {
+    return defaultSize;
+  }
+
+  const primaryValue = Number(localStorage.getItem(primaryKey));
+  if (Number.isFinite(primaryValue)) {
+    return clamp(primaryValue);
+  }
+
+  if (fallbackKey) {
+    const fallbackValue = Number(localStorage.getItem(fallbackKey));
+    if (Number.isFinite(fallbackValue)) {
+      return clamp(fallbackValue);
+    }
+  }
+
+  return defaultSize;
+}
 
 function applyCustomThemeVariables(
   root: HTMLElement,
@@ -71,7 +157,8 @@ export default function App() {
   >([]);
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [diffPanelOpen, setDiffPanelOpen] = useState(false);
+  const [contextPanelOpen, setContextPanelOpen] = useState(false);
   const [frameState, setFrameState] = useState<WindowFrameState>({
     isMaximized: false,
   });
@@ -80,37 +167,45 @@ export default function App() {
     useState<SettingsSection>("general");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
+  const [sidebarSize, setSidebarSize] = useState(() => {
     if (typeof window === "undefined") {
-      return DEFAULT_SIDEBAR_WIDTH;
+      return DEFAULT_SIDEBAR_SIZE;
     }
 
     const storedWidth = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
     if (!Number.isFinite(storedWidth)) {
-      return DEFAULT_SIDEBAR_WIDTH;
+      return DEFAULT_SIDEBAR_SIZE;
     }
 
-    return Math.min(
-      MAX_SIDEBAR_WIDTH,
-      Math.max(MIN_SIDEBAR_WIDTH, storedWidth),
-    );
+    return migrateLegacySidebarWidth(storedWidth);
   });
-  const [currentModel, setCurrentModel] = useState<ModelSelection>({
-    provider: "anthropic",
-    model: "claude-sonnet-4-20250514",
-  });
+  const [diffPanelSize, setDiffPanelSize] = useState(() =>
+    readStoredPanelSize(
+      DIFF_PANEL_SIZE_STORAGE_KEY,
+      LEGACY_RIGHT_PANEL_SIZE_STORAGE_KEY,
+      DEFAULT_DIFF_PANEL_SIZE,
+      clampDiffPanelSize,
+    ),
+  );
+  const [contextPanelSize, setContextPanelSize] = useState(() =>
+    readStoredPanelSize(
+      CONTEXT_PANEL_SIZE_STORAGE_KEY,
+      null,
+      DEFAULT_CONTEXT_PANEL_SIZE,
+      clampContextPanelSize,
+    ),
+  );
+  const [currentModelId, setCurrentModelId] = useState(
+    "builtin:anthropic:claude-sonnet-4-20250514",
+  );
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("off");
+  const [currentContextWindow, setCurrentContextWindow] = useState<number | null>(null);
+  const [gitOverview, setGitOverview] = useState<GitDiffOverview | null>(null);
+  const [gitOverviewLoading, setGitOverviewLoading] = useState(false);
 
   const activeSessionId = activeSession?.id ?? null;
-  const threadGridColumns =
-    mainView === "settings"
-      ? "minmax(0,1fr)"
-      : rightPanelOpen
-        ? "minmax(0,1fr) 360px"
-        : "minmax(0,1fr) 0px";
   const summariesRef = useRef<ChatSessionSummary[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
-  const sidebarWidthRef = useRef(sidebarWidth);
   const appliedCustomThemeKeysRef = useRef<string[]>([]);
 
   useEffect(() => {
@@ -122,9 +217,35 @@ export default function App() {
   }, [activeSessionId]);
 
   useEffect(() => {
-    sidebarWidthRef.current = sidebarWidth;
-    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
-  }, [sidebarWidth]);
+    localStorage.setItem(
+      SIDEBAR_WIDTH_STORAGE_KEY,
+      String(clampSidebarSize(sidebarSize)),
+    );
+  }, [sidebarSize]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      DIFF_PANEL_SIZE_STORAGE_KEY,
+      String(clampDiffPanelSize(diffPanelSize)),
+    );
+  }, [diffPanelSize]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      CONTEXT_PANEL_SIZE_STORAGE_KEY,
+      String(clampContextPanelSize(contextPanelSize)),
+    );
+  }, [contextPanelSize]);
+
+  useEffect(() => {
+    if (!diffPanelOpen || !contextPanelOpen) {
+      return;
+    }
+
+    setContextPanelSize((current) =>
+      clampContextPanelSizeForDualLayout(current, diffPanelSize),
+    );
+  }, [contextPanelOpen, diffPanelOpen, diffPanelSize]);
 
   useEffect(() => {
     if (!settings) {
@@ -150,6 +271,66 @@ export default function App() {
       settings.theme === "custom" ? settings.customTheme : null,
     );
   }, [settings]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!desktopApi?.models || !currentModelId) {
+      setCurrentContextWindow(null);
+      return;
+    }
+
+    void desktopApi.models.getEntry(currentModelId).then((entry) => {
+      if (!cancelled) {
+        setCurrentContextWindow(resolveContextWindow(entry));
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setCurrentContextWindow(null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentModelId, desktopApi]);
+
+  const refreshGitOverview = useCallback(async () => {
+    if (!desktopApi?.git) {
+      setGitOverview(null);
+      return;
+    }
+
+    setGitOverviewLoading(true);
+
+    try {
+      const nextOverview = await desktopApi.git.getSnapshot();
+      setGitOverview(nextOverview);
+    } finally {
+      setGitOverviewLoading(false);
+    }
+  }, [desktopApi]);
+
+  useEffect(() => {
+    if (mainView !== "thread") {
+      return;
+    }
+
+    void refreshGitOverview();
+  }, [mainView, refreshGitOverview, settings?.workspace]);
+
+  useEffect(() => {
+    if (mainView !== "thread" || !diffPanelOpen) {
+      return;
+    }
+
+    void refreshGitOverview();
+  }, [diffPanelOpen, mainView, refreshGitOverview]);
+
+  const contextSummary = useMemo(
+    () => getContextUsageSummary(activeSession, currentContextWindow),
+    [activeSession, currentContextWindow],
+  );
 
   const hydrateSession = useCallback((session: ChatSession) => {
     startTransition(() => {
@@ -219,14 +400,15 @@ export default function App() {
         desktopApi.settings.get(),
       ]);
 
-      setRightPanelOpen(uiState.rightPanelOpen);
+      setDiffPanelOpen(uiState.diffPanelOpen);
+      setContextPanelOpen(uiState.contextPanelOpen);
       setFrameState(frame);
       setSummaries(sessionSummaries);
       setArchivedSummaries(archivedList);
       setGroups(groupList);
       if (settings) {
         setSettings(settings);
-        setCurrentModel(settings.defaultModel);
+        setCurrentModelId(settings.defaultModelId);
         setThinkingLevel(settings.thinkingLevel);
       }
 
@@ -514,12 +696,7 @@ export default function App() {
   );
 
   const appendAttachmentsToSession = useCallback(
-    async (
-      files: SelectedFile[],
-      options?: {
-        openRightPanel?: boolean;
-      },
-    ) => {
+    async (files: SelectedFile[]) => {
       if (!activeSession || !desktopApi || files.length === 0) {
         return;
       }
@@ -532,19 +709,8 @@ export default function App() {
       };
 
       persistSession(nextSession);
-
-      if (options?.openRightPanel !== false && !rightPanelOpen) {
-        setRightPanelOpen(true);
-        void desktopApi.ui.setRightPanelOpen(true);
-      }
     },
-    [
-      activeSession,
-      desktopApi,
-      enrichSelectedFiles,
-      persistSession,
-      rightPanelOpen,
-    ],
+    [activeSession, desktopApi, enrichSelectedFiles, persistSession],
   );
 
   const attachFiles = useCallback(async () => {
@@ -556,7 +722,7 @@ export default function App() {
 
     try {
       const pickedFiles = await desktopApi.files.pick();
-      await appendAttachmentsToSession(pickedFiles, { openRightPanel: true });
+      await appendAttachmentsToSession(pickedFiles);
     } finally {
       setIsPickingFiles(false);
     }
@@ -581,9 +747,7 @@ export default function App() {
           ),
         );
 
-        await appendAttachmentsToSession(pastedFiles, {
-          openRightPanel: false,
-        });
+        await appendAttachmentsToSession(pastedFiles);
       } finally {
         setIsPickingFiles(false);
       }
@@ -610,11 +774,72 @@ export default function App() {
     [activeSession, persistSession],
   );
 
-  const toggleRightPanel = useCallback(() => {
-    const nextOpen = !rightPanelOpen;
-    setRightPanelOpen(nextOpen);
-    void desktopApi?.ui.setRightPanelOpen(nextOpen);
-  }, [desktopApi, rightPanelOpen]);
+  const clearAttachments = useCallback(() => {
+    if (!activeSession || activeSession.attachments.length === 0) {
+      return;
+    }
+
+    const nextSession: ChatSession = {
+      ...activeSession,
+      attachments: [],
+      updatedAt: new Date().toISOString(),
+    };
+
+    persistSession(nextSession);
+  }, [activeSession, persistSession]);
+
+  const toggleDiffPanel = useCallback(() => {
+    const nextOpen = !diffPanelOpen;
+    setDiffPanelOpen(nextOpen);
+    void desktopApi?.ui.setDiffPanelOpen(nextOpen);
+  }, [desktopApi, diffPanelOpen]);
+
+  const toggleContextPanel = useCallback(() => {
+    const nextOpen = !contextPanelOpen;
+    setContextPanelOpen(nextOpen);
+    void desktopApi?.ui.setContextPanelOpen(nextOpen);
+  }, [contextPanelOpen, desktopApi]);
+
+  const handleShellLayoutChanged = useCallback((layout: Record<string, number>) => {
+    const nextSidebarSize = layout["shell-sidebar"];
+    if (typeof nextSidebarSize === "number" && Number.isFinite(nextSidebarSize)) {
+      setSidebarSize(clampSidebarSize(nextSidebarSize));
+    }
+  }, []);
+
+  const handleDiffOnlyLayoutChanged = useCallback((layout: Record<string, number>) => {
+    const nextDiffPanelSize = layout["thread-diff"];
+    if (typeof nextDiffPanelSize === "number" && Number.isFinite(nextDiffPanelSize)) {
+      setDiffPanelSize(clampDiffPanelSize(nextDiffPanelSize));
+    }
+  }, []);
+
+  const handleContextOnlyLayoutChanged = useCallback((layout: Record<string, number>) => {
+    const nextContextSize = layout["thread-context"];
+    if (typeof nextContextSize === "number" && Number.isFinite(nextContextSize)) {
+      setContextPanelSize(clampContextPanelSize(nextContextSize));
+    }
+  }, []);
+
+  const handleDualOuterLayoutChanged = useCallback((layout: Record<string, number>) => {
+    const nextDiffPanelSize = layout["thread-diff"];
+    if (typeof nextDiffPanelSize === "number" && Number.isFinite(nextDiffPanelSize)) {
+      setDiffPanelSize(clampDiffPanelSize(nextDiffPanelSize));
+    }
+  }, []);
+
+  const handleDualInnerLayoutChanged = useCallback((layout: Record<string, number>) => {
+    const nextContextInnerSize = layout["thread-context"];
+    if (typeof nextContextInnerSize !== "number" || !Number.isFinite(nextContextInnerSize)) {
+      return;
+    }
+
+    const availableLeftSize = 100 - clampDiffPanelSize(diffPanelSize);
+    const nextAbsoluteContextSize = (availableLeftSize * nextContextInnerSize) / 100;
+    setContextPanelSize(
+      clampContextPanelSizeForDualLayout(nextAbsoluteContextSize, diffPanelSize),
+    );
+  }, [diffPanelSize]);
 
   const handleToggleMaximize = useCallback(() => {
     if (!desktopApi) {
@@ -656,12 +881,12 @@ export default function App() {
   );
 
   const handleModelChange = useCallback(
-    (model: ModelSelection) => {
-      setCurrentModel(model);
+    (modelEntryId: string) => {
+      setCurrentModelId(modelEntryId);
       setSettings((current) =>
-        current ? { ...current, defaultModel: model } : current,
+        current ? { ...current, defaultModelId: modelEntryId } : current,
       );
-      void desktopApi?.settings.update({ defaultModel: model });
+      void desktopApi?.settings.update({ defaultModelId: modelEntryId });
     },
     [desktopApi],
   );
@@ -677,39 +902,20 @@ export default function App() {
     [desktopApi],
   );
 
-  const startSidebarResize = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement>) => {
-      event.preventDefault();
-
-      const startX = event.clientX;
-      const startWidth = sidebarWidthRef.current;
-      const previousCursor = document.body.style.cursor;
-      const previousUserSelect = document.body.style.userSelect;
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        const proposedWidth = startWidth + moveEvent.clientX - startX;
-        const nextWidth = Math.min(
-          MAX_SIDEBAR_WIDTH,
-          Math.max(MIN_SIDEBAR_WIDTH, proposedWidth),
-        );
-        setSidebarWidth(nextWidth);
-      };
-
-      const handleMouseUp = () => {
-        document.body.style.cursor = previousCursor;
-        document.body.style.userSelect = previousUserSelect;
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
-      };
-
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
-    },
-    [],
-  );
+  const normalizedDiffPanelSize = clampDiffPanelSize(diffPanelSize);
+  const normalizedContextPanelSize = contextPanelOpen && diffPanelOpen
+    ? clampContextPanelSizeForDualLayout(contextPanelSize, normalizedDiffPanelSize)
+    : clampContextPanelSize(contextPanelSize);
+  const dualLeftSize = 100 - normalizedDiffPanelSize;
+  const dualContextInnerSize = (normalizedContextPanelSize / dualLeftSize) * 100;
+  const dualMainInnerSize = 100 - dualContextInnerSize;
+  const dualMainMinSize = (MIN_MAIN_PANEL_SIZE / dualLeftSize) * 100;
+  const dualContextMinSize = (MIN_CONTEXT_PANEL_SIZE / dualLeftSize) * 100;
+  const dualContextMaxSize =
+    (Math.min(
+      MAX_CONTEXT_PANEL_SIZE,
+      dualLeftSize - MIN_MAIN_PANEL_SIZE,
+    ) / dualLeftSize) * 100;
 
   if (booting) {
     return (
@@ -750,6 +956,179 @@ export default function App() {
     );
   }
 
+  const threadContent =
+    mainView === "settings" ? (
+      <SettingsView
+        activeSection={settingsSection}
+        settings={settings}
+        currentModelId={currentModelId}
+        thinkingLevel={thinkingLevel}
+        onModelChange={handleModelChange}
+        onThinkingLevelChange={handleThinkingLevelChange}
+        onSettingsChange={handleSettingsChange}
+        archivedSummaries={archivedSummaries}
+        onOpenArchivedSession={openArchivedSessionFromSettings}
+        onUnarchiveSession={(sessionId) => {
+          void unarchiveSession(sessionId);
+        }}
+        onDeleteSession={(sessionId) => {
+          void deleteSessionPermanently(sessionId);
+        }}
+      />
+    ) : activeSession && desktopApi ? (
+      <AssistantThreadPanel
+        session={activeSession}
+        desktopApi={desktopApi}
+        onPersistSession={persistSession}
+        currentModelId={currentModelId}
+        thinkingLevel={thinkingLevel}
+        terminalOpen={terminalOpen}
+        isPickingFiles={isPickingFiles}
+        onAttachFiles={attachFiles}
+        onPasteFiles={pasteFiles}
+        onRemoveAttachment={removeAttachment}
+        onModelChange={handleModelChange}
+        onThinkingLevelChange={handleThinkingLevelChange}
+        branchSummary={gitOverview?.branch ?? null}
+        contextSummary={contextSummary}
+        contextPanelOpen={contextPanelOpen}
+        onToggleContextPanel={toggleContextPanel}
+      />
+    ) : (
+      <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
+        当前没有可用线程。
+      </div>
+    );
+
+  const threadPanels =
+    mainView !== "thread" ? (
+      <section className="flex h-full min-h-0 flex-col bg-shell-panel">
+        {threadContent}
+      </section>
+    ) : contextPanelOpen && diffPanelOpen ? (
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="min-h-0 bg-shell-panel"
+        onLayoutChanged={handleDualOuterLayoutChanged}
+        resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
+      >
+        <ResizablePanel
+          id="thread-main-context"
+          defaultSize={toPercentageSize(100 - normalizedDiffPanelSize)}
+          minSize={`${MIN_MAIN_PANEL_SIZE + MIN_CONTEXT_PANEL_SIZE}%`}
+        >
+          <ResizablePanelGroup
+            orientation="horizontal"
+            className="min-h-0 bg-shell-panel"
+            onLayoutChanged={handleDualInnerLayoutChanged}
+            resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
+          >
+            <ResizablePanel
+              id="thread-main"
+              defaultSize={toPercentageSize(dualMainInnerSize)}
+              minSize={toPercentageSize(dualMainMinSize)}
+            >
+              <section className="flex h-full min-h-0 flex-col bg-shell-panel">
+                {threadContent}
+              </section>
+            </ResizablePanel>
+            <ResizableHandle className="-mx-px w-px" />
+            <ResizablePanel
+              id="thread-context"
+              defaultSize={toPercentageSize(dualContextInnerSize)}
+              minSize={toPercentageSize(dualContextMinSize)}
+              maxSize={toPercentageSize(dualContextMaxSize)}
+            >
+              <ContextSidePanel
+                session={activeSession}
+                summary={contextSummary}
+                onRemoveAttachment={removeAttachment}
+                onClearAttachments={clearAttachments}
+              />
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </ResizablePanel>
+        <ResizableHandle className="-mx-px w-px" />
+        <ResizablePanel
+          id="thread-diff"
+          defaultSize={toPercentageSize(normalizedDiffPanelSize)}
+          minSize={`${MIN_DIFF_PANEL_SIZE}%`}
+          maxSize={`${MAX_DIFF_PANEL_SIZE}%`}
+        >
+          <DiffPanel
+            overview={gitOverview}
+            isLoading={gitOverviewLoading}
+            onRefresh={refreshGitOverview}
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    ) : contextPanelOpen ? (
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="min-h-0 bg-shell-panel"
+        onLayoutChanged={handleContextOnlyLayoutChanged}
+        resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
+      >
+        <ResizablePanel
+          id="thread-main"
+          defaultSize={toPercentageSize(100 - normalizedContextPanelSize)}
+          minSize={`${100 - MAX_CONTEXT_PANEL_SIZE}%`}
+        >
+          <section className="flex h-full min-h-0 flex-col bg-shell-panel">
+            {threadContent}
+          </section>
+        </ResizablePanel>
+        <ResizableHandle className="-mx-px w-px" />
+        <ResizablePanel
+          id="thread-context"
+          defaultSize={toPercentageSize(normalizedContextPanelSize)}
+          minSize={`${MIN_CONTEXT_PANEL_SIZE}%`}
+          maxSize={`${MAX_CONTEXT_PANEL_SIZE}%`}
+        >
+          <ContextSidePanel
+            session={activeSession}
+            summary={contextSummary}
+            onRemoveAttachment={removeAttachment}
+            onClearAttachments={clearAttachments}
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    ) : diffPanelOpen ? (
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="min-h-0 bg-shell-panel"
+        onLayoutChanged={handleDiffOnlyLayoutChanged}
+        resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
+      >
+        <ResizablePanel
+          id="thread-main"
+          defaultSize={toPercentageSize(100 - normalizedDiffPanelSize)}
+          minSize={`${100 - MAX_DIFF_PANEL_SIZE}%`}
+        >
+          <section className="flex h-full min-h-0 flex-col bg-shell-panel">
+            {threadContent}
+          </section>
+        </ResizablePanel>
+        <ResizableHandle className="-mx-px w-px" />
+        <ResizablePanel
+          id="thread-diff"
+          defaultSize={toPercentageSize(normalizedDiffPanelSize)}
+          minSize={`${MIN_DIFF_PANEL_SIZE}%`}
+          maxSize={`${MAX_DIFF_PANEL_SIZE}%`}
+        >
+          <DiffPanel
+            overview={gitOverview}
+            isLoading={gitOverviewLoading}
+            onRefresh={refreshGitOverview}
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    ) : (
+      <section className="flex h-full min-h-0 flex-col bg-shell-panel">
+        {threadContent}
+      </section>
+    );
+
   return (
     <main className="flex h-screen flex-col overflow-hidden rounded-[var(--radius-shell)] bg-shell-window text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
       <TitleBar
@@ -758,45 +1137,46 @@ export default function App() {
         onToggleMaximize={handleToggleMaximize}
         onClose={() => desktopApi?.window.close()}
       />
-      <div
-        className="grid min-h-0 flex-1 overflow-hidden bg-shell-window"
-        style={{ gridTemplateColumns: `${sidebarWidth}px minmax(0, 1fr)` }}
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="min-h-0 flex-1 overflow-hidden bg-shell-window"
+        onLayoutChanged={handleShellLayoutChanged}
+        resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
       >
-        <aside className="relative min-h-0 bg-transparent">
-          <Sidebar
-            summaries={summaries}
-            activeSessionId={activeSessionId}
-            onSelectSession={selectSession}
-            onNewSession={createNewSession}
-            onOpenSettings={() => openSettingsView("general")}
-            onArchiveSession={archiveSession}
-            onUnarchiveSession={unarchiveSession}
-            onDeleteSession={deleteSessionPermanently}
-            onRenameSession={renameSession}
-            archivedSummaries={archivedSummaries}
-            groups={groups}
-            onCreateGroup={createGroup}
-            onRenameGroup={renameGroup}
-            onDeleteGroup={deleteGroup}
-            onSetSessionGroup={setSessionGroup}
-            viewMode={mainView === "settings" ? "settings" : "threads"}
-            activeSettingsSection={settingsSection}
-            onSelectSettingsSection={setSettingsSection}
-            onExitSettings={closeSettingsView}
-          />
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="调整侧边栏宽度"
-            onMouseDown={startSidebarResize}
-            className="group absolute inset-y-0 right-0 z-20 flex w-3 translate-x-1/2 cursor-col-resize items-center justify-center"
-          >
-            <div className="h-14 w-[2px] rounded-full bg-shell-resize transition group-hover:h-24 group-hover:bg-shell-resize-hover" />
-          </div>
-        </aside>
-
-        <section className="relative flex min-h-0 flex-col overflow-hidden bg-shell-window">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] bg-shell-panel shadow-[inset_1px_0_0_rgba(255,255,255,0.03)]">
+        <ResizablePanel
+          id="shell-sidebar"
+          defaultSize={toSidebarPercentageSize(sidebarSize)}
+          minSize={`${MIN_SIDEBAR_SIZE}%`}
+          maxSize={`${MAX_SIDEBAR_SIZE}%`}
+        >
+          <aside className="relative h-full min-h-0 bg-transparent">
+            <Sidebar
+              summaries={summaries}
+              activeSessionId={activeSessionId}
+              onSelectSession={selectSession}
+              onNewSession={createNewSession}
+              onOpenSettings={() => openSettingsView("general")}
+              onArchiveSession={archiveSession}
+              onUnarchiveSession={unarchiveSession}
+              onDeleteSession={deleteSessionPermanently}
+              onRenameSession={renameSession}
+              archivedSummaries={archivedSummaries}
+              groups={groups}
+              onCreateGroup={createGroup}
+              onRenameGroup={renameGroup}
+              onDeleteGroup={deleteGroup}
+              onSetSessionGroup={setSessionGroup}
+              viewMode={mainView === "settings" ? "settings" : "threads"}
+              activeSettingsSection={settingsSection}
+              onSelectSettingsSection={setSettingsSection}
+              onExitSettings={closeSettingsView}
+            />
+          </aside>
+        </ResizablePanel>
+        <ResizableHandle className="-mx-px w-px" />
+        <ResizablePanel id="shell-main">
+          <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-shell-window">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] bg-shell-panel">
             <div className="flex min-h-[52px] items-center justify-end gap-2 px-5 pb-3 pt-4">
               {mainView === "thread" ? (
                 <>
@@ -814,11 +1194,9 @@ export default function App() {
                     type="button"
                     variant="outline"
                     size="icon"
-                    onClick={toggleRightPanel}
-                    className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${rightPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
-                    aria-label={
-                      rightPanelOpen ? "收起右侧上下文" : "展开右侧上下文"
-                    }
+                    onClick={toggleDiffPanel}
+                    className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
+                    aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
                   >
                     <RectangleGroupIcon className="h-4 w-4" />
                   </Button>
@@ -826,58 +1204,8 @@ export default function App() {
               ) : null}
             </div>
 
-            <div
-              className="grid min-h-0 flex-1 bg-shell-panel transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
-              style={{ gridTemplateColumns: threadGridColumns }}
-            >
-              <section className="flex min-h-0 flex-col bg-shell-panel">
-                {mainView === "settings" ? (
-                  <SettingsView
-                    activeSection={settingsSection}
-                    settings={settings}
-                    currentModel={currentModel}
-                    thinkingLevel={thinkingLevel}
-                    onModelChange={handleModelChange}
-                    onThinkingLevelChange={handleThinkingLevelChange}
-                    onSettingsChange={handleSettingsChange}
-                    archivedSummaries={archivedSummaries}
-                    onOpenArchivedSession={openArchivedSessionFromSettings}
-                    onUnarchiveSession={(sessionId) => {
-                      void unarchiveSession(sessionId);
-                    }}
-                    onDeleteSession={(sessionId) => {
-                      void deleteSessionPermanently(sessionId);
-                    }}
-                  />
-                ) : activeSession && desktopApi ? (
-                  <AssistantThreadPanel
-                    session={activeSession}
-                    desktopApi={desktopApi}
-                    onPersistSession={persistSession}
-                    currentModel={currentModel}
-                    thinkingLevel={thinkingLevel}
-                    terminalOpen={terminalOpen}
-                    isPickingFiles={isPickingFiles}
-                    onAttachFiles={attachFiles}
-                    onPasteFiles={pasteFiles}
-                    onRemoveAttachment={removeAttachment}
-                    onModelChange={handleModelChange}
-                    onThinkingLevelChange={handleThinkingLevelChange}
-                  />
-                ) : (
-                  <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
-                    当前没有可用线程。
-                  </div>
-                )}
-              </section>
-
-              {mainView === "thread" ? (
-                <div
-                  className={`min-h-0 overflow-hidden ${rightPanelOpen ? "" : "pointer-events-none"}`}
-                >
-                  <ContextPanel open={rightPanelOpen} session={activeSession} />
-                </div>
-              ) : null}
+            <div className="min-h-0 flex-1 bg-shell-panel">
+              {threadPanels}
             </div>
 
             {mainView === "thread" ? (
@@ -889,7 +1217,8 @@ export default function App() {
             ) : null}
           </div>
         </section>
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </main>
   );
 }

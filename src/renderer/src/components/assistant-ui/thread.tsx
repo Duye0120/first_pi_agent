@@ -24,11 +24,13 @@ import {
   BrainCircuitIcon,
   CheckIcon,
   CopyIcon,
+  GitBranchIcon,
   SquareIcon,
 } from "lucide-react";
 import type {
-  AvailableModel,
-  ModelSelection,
+  GitBranchSummary,
+  ModelEntry,
+  ProviderSource,
   SelectedFile,
   ThinkingLevel,
 } from "@shared/contracts";
@@ -39,11 +41,17 @@ import {
   UserMessageAttachments,
 } from "@renderer/components/assistant-ui/attachment";
 import { Button } from "@renderer/components/assistant-ui/button";
+import { ContextUsageIndicator } from "@renderer/components/assistant-ui/context-usage-indicator";
 import { MarkdownText } from "@renderer/components/assistant-ui/markdown-text";
 import {
   ModelSelector,
   type ModelOption,
 } from "@renderer/components/assistant-ui/model-selector";
+import {
+  EMPTY_CONTEXT_USAGE_SUMMARY,
+  getContextStatusCopy,
+  type ContextUsageSummary,
+} from "@renderer/lib/context-usage";
 import { Reasoning } from "@renderer/components/assistant-ui/reasoning";
 import { Select } from "@renderer/components/assistant-ui/select";
 import { ToolFallback } from "@renderer/components/assistant-ui/tool-fallback";
@@ -52,6 +60,12 @@ import {
   selectedFileToCreateAttachment,
   toPersistedMessageAttachment,
 } from "@renderer/lib/assistant-ui-attachments";
+import {
+  buildSelectableModelOptions,
+  findEntryLabel,
+  loadProviderDirectory,
+} from "@renderer/lib/provider-directory";
+import { cn } from "@renderer/lib/utils";
 
 type ThreadProps = {
   attachments?: SelectedFile[];
@@ -60,10 +74,14 @@ type ThreadProps = {
   onAttachFiles?: () => void;
   onPasteFiles?: (files: File[]) => void;
   onRemoveAttachment?: (attachmentId: string) => void;
-  currentModel?: ModelSelection;
+  currentModelId?: string;
   thinkingLevel?: ThinkingLevel;
-  onModelChange?: (model: ModelSelection) => void;
+  onModelChange?: (modelEntryId: string) => void;
   onThinkingLevelChange?: (level: ThinkingLevel) => void;
+  branchSummary?: GitBranchSummary | null;
+  contextSummary?: ContextUsageSummary;
+  contextPanelOpen?: boolean;
+  onToggleContextPanel?: () => void;
 };
 
 type ThreadResolvedProps = {
@@ -73,10 +91,14 @@ type ThreadResolvedProps = {
   onAttachFiles: () => void;
   onPasteFiles: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
-  currentModel: ModelSelection;
+  currentModelId: string;
   thinkingLevel: ThinkingLevel;
-  onModelChange: (model: ModelSelection) => void;
+  onModelChange: (modelEntryId: string) => void;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
+  branchSummary: GitBranchSummary | null;
+  contextSummary: ContextUsageSummary;
+  contextPanelOpen: boolean;
+  onToggleContextPanel: () => void;
 };
 
 const THINKING_LEVELS: { value: ThinkingLevel; label: string }[] = [
@@ -88,39 +110,24 @@ const THINKING_LEVELS: { value: ThinkingLevel; label: string }[] = [
   { value: "xhigh", label: "极高" },
 ];
 
-function getModelValue(model: ModelSelection | AvailableModel) {
-  return `${model.provider}/${model.model}`;
-}
-
-function fallbackModelLabel(model: ModelSelection): string {
-  return (model.model.split("/").pop() ?? model.model)
-    .replace(/-\d{8}$/, "")
-    .replace("claude-", "Claude ")
-    .replace("gpt-", "GPT-")
-    .replace("sonnet", "Sonnet")
-    .replace("opus", "Opus")
-    .replace("haiku", "Haiku");
-}
-
 function buildModelOptions(
-  availableModels: AvailableModel[],
-  currentModel: ModelSelection,
+  sources: ProviderSource[],
+  entries: ModelEntry[],
+  currentModelId: string,
 ): ModelOption[] {
-  const options: ModelOption[] = availableModels.map((model) => ({
-    id: getModelValue(model),
+  const options: ModelOption[] = buildSelectableModelOptions(sources, entries).map((model) => ({
+    id: model.value,
     name: model.label,
-    description: model.available
-      ? `${model.provider} provider model`
-      : "需配置 Key",
+    description: model.description,
     icon: <BotIcon className="size-4" />,
-    disabled: !model.available,
+    disabled: false,
   }));
 
-  if (!options.some((option) => option.id === getModelValue(currentModel))) {
+  if (!options.some((option) => option.id === currentModelId)) {
     options.unshift({
-      id: getModelValue(currentModel),
-      name: fallbackModelLabel(currentModel),
-      description: `${currentModel.provider} provider model`,
+      id: currentModelId,
+      name: findEntryLabel(currentModelId, sources, entries),
+      description: "当前模型",
       icon: <BotIcon className="size-4" />,
       disabled: false,
     });
@@ -164,21 +171,29 @@ export const Thread: FC<ThreadProps> = ({
   onAttachFiles = () => undefined,
   onPasteFiles = () => undefined,
   onRemoveAttachment = () => undefined,
-  currentModel = { provider: "anthropic", model: "claude-sonnet-4-20250514" },
+  currentModelId = "builtin:anthropic:claude-sonnet-4-20250514",
   thinkingLevel = "off",
   onModelChange = () => undefined,
   onThinkingLevelChange = () => undefined,
+  branchSummary = null,
+  contextSummary = EMPTY_CONTEXT_USAGE_SUMMARY,
+  contextPanelOpen = false,
+  onToggleContextPanel = () => undefined,
 }) => {
-  const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
+  const [sources, setSources] = useState<ProviderSource[]>([]);
+  const [entries, setEntries] = useState<ModelEntry[]>([]);
 
   useEffect(() => {
     let cancelled = false;
 
-    void window.desktopApi?.models.listAvailable().then((models) => {
-      if (!cancelled && Array.isArray(models)) {
-        setAvailableModels(models);
+    void (async () => {
+      if (!window.desktopApi) return;
+      const nextDirectory = await loadProviderDirectory(window.desktopApi);
+      if (!cancelled) {
+        setSources(nextDirectory.sources);
+        setEntries(nextDirectory.entries);
       }
-    });
+    })();
 
     return () => {
       cancelled = true;
@@ -186,36 +201,38 @@ export const Thread: FC<ThreadProps> = ({
   }, []);
 
   const modelOptions = useMemo(
-    () => buildModelOptions(availableModels, currentModel),
-    [availableModels, currentModel],
+    () => buildModelOptions(sources, entries, currentModelId),
+    [currentModelId, entries, sources],
   );
 
   return (
     <ThreadPrimitive.Root
-      className="@container flex h-full flex-col bg-shell-panel"
+      className="@container flex h-full min-h-0 flex-col bg-shell-panel"
       style={{
         ["--thread-max-width" as string]: "56rem",
         ["--composer-radius" as string]: "8px",
         ["--composer-padding" as string]: "12px",
       }}
     >
-      <ThreadPrimitive.Viewport
-        turnAnchor="top"
-        className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth px-8 pt-3"
-      >
-        <AuiIf condition={(s) => s.thread.isEmpty}>
-          <ThreadWelcome />
-        </AuiIf>
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <ThreadPrimitive.Viewport
+          turnAnchor="top"
+          className="relative mr-3 min-h-0 flex-1 overflow-x-auto overflow-y-auto scroll-smooth pl-8 pr-5 pt-3"
+        >
+          <AuiIf condition={(s) => s.thread.isEmpty}>
+            <ThreadWelcome />
+          </AuiIf>
 
-        <ThreadPrimitive.Messages>
-          {() => <ThreadMessage />}
-        </ThreadPrimitive.Messages>
+          <ThreadPrimitive.Messages>
+            {() => <ThreadMessage />}
+          </ThreadPrimitive.Messages>
+        </ThreadPrimitive.Viewport>
 
-        <ThreadPrimitive.ViewportFooter
+        <div
           className={
             terminalOpen
-              ? "sticky bottom-0 mx-auto mt-auto flex w-full max-w-none flex-col gap-2 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel/85 to-transparent pb-1 pt-4"
-              : "sticky bottom-0 mx-auto mt-auto flex w-full max-w-none flex-col gap-3 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel to-transparent pb-3 pt-9 md:pb-4"
+              ? "relative mx-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-2 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel/85 to-transparent px-8 pb-3 pt-4"
+              : "relative mx-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-3 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel to-transparent px-8 pb-5 pt-9 md:pb-6"
           }
         >
           <ThreadScrollToBottom />
@@ -226,13 +243,17 @@ export const Thread: FC<ThreadProps> = ({
             onAttachFiles={onAttachFiles}
             onPasteFiles={onPasteFiles}
             onRemoveAttachment={onRemoveAttachment}
-            currentModel={currentModel}
+            currentModelId={currentModelId}
             thinkingLevel={thinkingLevel}
             onModelChange={onModelChange}
             onThinkingLevelChange={onThinkingLevelChange}
+            branchSummary={branchSummary}
+            contextSummary={contextSummary}
+            contextPanelOpen={contextPanelOpen}
+            onToggleContextPanel={onToggleContextPanel}
           />
-        </ThreadPrimitive.ViewportFooter>
-      </ThreadPrimitive.Viewport>
+        </div>
+      </div>
     </ThreadPrimitive.Root>
   );
 };
@@ -280,11 +301,28 @@ const Composer: FC<ThreadResolvedProps> = ({
   onAttachFiles,
   onPasteFiles,
   onRemoveAttachment,
-  currentModel,
+  currentModelId,
   thinkingLevel,
   onModelChange,
   onThinkingLevelChange,
+  branchSummary,
+  contextSummary,
+  contextPanelOpen,
+  onToggleContextPanel,
 }) => {
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
+  const [inputScrollable, setInputScrollable] = useState(false);
+
+  const syncInputOverflow = useCallback(() => {
+    const textarea = composerInputRef.current;
+    if (!textarea) return;
+
+    const nextScrollable = textarea.scrollHeight > textarea.clientHeight + 1;
+    setInputScrollable((current) =>
+      current === nextScrollable ? current : nextScrollable,
+    );
+  }, []);
+
   const handleInputPaste = useCallback(
     (event: ClipboardEvent<HTMLTextAreaElement>) => {
       const clipboardData = event.clipboardData;
@@ -299,6 +337,10 @@ const Composer: FC<ThreadResolvedProps> = ({
     [onPasteFiles],
   );
 
+  useEffect(() => {
+    syncInputOverflow();
+  }, [syncInputOverflow]);
+
   return (
     <ComposerPrimitive.Root className="relative flex w-full flex-col">
       <ComposerAttachmentSync
@@ -310,9 +352,19 @@ const Composer: FC<ThreadResolvedProps> = ({
 
         <ComposerPrimitive.Input
           placeholder="向 Pi Agent 提问..."
-          className="max-h-32 min-h-0 w-full resize-none bg-transparent px-1 py-1 text-[15px] leading-6 outline-none placeholder:text-muted-foreground/80"
-          rows={1}
+          ref={composerInputRef}
+          className={`min-h-0 w-full resize-none bg-transparent px-1 py-1 text-[15px] leading-6 outline-none placeholder:text-muted-foreground/80 ${
+            inputScrollable ? "overflow-y-auto pr-2" : "overflow-y-hidden"
+          }`}
+          minRows={1}
+          maxRows={5}
           autoFocus
+          onChange={() => {
+            requestAnimationFrame(syncInputOverflow);
+          }}
+          onHeightChange={() => {
+            requestAnimationFrame(syncInputOverflow);
+          }}
           onPaste={handleInputPaste}
           aria-label="消息输入框"
         />
@@ -320,10 +372,16 @@ const Composer: FC<ThreadResolvedProps> = ({
           isPickingFiles={isPickingFiles}
           onAttachFiles={onAttachFiles}
           modelOptions={modelOptions}
-          currentModel={currentModel}
+          currentModelId={currentModelId}
           thinkingLevel={thinkingLevel}
           onModelChange={onModelChange}
           onThinkingLevelChange={onThinkingLevelChange}
+        />
+        <ComposerStatusBar
+          branchSummary={branchSummary}
+          contextSummary={contextSummary}
+          contextPanelOpen={contextPanelOpen}
+          onToggleContextPanel={onToggleContextPanel}
         />
       </div>
     </ComposerPrimitive.Root>
@@ -336,7 +394,7 @@ const ComposerAction: FC<
     | "isPickingFiles"
     | "onAttachFiles"
     | "modelOptions"
-    | "currentModel"
+    | "currentModelId"
     | "thinkingLevel"
     | "onModelChange"
     | "onThinkingLevelChange"
@@ -345,7 +403,7 @@ const ComposerAction: FC<
   isPickingFiles,
   onAttachFiles,
   modelOptions,
-  currentModel,
+  currentModelId,
   thinkingLevel,
   onModelChange,
   onThinkingLevelChange,
@@ -359,13 +417,8 @@ const ComposerAction: FC<
         />
         <ModelSelector
           models={modelOptions}
-          value={getModelValue(currentModel)}
-          onValueChange={(value) => {
-            const [provider, ...modelParts] = value.split("/");
-            const model = modelParts.join("/");
-            if (!provider || !model) return;
-            onModelChange({ provider, model });
-          }}
+          value={currentModelId}
+          onValueChange={onModelChange}
           variant="outline"
           size="sm"
           contentClassName="min-w-[220px]"
@@ -417,6 +470,83 @@ const ComposerAction: FC<
           </Button>
         </ComposerPrimitive.Cancel>
       </AuiIf>
+    </div>
+  );
+};
+
+function formatBranchLabel(branchSummary: GitBranchSummary | null) {
+  if (!branchSummary) {
+    return "读取中";
+  }
+
+  if (!branchSummary.branchName) {
+    return "非 Git 仓库";
+  }
+
+  if (branchSummary.isDetached) {
+    return `Detached · ${branchSummary.branchName}`;
+  }
+
+  return branchSummary.branchName;
+}
+
+const ComposerStatusBar: FC<{
+  branchSummary: GitBranchSummary | null;
+  contextSummary: ContextUsageSummary;
+  contextPanelOpen: boolean;
+  onToggleContextPanel: () => void;
+}> = ({
+  branchSummary,
+  contextSummary,
+  contextPanelOpen,
+  onToggleContextPanel,
+}) => {
+  const branchLabel = formatBranchLabel(branchSummary);
+  const isGitRepo = !!branchSummary?.branchName;
+
+  return (
+    <div className="flex items-center justify-between gap-3 pt-1">
+      <div
+        className={cn(
+          "inline-flex min-w-0 items-center gap-2 rounded-full px-3 py-1.5 text-[11px]",
+          isGitRepo
+            ? "bg-shell-panel text-foreground"
+            : "bg-shell-panel/60 text-muted-foreground",
+        )}
+        aria-label={isGitRepo ? `当前分支 ${branchLabel}` : "当前 workspace 不是 Git 仓库"}
+      >
+        <GitBranchIcon className="size-3.5 shrink-0" />
+        <span className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
+          Branch
+        </span>
+        <span className="truncate">{branchLabel}</span>
+        {branchSummary?.hasChanges ? (
+          <span className="size-1.5 shrink-0 rounded-full bg-amber-300" />
+        ) : null}
+      </div>
+
+      <button
+        type="button"
+        onClick={onToggleContextPanel}
+        aria-pressed={contextPanelOpen}
+        aria-label={contextPanelOpen ? "收起 Context 面板" : "展开 Context 面板"}
+        className={cn(
+          "inline-flex items-center gap-2 rounded-full px-2.5 py-1.5 text-left transition-colors",
+          contextPanelOpen
+            ? "bg-shell-panel text-foreground"
+            : "bg-shell-panel/60 text-muted-foreground hover:bg-shell-panel hover:text-foreground",
+        )}
+      >
+        <ContextUsageIndicator summary={contextSummary} size={28} strokeWidth={3} />
+        <span className="min-w-0">
+          <span className="block text-[10px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
+            Context
+          </span>
+          <span className="block truncate text-[11px]">
+            {getContextStatusCopy(contextSummary)}
+          </span>
+        </span>
+      </button>
     </div>
   );
 };

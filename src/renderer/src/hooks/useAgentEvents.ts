@@ -93,6 +93,13 @@ export function useAgentEvents() {
         break;
       }
 
+      case "message_end": {
+        if (!r) break;
+        r.usage = event.usage;
+        setCurrentResponse({ ...r });
+        break;
+      }
+
       case "tool_execution_start": {
         if (!r) break;
         // Close any open thinking step
@@ -211,6 +218,7 @@ export function useAgentEvents() {
       content: response.finalText,
       timestamp: new Date(response.endedAt ?? response.startedAt).toISOString(),
       status: response.status === "completed" ? "done" : "error",
+      usage: response.usage,
       steps: response.steps,
     };
   }, []);

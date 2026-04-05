@@ -1,9 +1,8 @@
 import { Agent } from "@mariozechner/pi-agent-core";
 import type { AgentEvent as CoreAgentEvent } from "@mariozechner/pi-agent-core";
-import { getModel } from "@mariozechner/pi-ai";
 import type { ElectronAdapter } from "./adapter.js";
 import { getSettings } from "./settings.js";
-import { getApiKey } from "./credentials.js";
+import { resolveModelEntry } from "./providers.js";
 import { getBuiltinTools } from "./tools/index.js";
 import { buildSoulPromptSection } from "./soul.js";
 import { loadMcpConfig, getActiveServers } from "../mcp/config.js";
@@ -14,6 +13,9 @@ export interface AgentHandle {
   agent: Agent;
   unsubscribe: () => void;
   sessionId: string;
+  modelEntryId: string;
+  runtimeSignature: string;
+  thinkingLevel: string;
 }
 
 let currentHandle: AgentHandle | null = null;
@@ -34,15 +36,11 @@ export async function initAgent(
   const settings = getSettings();
   adapter.setSessionId(sessionId);
 
-  let model;
+  let resolved;
   try {
-    model = getModel(
-      settings.defaultModel.provider as any,
-      settings.defaultModel.model as any,
-    );
+    resolved = resolveModelEntry(settings.defaultModelId);
   } catch {
-    // Fallback to a known model if configured model is invalid
-    model = getModel("anthropic" as any, "claude-sonnet-4-20250514" as any);
+    resolved = resolveModelEntry("builtin:anthropic:claude-sonnet-4-20250514");
   }
 
   // Load MCP tools
@@ -62,21 +60,26 @@ export async function initAgent(
   const agent = new Agent({
     initialState: {
       systemPrompt: buildSystemPrompt(adapter.workspacePath),
-      model,
+      model: resolved.model,
       thinkingLevel: settings.thinkingLevel,
       tools: [...builtinTools, ...mcpTools],
       messages: existingMessages ?? [],
     },
-    getApiKey: (provider: string) => {
-      return getApiKey(provider);
-    },
+    getApiKey: () => resolved.apiKey,
   });
 
   const unsubscribe = agent.subscribe((event: CoreAgentEvent) => {
     adapter.handleCoreEvent(event);
   });
 
-  const handle: AgentHandle = { agent, unsubscribe, sessionId };
+  const handle: AgentHandle = {
+    agent,
+    unsubscribe,
+    sessionId,
+    modelEntryId: resolved.entry.id,
+    runtimeSignature: resolved.runtimeSignature,
+    thinkingLevel: settings.thinkingLevel,
+  };
   currentHandle = handle;
   return handle;
 }

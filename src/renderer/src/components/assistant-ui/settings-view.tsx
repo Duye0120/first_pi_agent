@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type {
-  AvailableModel,
-  CredentialTestResult,
-  CredentialsSafe,
-  SoulFilesStatus,
-} from "@shared/contracts";
-import {
-  fallbackModelLabel,
-  getModelValue,
-  SECTION_META,
-} from "./settings/constants";
+import type { ModelEntry, ProviderSource, SoulFilesStatus } from "@shared/contracts";
+import { buildSelectableModelOptions, findEntryLabel, loadProviderDirectory } from "@renderer/lib/provider-directory";
+import { SECTION_META } from "./settings/constants";
 import { AboutSection } from "./settings/about-section";
 import { AppearanceSection } from "./settings/appearance-section";
 import { ArchivedSection } from "./settings/archived-section";
@@ -25,7 +17,7 @@ export { SETTINGS_SECTIONS } from "./settings/constants";
 export function SettingsView({
   activeSection,
   settings,
-  currentModel,
+  currentModelId,
   thinkingLevel,
   onModelChange,
   onThinkingLevelChange,
@@ -36,26 +28,15 @@ export function SettingsView({
   onDeleteSession,
 }: SettingsViewProps) {
   const desktopApi = window.desktopApi;
-  const [credentials, setCredentials] = useState<CredentialsSafe>({});
-  const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
+  const [sources, setSources] = useState<ProviderSource[]>([]);
+  const [entries, setEntries] = useState<ModelEntry[]>([]);
   const [soulStatus, setSoulStatus] = useState<SoulFilesStatus | null>(null);
-  const [editingProvider, setEditingProvider] = useState<string | null>(null);
-  const [editingKey, setEditingKey] = useState("");
-  const [testResult, setTestResult] = useState<CredentialTestResult | null>(
-    null,
-  );
-  const [testingProvider, setTestingProvider] = useState<string | null>(null);
 
-  const loadCredentials = useCallback(async () => {
+  const loadDirectory = useCallback(async () => {
     if (!desktopApi) return;
-    const nextCredentials = await desktopApi.credentials.get();
-    setCredentials(nextCredentials);
-  }, [desktopApi]);
-
-  const loadAvailableModels = useCallback(async () => {
-    if (!desktopApi) return;
-    const models = await desktopApi.models.listAvailable();
-    setAvailableModels(models);
+    const nextDirectory = await loadProviderDirectory(desktopApi);
+    setSources(nextDirectory.sources);
+    setEntries(nextDirectory.entries);
   }, [desktopApi]);
 
   const loadSoulStatus = useCallback(async () => {
@@ -65,79 +46,37 @@ export function SettingsView({
   }, [desktopApi]);
 
   useEffect(() => {
-    if (activeSection === "keys") {
-      void loadCredentials();
-      setEditingProvider(null);
-      setEditingKey("");
-      setTestResult(null);
-      setTestingProvider(null);
-    }
-  }, [activeSection, loadCredentials]);
+    void loadDirectory();
+  }, [loadDirectory]);
 
   useEffect(() => {
-    if (activeSection === "general") {
-      void loadAvailableModels();
+    if (activeSection === "general" || activeSection === "keys") {
+      void loadDirectory();
     }
     if (activeSection === "workspace") {
       void loadSoulStatus();
     }
-  }, [activeSection, loadAvailableModels, loadSoulStatus]);
+  }, [activeSection, loadDirectory, loadSoulStatus]);
 
   const modelOptions = useMemo(() => {
-    const nextOptions = availableModels.map((model) => ({
-      value: getModelValue(model),
-      label: model.available ? model.label : `${model.label}（需配置 Key）`,
-      disabled: !model.available,
-    }));
+    const nextOptions = buildSelectableModelOptions(sources, entries).map(
+      (option) => ({
+        value: option.value,
+        label: option.label,
+        disabled: false,
+      }),
+    );
 
-    const currentValue = getModelValue(currentModel);
-    if (!nextOptions.some((option) => option.value === currentValue)) {
+    if (!nextOptions.some((option) => option.value === currentModelId)) {
       nextOptions.unshift({
-        value: currentValue,
-        label: fallbackModelLabel(currentModel),
+        value: currentModelId,
+        label: findEntryLabel(currentModelId, sources, entries),
         disabled: false,
       });
     }
 
     return nextOptions;
-  }, [availableModels, currentModel]);
-
-  const handleSaveKey = useCallback(
-    async (provider: string) => {
-      if (!desktopApi || !editingKey.trim()) return;
-
-      setTestingProvider(provider);
-      setTestResult(null);
-
-      try {
-        const result = await desktopApi.credentials.test(provider, editingKey);
-        setTestResult(result);
-
-        if (!result.success) {
-          return;
-        }
-
-        await desktopApi.credentials.set(provider, editingKey);
-        await Promise.all([loadCredentials(), loadAvailableModels()]);
-        setEditingProvider(null);
-        setEditingKey("");
-      } catch {
-        setTestResult({ success: false, error: "测试请求失败" });
-      } finally {
-        setTestingProvider(null);
-      }
-    },
-    [desktopApi, editingKey, loadAvailableModels, loadCredentials],
-  );
-
-  const handleDeleteKey = useCallback(
-    async (provider: string) => {
-      if (!desktopApi) return;
-      await desktopApi.credentials.delete(provider);
-      await Promise.all([loadCredentials(), loadAvailableModels()]);
-    },
-    [desktopApi, loadAvailableModels, loadCredentials],
-  );
+  }, [currentModelId, entries, sources]);
 
   if (!settings) {
     return (
@@ -154,8 +93,8 @@ export function SettingsView({
       <div className="flex-1 overflow-y-auto px-8 pb-10 pt-4">
         <div className="mx-auto w-full max-w-[56rem]">
           <header className="mb-6">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              Settings
+            <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
+              设置
             </p>
             <h1 className="mt-3 text-[26px] font-semibold tracking-[-0.02em] text-foreground">
               {meta.label}
@@ -168,7 +107,7 @@ export function SettingsView({
           <div className="space-y-3">
             {activeSection === "general" ? (
               <GeneralSection
-                currentModel={currentModel}
+                currentModelId={currentModelId}
                 thinkingLevel={thinkingLevel}
                 modelOptions={modelOptions}
                 onModelChange={onModelChange}
@@ -178,16 +117,10 @@ export function SettingsView({
 
             {activeSection === "keys" ? (
               <KeysSection
-                credentials={credentials}
-                editingProvider={editingProvider}
-                editingKey={editingKey}
-                testResult={testResult}
-                testingProvider={testingProvider}
-                setEditingProvider={setEditingProvider}
-                setEditingKey={setEditingKey}
-                setTestResult={setTestResult}
-                onSaveKey={handleSaveKey}
-                onDeleteKey={handleDeleteKey}
+                currentModelId={currentModelId}
+                initialSources={sources}
+                initialEntries={entries}
+                onDirectoryChanged={loadDirectory}
               />
             ) : null}
 

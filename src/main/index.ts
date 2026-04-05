@@ -21,7 +21,8 @@ import {
   renameGroup,
   renameSession,
   saveSession,
-  setRightPanelOpen,
+  setContextPanelOpen,
+  setDiffPanelOpen,
   setSessionGroup,
   unarchiveSession,
 } from "./store.js";
@@ -36,11 +37,21 @@ import {
 } from "./agent.js";
 import { getSettings, updateSettings } from "./settings.js";
 import {
-  getMaskedCredentials,
-  setCredential,
-  deleteCredential,
-  testCredential,
-} from "./credentials.js";
+  deleteEntry,
+  deleteSource,
+  getCredentials,
+  getEntry,
+  getSource,
+  listEntries,
+  listEntriesBySource,
+  listSources,
+  resolveModelEntry,
+  saveEntry,
+  saveSource,
+  setCredentials,
+  testSource,
+} from "./providers.js";
+import { getGitDiffSnapshot } from "./git.js";
 import { getSoulFilesStatus } from "./soul.js";
 import {
   setTerminalWindow,
@@ -224,10 +235,18 @@ function registerIpcHandlers() {
     IPC_CHANNELS.chatSend,
     async (_event, input: SendMessageInput) => {
       if (!adapter) return;
+      const settings = getSettings();
+      const resolvedModel = resolveModelEntry(settings.defaultModelId);
 
       // Ensure agent is initialized for this session
       let handle = getCurrentHandle();
-      if (!handle || handle.sessionId !== input.sessionId) {
+      if (
+        !handle ||
+        handle.sessionId !== input.sessionId ||
+        handle.modelEntryId !== resolvedModel.entry.id ||
+        handle.runtimeSignature !== resolvedModel.runtimeSignature ||
+        handle.thinkingLevel !== settings.thinkingLevel
+      ) {
         const session = await loadSession(input.sessionId);
         handle = await initAgent(
           input.sessionId,
@@ -261,68 +280,52 @@ function registerIpcHandlers() {
     updateSettings(partial),
   );
 
-  // Credentials
-  ipcMain.handle(IPC_CHANNELS.credentialsGet, async () =>
-    getMaskedCredentials(),
+  // Providers
+  ipcMain.handle(IPC_CHANNELS.providersListSources, async () => listSources());
+  ipcMain.handle(
+    IPC_CHANNELS.providersGetSource,
+    async (_event, sourceId: string) => getSource(sourceId),
   );
   ipcMain.handle(
-    IPC_CHANNELS.credentialsSet,
-    async (_event, provider: string, apiKey: string) =>
-      setCredential(provider, apiKey),
+    IPC_CHANNELS.providersSaveSource,
+    async (_event, draft) => saveSource(draft),
   );
   ipcMain.handle(
-    IPC_CHANNELS.credentialsDelete,
-    async (_event, provider: string) => deleteCredential(provider),
+    IPC_CHANNELS.providersDeleteSource,
+    async (_event, sourceId: string) => deleteSource(sourceId),
   );
   ipcMain.handle(
-    IPC_CHANNELS.credentialsTest,
-    async (_event, provider: string, apiKey: string) =>
-      testCredential(provider, apiKey),
+    IPC_CHANNELS.providersTestSource,
+    async (_event, draft) => testSource(draft),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.providersGetCredentials,
+    async (_event, sourceId: string) => getCredentials(sourceId),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.providersSetCredentials,
+    async (_event, sourceId: string, apiKey: string) =>
+      setCredentials(sourceId, apiKey),
   );
 
   // Models
-  ipcMain.handle(IPC_CHANNELS.modelsListAvailable, async () => {
-    const creds = getMaskedCredentials();
-    const models = [
-      {
-        provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
-        label: "Claude Sonnet 4",
-        available: !!creds.anthropic?.hasKey,
-      },
-      {
-        provider: "anthropic",
-        model: "claude-opus-4-20250514",
-        label: "Claude Opus 4",
-        available: !!creds.anthropic?.hasKey,
-      },
-      {
-        provider: "anthropic",
-        model: "claude-haiku-3-5-20241022",
-        label: "Claude Haiku 3.5",
-        available: !!creds.anthropic?.hasKey,
-      },
-      {
-        provider: "openai",
-        model: "gpt-4o",
-        label: "GPT-4o",
-        available: !!creds.openai?.hasKey,
-      },
-      {
-        provider: "openai",
-        model: "gpt-4o-mini",
-        label: "GPT-4o Mini",
-        available: !!creds.openai?.hasKey,
-      },
-      {
-        provider: "google",
-        model: "gemini-2.0-flash",
-        label: "Gemini 2.0 Flash",
-        available: !!creds.google?.hasKey,
-      },
-    ];
-    return models;
-  });
+  ipcMain.handle(IPC_CHANNELS.modelsListEntries, async () => listEntries());
+  ipcMain.handle(
+    IPC_CHANNELS.modelsListEntriesBySource,
+    async (_event, sourceId: string) => listEntriesBySource(sourceId),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.modelsSaveEntry,
+    async (_event, draft) => saveEntry(draft),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.modelsDeleteEntry,
+    async (_event, entryId: string) => deleteEntry(entryId),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.modelsGetEntry,
+    async (_event, entryId: string) => getEntry(entryId),
+  );
 
   // Workspace
   ipcMain.handle(IPC_CHANNELS.workspaceChange, async (_event, path: string) => {
@@ -350,11 +353,18 @@ function registerIpcHandlers() {
   ipcMain.handle(IPC_CHANNELS.terminalDestroy, async (_event, id: string) =>
     destroyTerminal(id),
   );
+  ipcMain.handle(IPC_CHANNELS.gitStatus, async () =>
+    getGitDiffSnapshot(getSettings().workspace),
+  );
 
   ipcMain.handle(IPC_CHANNELS.uiGetState, async () => getUiState());
   ipcMain.handle(
-    IPC_CHANNELS.uiSetRightPanelOpen,
-    async (_event, open: boolean) => setRightPanelOpen(open),
+    IPC_CHANNELS.uiSetDiffPanelOpen,
+    async (_event, open: boolean) => setDiffPanelOpen(open),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.uiSetContextPanelOpen,
+    async (_event, open: boolean) => setContextPanelOpen(open),
   );
 
   ipcMain.handle(IPC_CHANNELS.windowGetState, async () => {

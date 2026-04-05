@@ -26,14 +26,14 @@
   --secondary: 210 32% 97%;
   --secondary-foreground: 222 47% 11%;
   --muted: 210 26% 96%;
-  --muted-foreground: 215 16% 47%;
+  --muted-foreground: 215 18% 41%;
   --accent: 210 28% 95%;
   --accent-foreground: 222 47% 11%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 210 20% 98%;
-  --border: 214 22% 88%;
-  --input: 214 22% 88%;
-  --ring: 221 83% 53%;
+  --border: 214 20% 84%;
+  --input: 214 20% 84%;
+  --ring: 214 16% 68%;
 
   /* ── Global Base ─────────────────────────────────────────── */
   --color-bg-primary:        #ffffff;
@@ -43,21 +43,21 @@
   --color-shell-window:      #e8edf3;
   --color-shell-panel:       #ffffff;
   --color-shell-panel-muted: #f8fafc;
-  --color-shell-panel-elevated: #f2f6fb;
-  --color-shell-panel-contrast: #edf2f8;
-  --color-shell-border:      #dbe2ea;
+  --color-shell-panel-elevated: #eef3f9;
+  --color-shell-panel-contrast: #e8eef5;
+  --color-shell-border:      #d4dce6;
   --radius-shell:            8px;
   --color-shell-toolbar:     #f8fafc;
   --color-shell-toolbar-hover:#eef2f7;
-  --color-shell-hover:       rgba(255, 255, 255, 0.72);
+  --color-shell-hover:       rgba(236, 242, 248, 0.96);
   --color-shell-terminal:    #fbfcfe;
   --color-shell-resize-handle: rgba(15, 23, 42, 0.07);
   --color-shell-resize-handle-hover: rgba(15, 23, 42, 0.14);
   --color-text-primary:      #111827;
   --color-text-secondary:    #475569;
-  --color-text-muted:        #64748b;
-  --color-border:            #e2e8f0;
-  --color-border-light:      #f1f5f9;
+  --color-text-muted:        #55657c;
+  --color-border:            #dce4ed;
+  --color-border-light:      #e8eef5;
 
   /* ── Step Cards ──────────────────────────────────────────── */
   --color-step-bg:           #ffffff;
@@ -124,14 +124,14 @@
   --secondary: 220 10% 18%;
   --secondary-foreground: 210 20% 96%;
   --muted: 220 10% 16%;
-  --muted-foreground: 215 16% 72%;
+  --muted-foreground: 215 16% 76%;
   --accent: 220 10% 18%;
   --accent-foreground: 210 20% 96%;
   --destructive: 0 72% 55%;
   --destructive-foreground: 210 20% 98%;
-  --border: 220 10% 22%;
-  --input: 220 10% 22%;
-  --ring: 208 100% 60%;
+  --border: 220 10% 26%;
+  --input: 220 10% 26%;
+  --ring: 220 10% 40%;
 
   --color-bg-primary:        #181818;
   --color-bg-secondary:      #202020;
@@ -142,18 +142,18 @@
   --color-shell-panel-muted: #212121;
   --color-shell-panel-elevated: #262626;
   --color-shell-panel-contrast: #2c2c2c;
-  --color-shell-border:      #1b1b1b;
+  --color-shell-border:      #2f3339;
   --color-shell-toolbar:     #1a1a1a;
   --color-shell-toolbar-hover:#2a2a2a;
-  --color-shell-hover:       rgba(255, 255, 255, 0.075);
+  --color-shell-hover:       rgba(255, 255, 255, 0.1);
   --color-shell-terminal:    #161616;
   --color-shell-resize-handle: rgba(255, 255, 255, 0.08);
   --color-shell-resize-handle-hover: rgba(255, 255, 255, 0.18);
   --color-text-primary:      #f5f5f5;
   --color-text-secondary:    #d4d4d4;
-  --color-text-muted:        #9ca3af;
-  --color-border:            #303030;
-  --color-border-light:      #262626;
+  --color-text-muted:        #aeb7c6;
+  --color-border:            #32363d;
+  --color-border-light:      #2a2e34;
 
   --color-step-bg:           #1f1f1f;
   --color-step-bg-hover:     #262626;

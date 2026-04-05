@@ -145,15 +145,15 @@ export function TerminalDrawer({ open, onToggle, settings }: Props) {
                 className={`group relative -mb-px flex shrink-0 items-center gap-2 rounded-t-[6px] px-3 py-1 text-[11px] font-medium transition-colors ${
                   tab.id === activeTabId
                     ? "z-10 bg-shell-panel-elevated text-foreground shadow-[0_-2px_10px_rgba(0,0,0,0.18)]"
-                    : "border-transparent text-muted-foreground hover:bg-foreground/6 hover:text-foreground/80"
+                    : "border-transparent text-[color:var(--color-text-secondary)] hover:bg-shell-hover hover:text-foreground"
                 }`}
               >
                 <span className="flex items-center gap-1.5">
-                  <CommandLineIcon className="h-3.5 w-3.5 text-muted-foreground/70" />
-                  <span className="truncate max-w-[120px] text-foreground/90">
+                  <CommandLineIcon className="h-3.5 w-3.5 text-[color:var(--color-text-secondary)]" />
+                  <span className="truncate max-w-[120px]">
                     {tab.label}
                   </span>
-                  <span className="text-[10px] font-normal text-muted-foreground/50">
+                  <span className="text-[10px] font-normal text-[color:var(--color-text-muted)]">
                     - {tab.shellLabel}
                   </span>
                 </span>
@@ -163,7 +163,7 @@ export function TerminalDrawer({ open, onToggle, settings }: Props) {
                     void closeTab(tab.id);
                     if (tabs.length <= 1 && open) onToggle();
                   }}
-                  className={`rounded p-0.5 hover:bg-foreground/10 ${tab.id === activeTabId ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                  className={`rounded p-0.5 text-[color:var(--color-text-muted)] hover:bg-shell-hover hover:text-foreground ${tab.id === activeTabId ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                 >
                   <XMarkIcon className="h-3 w-3" />
                 </span>
@@ -171,11 +171,11 @@ export function TerminalDrawer({ open, onToggle, settings }: Props) {
             ))}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1 pb-0.5 pl-2 text-muted-foreground/50">
+          <div className="flex shrink-0 items-center gap-1 pb-0.5 pl-2 text-[color:var(--color-text-secondary)]">
             <button
               type="button"
               onClick={() => void createTab()}
-              className="rounded-md p-1 transition hover:bg-foreground/6 hover:text-foreground"
+              className="rounded-md p-1 transition hover:bg-shell-hover hover:text-foreground"
               aria-label="新终端"
             >
               <PlusIcon className="h-3.5 w-3.5" />
@@ -186,7 +186,7 @@ export function TerminalDrawer({ open, onToggle, settings }: Props) {
                 if (activeTabId) void closeTab(activeTabId);
                 if (tabs.length <= 1 && open) onToggle();
               }}
-              className="rounded-md p-1 transition hover:bg-foreground/6 hover:text-foreground"
+              className="rounded-md p-1 transition hover:bg-shell-hover hover:text-foreground"
               aria-label="关闭当前终端"
             >
               <XMarkIcon className="h-3.5 w-3.5" />

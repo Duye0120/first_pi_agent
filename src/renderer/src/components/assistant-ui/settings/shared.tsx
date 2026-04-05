@@ -3,20 +3,33 @@ import {
   CheckCircleIcon,
   ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
+import { Badge } from "@renderer/components/assistant-ui/badge";
 import { Select } from "@renderer/components/assistant-ui/select";
+import { cn } from "@renderer/lib/utils";
 
 export function SettingsCard({
   title,
   description,
   children,
+  className,
+  headerClassName,
+  bodyClassName,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
+  className?: string;
+  headerClassName?: string;
+  bodyClassName?: string;
 }) {
   return (
-    <section className="overflow-hidden rounded-[var(--radius-shell)] border border-shell-border bg-shell-panel">
-      <div className="px-5 py-4">
+    <section
+      className={cn(
+        "overflow-hidden rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel",
+        className,
+      )}
+    >
+      <div className={cn("px-5 py-4", headerClassName)}>
         <h2 className="text-[14px] font-semibold text-foreground">{title}</h2>
         {description ? (
           <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
@@ -24,7 +37,7 @@ export function SettingsCard({
           </p>
         ) : null}
       </div>
-      <div>{children}</div>
+      <div className={bodyClassName}>{children}</div>
     </section>
   );
 }
@@ -39,7 +52,7 @@ export function SettingsRow({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-t border-shell-border px-5 py-4 first:border-t-0 md:flex-row md:items-start md:justify-between md:gap-6">
+    <div className="flex flex-col gap-3 border-t border-[color:var(--color-border-light)] px-5 py-4 first:border-t-0 md:flex-row md:items-start md:justify-between md:gap-6">
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-medium text-foreground">{label}</p>
         {hint ? (
@@ -63,7 +76,7 @@ export function FieldInput(
   return (
     <input
       {...rest}
-      className={`h-9 w-full rounded-[var(--radius-shell)] border border-shell-border bg-shell-panel-contrast px-3 text-[13px] text-foreground transition outline-none focus:border-ring/60 ${mono ? "font-mono text-[12px]" : ""} ${className}`}
+      className={`h-9 w-full rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-3 text-[13px] text-foreground transition-colors outline-none focus:border-ring/40 ${mono ? "font-mono text-[12px]" : ""} ${className}`}
     />
   );
 }
@@ -86,7 +99,7 @@ export function FieldSelect(props: {
         textValue: option.label,
         disabled: option.disabled,
       }))}
-      className={`h-9 w-full justify-between rounded-[var(--radius-shell)] border border-shell-border bg-shell-panel-contrast px-3 text-[13px] text-foreground hover:bg-shell-panel-contrast ${className}`}
+      className={`h-9 w-full justify-between rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-3 text-[13px] text-foreground hover:bg-shell-panel-contrast ${className}`}
     />
   );
 }
@@ -99,19 +112,13 @@ export function StatusBadge({
   text: string;
 }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] ${
-        ok
-          ? "bg-emerald-50 text-emerald-700"
-          : "bg-amber-50 text-amber-700"
-      }`}
-    >
+    <Badge variant={ok ? "success" : "warning"} className="gap-1">
       {ok ? (
         <CheckCircleIcon className="h-3.5 w-3.5" />
       ) : (
         <ExclamationCircleIcon className="h-3.5 w-3.5" />
       )}
       {text}
-    </span>
+    </Badge>
   );
 }

@@ -1,159 +1,1347 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { EyeIcon, EyeOffIcon, SlidersHorizontalIcon, Trash2Icon } from "lucide-react";
 import type {
-  CredentialTestResult,
-  CredentialsSafe,
+  ModelCapabilities,
+  ModelCapabilitiesOverride,
+  ModelEntry,
+  ModelLimits,
+  ModelLimitsOverride,
+  ProviderSource,
+  ProviderSourceDraft,
+  ProviderType,
+  SourceCredentials,
+  SourceTestResult,
 } from "@shared/contracts";
-import { ExclamationCircleIcon } from "@heroicons/react/24/outline";
 import { Button } from "@renderer/components/assistant-ui/button";
-import { PROVIDERS } from "./constants";
-import { FieldInput, SettingsCard, StatusBadge } from "./shared";
+import { Badge } from "@renderer/components/assistant-ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@renderer/components/assistant-ui/dialog";
+import { Switch } from "@renderer/components/assistant-ui/switch";
+import { TooltipIconButton } from "@renderer/components/assistant-ui/tooltip-icon-button";
+import {
+  deriveModelEntryName,
+  providerTypeLabel,
+  sourceModeLabel,
+} from "@renderer/lib/provider-directory";
+import { FieldInput, FieldSelect, SettingsCard } from "./shared";
+
+type EditableEntry = {
+  id: string;
+  persistedId?: string;
+  sourceId: string;
+  name: string;
+  modelId: string;
+  enabled: boolean;
+  builtin: boolean;
+  capabilities: ModelCapabilitiesOverride;
+  limits: ModelLimitsOverride;
+  detectedCapabilities: ModelCapabilities;
+  detectedLimits: ModelLimits;
+  providerOptionsText: string;
+};
+
+type SourceWorkspace = {
+  sourceId: string;
+  persistedSourceId?: string;
+  kind: ProviderSource["kind"];
+  sourceDraft: ProviderSourceDraft;
+  hasStoredCredential: boolean;
+  credentialMasked: string;
+  apiKeyInput: string;
+  entries: EditableEntry[];
+  deletedEntryIds: string[];
+  baseline: string;
+};
+
+const PROVIDER_TYPE_OPTIONS = [
+  { value: "anthropic", label: "Anthropic" },
+  { value: "openai", label: "OpenAI" },
+  { value: "google", label: "Google" },
+  { value: "openai-compatible", label: "OpenAI Compatible" },
+] as const;
+
+const CAPABILITY_FIELDS = [
+  { key: "vision", label: "视觉" },
+  { key: "imageOutput", label: "图像输出" },
+  { key: "toolCalling", label: "工具调用" },
+  { key: "reasoning", label: "推理" },
+  { key: "embedding", label: "向量 Embedding" },
+] as const;
+
+function normalizeCapabilityOverride(value: boolean | null): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function normalizeCapabilitiesOverride(
+  capabilities: ModelCapabilitiesOverride,
+): ModelCapabilitiesOverride {
+  return {
+    vision: normalizeCapabilityOverride(capabilities.vision),
+    imageOutput: normalizeCapabilityOverride(capabilities.imageOutput),
+    toolCalling: normalizeCapabilityOverride(capabilities.toolCalling),
+    reasoning: normalizeCapabilityOverride(capabilities.reasoning),
+    embedding: normalizeCapabilityOverride(capabilities.embedding),
+  };
+}
+
+function serializeWorkspace(workspace: SourceWorkspace): string {
+  return JSON.stringify({
+    sourceDraft: workspace.sourceDraft,
+    apiKeyInput: workspace.apiKeyInput,
+    deletedEntryIds: workspace.deletedEntryIds,
+    entries: workspace.entries.map((entry) => ({
+      id: entry.id,
+      sourceId: entry.sourceId,
+      name: entry.name,
+      modelId: entry.modelId,
+      enabled: entry.enabled,
+      builtin: entry.builtin,
+      capabilities: entry.capabilities,
+      limits: entry.limits,
+      providerOptionsText: entry.providerOptionsText,
+    })),
+  });
+}
+
+function cloneEditableEntry(entry: EditableEntry): EditableEntry {
+  return {
+    ...entry,
+    capabilities: { ...entry.capabilities },
+    limits: { ...entry.limits },
+    detectedCapabilities: { ...entry.detectedCapabilities },
+    detectedLimits: { ...entry.detectedLimits },
+  };
+}
+
+function serializeEditableEntry(entry: EditableEntry): string {
+  return JSON.stringify({
+    id: entry.id,
+    sourceId: entry.sourceId,
+    name: entry.name,
+    modelId: entry.modelId,
+    enabled: entry.enabled,
+    builtin: entry.builtin,
+    capabilities: entry.capabilities,
+    limits: entry.limits,
+    providerOptionsText: entry.providerOptionsText,
+  });
+}
+
+function getEntryDisplayName(entry: EditableEntry): string {
+  if (entry.builtin) {
+    return entry.name;
+  }
+
+  const manualName = entry.name.trim();
+  return manualName || deriveModelEntryName(entry.modelId);
+}
+
+function getEntryNameHint(entry: EditableEntry): string {
+  if (entry.builtin) {
+    return "内置模型名称";
+  }
+
+  return entry.name.trim()
+    ? "当前使用自定义显示名称"
+    : "将根据模型 ID 自动生成显示名称";
+}
+
+function createEditableEntry(entry: ModelEntry): EditableEntry {
+  const generatedName = deriveModelEntryName(entry.modelId);
+  const customName =
+    entry.builtin || entry.name.trim() !== generatedName ? entry.name : "";
+
+  return {
+    id: entry.id,
+    persistedId: entry.id,
+    sourceId: entry.sourceId,
+    name: customName,
+    modelId: entry.modelId,
+    enabled: entry.enabled,
+    builtin: entry.builtin,
+    capabilities: normalizeCapabilitiesOverride(entry.capabilities),
+    limits: { ...entry.limits },
+    detectedCapabilities: { ...entry.detectedCapabilities },
+    detectedLimits: { ...entry.detectedLimits },
+    providerOptionsText: entry.providerOptions
+      ? JSON.stringify(entry.providerOptions, null, 2)
+      : "",
+  };
+}
+
+function createWorkspace(
+  source: ProviderSource,
+  entries: ModelEntry[],
+  credentials: SourceCredentials,
+): SourceWorkspace {
+  const workspace: SourceWorkspace = {
+    sourceId: source.id,
+    persistedSourceId: source.id,
+    kind: source.kind,
+    sourceDraft: {
+      id: source.id,
+      name: source.name,
+      providerType: source.providerType,
+      mode: source.mode,
+      enabled: source.enabled,
+      baseUrl: source.baseUrl ?? "",
+    },
+    hasStoredCredential: credentials.hasKey,
+    credentialMasked: credentials.masked,
+    apiKeyInput: "",
+    entries: entries.map(createEditableEntry),
+    deletedEntryIds: [],
+    baseline: "",
+  };
+
+  workspace.baseline = serializeWorkspace(workspace);
+  return workspace;
+}
+
+function createDefaultCredentials(sourceId: string): SourceCredentials {
+  return {
+    sourceId,
+    masked: "",
+    hasKey: false,
+  };
+}
+
+function createWorkspaceMap(
+  sources: ProviderSource[],
+  entries: ModelEntry[],
+  credentialsMap?: Map<string, SourceCredentials>,
+): Record<string, SourceWorkspace> {
+  return Object.fromEntries(
+    sources.map((source) => [
+      source.id,
+      createWorkspace(
+        source,
+        entries.filter((entry) => entry.sourceId === source.id),
+        credentialsMap?.get(source.id) ?? createDefaultCredentials(source.id),
+      ),
+    ]),
+  );
+}
+
+function createNewCustomWorkspace(): SourceWorkspace {
+  const workspace: SourceWorkspace = {
+    sourceId: `draft-source:${crypto.randomUUID()}`,
+    kind: "custom",
+    sourceDraft: {
+      name: "",
+      providerType: "openai-compatible",
+      mode: "custom",
+      enabled: true,
+      baseUrl: "",
+    },
+    hasStoredCredential: false,
+    credentialMasked: "",
+    apiKeyInput: "",
+    entries: [],
+    deletedEntryIds: [],
+    baseline: "",
+  };
+
+  workspace.baseline = serializeWorkspace(workspace);
+  return workspace;
+}
+
+function parseOptionalNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseProviderOptions(text: string): Record<string, unknown> | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const parsed = JSON.parse(trimmed) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("providerOptions 必须是 JSON 对象。");
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function resolveCapabilityChecked(
+  entry: EditableEntry,
+  key: keyof ModelCapabilitiesOverride,
+): boolean {
+  return (entry.capabilities[key] ?? entry.detectedCapabilities[key]) === true;
+}
+
+function toCapabilityOverrideValue(
+  detectedValue: boolean | null,
+  checked: boolean,
+): boolean | null {
+  if (checked) {
+    return detectedValue === true ? null : true;
+  }
+
+  return detectedValue === true ? false : null;
+}
+
+function formatAutoLimit(value: number | null): string {
+  return value ? value.toLocaleString("zh-CN") : "未知";
+}
 
 export function KeysSection({
-  credentials,
-  editingProvider,
-  editingKey,
-  testResult,
-  testingProvider,
-  setEditingProvider,
-  setEditingKey,
-  setTestResult,
-  onSaveKey,
-  onDeleteKey,
+  currentModelId,
+  initialSources,
+  initialEntries,
+  onDirectoryChanged,
 }: {
-  credentials: CredentialsSafe;
-  editingProvider: string | null;
-  editingKey: string;
-  testResult: CredentialTestResult | null;
-  testingProvider: string | null;
-  setEditingProvider: (provider: string | null) => void;
-  setEditingKey: (value: string) => void;
-  setTestResult: (result: CredentialTestResult | null) => void;
-  onSaveKey: (provider: string) => Promise<void>;
-  onDeleteKey: (provider: string) => Promise<void>;
+  currentModelId: string;
+  initialSources: ProviderSource[];
+  initialEntries: ModelEntry[];
+  onDirectoryChanged: () => void;
 }) {
+  const desktopApi = window.desktopApi;
+  const [search, setSearch] = useState("");
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(
+    initialSources[0]?.id ?? null,
+  );
+  const [workspaces, setWorkspaces] = useState<Record<string, SourceWorkspace>>(
+    () => createWorkspaceMap(initialSources, initialEntries),
+  );
+  const [loading, setLoading] = useState(initialSources.length === 0);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<SourceTestResult | null>(null);
+  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editingEntrySnapshot, setEditingEntrySnapshot] =
+    useState<EditableEntry | null>(null);
+  const hasWorkspacesRef = useRef(Object.keys(workspaces).length > 0);
+
+  useEffect(() => {
+    hasWorkspacesRef.current = Object.keys(workspaces).length > 0;
+  }, [workspaces]);
+
+  const reload = useCallback(
+    async (preferredSourceId?: string | null) => {
+      if (!desktopApi) return;
+
+      setLoading(!hasWorkspacesRef.current);
+      setError(null);
+
+      try {
+        const sources = await desktopApi.providers.listSources();
+        const credentialsList = await Promise.all(
+          sources.map((source) => desktopApi.providers.getCredentials(source.id)),
+        );
+        const credentialsMap = new Map(
+          credentialsList.map((item) => [item.sourceId, item]),
+        );
+        const allEntries = await desktopApi.models.listEntries();
+        const nextWorkspaces = createWorkspaceMap(
+          sources,
+          allEntries,
+          credentialsMap,
+        );
+
+        setWorkspaces(nextWorkspaces);
+        setSelectedSourceId((current) => {
+          if (preferredSourceId && nextWorkspaces[preferredSourceId]) {
+            return preferredSourceId;
+          }
+          if (current && nextWorkspaces[current]) {
+            return current;
+          }
+          return sources[0]?.id ?? null;
+        });
+        setTestResult(null);
+        onDirectoryChanged();
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : "加载失败");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [desktopApi, onDirectoryChanged],
+  );
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  useEffect(() => {
+    if (Object.keys(workspaces).length > 0 || initialSources.length === 0) {
+      return;
+    }
+
+    const nextWorkspaces = createWorkspaceMap(initialSources, initialEntries);
+    setWorkspaces(nextWorkspaces);
+    setSelectedSourceId((current) => current ?? initialSources[0]?.id ?? null);
+    setLoading(false);
+  }, [initialEntries, initialSources, workspaces]);
+
+  useEffect(() => {
+    setApiKeyVisible(false);
+  }, [selectedSourceId]);
+
+  const sourceList = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return Object.values(workspaces)
+      .filter((workspace) => {
+        if (!query) return true;
+
+        return (
+          workspace.sourceDraft.name.toLowerCase().includes(query) ||
+          providerTypeLabel(workspace.sourceDraft.providerType)
+            .toLowerCase()
+            .includes(query)
+        );
+      })
+      .sort((left, right) => {
+        if (left.kind !== right.kind) {
+          return left.kind === "builtin" ? -1 : 1;
+        }
+
+        return (left.sourceDraft.name || "未命名提供商").localeCompare(
+          right.sourceDraft.name || "未命名提供商",
+          "zh-CN",
+        );
+      });
+  }, [search, workspaces]);
+
+  const currentWorkspace = selectedSourceId ? workspaces[selectedSourceId] : null;
+  const currentEntry =
+    currentWorkspace && editingEntryId
+      ? currentWorkspace.entries.find((entry) => entry.id === editingEntryId) ??
+        null
+      : null;
+  const entryDialogDirty =
+    currentEntry && editingEntrySnapshot
+      ? serializeEditableEntry(currentEntry) !==
+        serializeEditableEntry(editingEntrySnapshot)
+      : false;
+  const dirty = currentWorkspace
+    ? serializeWorkspace(currentWorkspace) !== currentWorkspace.baseline
+    : false;
+
+  const updateWorkspace = useCallback(
+    (
+      sourceId: string,
+      updater: (workspace: SourceWorkspace) => SourceWorkspace,
+    ) => {
+      setWorkspaces((current) => {
+        const workspace = current[sourceId];
+        if (!workspace) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [sourceId]: updater(workspace),
+        };
+      });
+    },
+    [],
+  );
+
+  const handleOpenEntryDialog = useCallback(
+    (entry: EditableEntry) => {
+      setEditingEntryId(entry.id);
+      setEditingEntrySnapshot(cloneEditableEntry(entry));
+      setError(null);
+    },
+    [],
+  );
+
+  const handleCancelEntryDialog = useCallback(() => {
+    if (currentWorkspace && editingEntrySnapshot) {
+      updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+        ...workspace,
+        entries: workspace.entries.map((entry) =>
+          entry.id === editingEntrySnapshot.id
+            ? cloneEditableEntry(editingEntrySnapshot)
+            : entry,
+        ),
+      }));
+    }
+
+    setEditingEntrySnapshot(null);
+    setEditingEntryId(null);
+  }, [currentWorkspace, editingEntrySnapshot, updateWorkspace]);
+
+  const handleSaveEntryDialog = useCallback(() => {
+    setEditingEntrySnapshot(null);
+    setEditingEntryId(null);
+  }, []);
+
+  const handleAddCustomSource = useCallback(() => {
+    const workspace = createNewCustomWorkspace();
+    setWorkspaces((current) => ({
+      ...current,
+      [workspace.sourceId]: workspace,
+    }));
+    setSelectedSourceId(workspace.sourceId);
+    setTestResult(null);
+    setError(null);
+  }, []);
+
+  const handleDeleteSource = useCallback(async () => {
+    if (!desktopApi || !currentWorkspace) return;
+
+    if (currentWorkspace.entries.length > 0) {
+      setError("删除提供商前，请先清空它下面的模型条目。");
+      return;
+    }
+
+    if (!currentWorkspace.persistedSourceId) {
+      const nextSourceId =
+        Object.keys(workspaces).find((id) => id !== currentWorkspace.sourceId) ??
+        null;
+
+      setWorkspaces((current) => {
+        const next = { ...current };
+        delete next[currentWorkspace.sourceId];
+        return next;
+      });
+      setSelectedSourceId(nextSourceId);
+      setError(null);
+      return;
+    }
+
+    try {
+      await desktopApi.providers.deleteSource(currentWorkspace.persistedSourceId);
+      await reload();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "删除失败");
+    }
+  }, [currentWorkspace, desktopApi, reload, workspaces]);
+
+  const handleSave = useCallback(async () => {
+    if (!desktopApi || !currentWorkspace) return;
+
+    setSaving(true);
+    setError(null);
+    setTestResult(null);
+
+    try {
+      const savedSource = await desktopApi.providers.saveSource({
+        id: currentWorkspace.persistedSourceId,
+        name:
+          currentWorkspace.kind === "builtin"
+            ? currentWorkspace.sourceDraft.name
+            : currentWorkspace.sourceDraft.name.trim(),
+        providerType: currentWorkspace.sourceDraft.providerType,
+        mode:
+          currentWorkspace.kind === "builtin"
+            ? currentWorkspace.sourceDraft.mode
+            : "custom",
+        enabled: currentWorkspace.sourceDraft.enabled,
+        baseUrl: currentWorkspace.sourceDraft.baseUrl,
+      });
+
+      if (currentWorkspace.apiKeyInput.trim()) {
+        await desktopApi.providers.setCredentials(
+          savedSource.id,
+          currentWorkspace.apiKeyInput.trim(),
+        );
+      }
+
+      for (const entryId of currentWorkspace.deletedEntryIds) {
+        await desktopApi.models.deleteEntry(entryId);
+      }
+
+      for (const entry of currentWorkspace.entries) {
+        const providerOptions = parseProviderOptions(entry.providerOptionsText);
+        await desktopApi.models.saveEntry({
+          id: entry.persistedId,
+          sourceId: savedSource.id,
+          name: getEntryDisplayName(entry),
+          modelId: entry.modelId,
+          enabled: entry.enabled,
+          capabilities: normalizeCapabilitiesOverride(entry.capabilities),
+          limits: entry.limits,
+          providerOptions,
+        });
+      }
+
+      await reload(savedSource.id);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }, [currentWorkspace, desktopApi, reload]);
+
+  const handleTest = useCallback(async () => {
+    if (!desktopApi || !currentWorkspace) return;
+
+    setTesting(true);
+    setError(null);
+
+    try {
+      const result = await desktopApi.providers.testSource({
+        id: currentWorkspace.persistedSourceId,
+        name:
+          currentWorkspace.kind === "builtin"
+            ? currentWorkspace.sourceDraft.name
+            : currentWorkspace.sourceDraft.name.trim(),
+        providerType: currentWorkspace.sourceDraft.providerType,
+        mode:
+          currentWorkspace.kind === "builtin"
+            ? currentWorkspace.sourceDraft.mode
+            : "custom",
+        enabled: currentWorkspace.sourceDraft.enabled,
+        baseUrl: currentWorkspace.sourceDraft.baseUrl,
+      });
+
+      setTestResult(result);
+    } catch (nextError) {
+      setTestResult({
+        success: false,
+        error: nextError instanceof Error ? nextError.message : "测试失败",
+      });
+    } finally {
+      setTesting(false);
+    }
+  }, [currentWorkspace, desktopApi]);
+
+  if (loading) {
+    return (
+      <div className="grid h-[640px] place-items-center rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-muted/60 text-sm text-muted-foreground">
+        正在加载提供商与模型目录…
+      </div>
+    );
+  }
+
   return (
-    <SettingsCard
-      title="API Keys"
-      description="密钥会保存在本地，不会直接展示明文。保存前会先做一次轻量验证。"
-    >
-      <div className="space-y-4 px-6 py-5">
-        {PROVIDERS.map((provider) => {
-          const cred = credentials[provider.id];
-          const isEditing = editingProvider === provider.id;
-          const isTesting = testingProvider === provider.id;
-          const providerResult =
-            testResult && editingProvider === provider.id ? testResult : null;
+    <div className="grid h-[680px] min-h-0 grid-cols-[280px_minmax(0,1fr)] gap-4">
+      <div className="flex min-h-0 flex-col rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-muted/60">
+        <div className="space-y-3 border-b border-[color:var(--color-border-light)] px-4 py-4">
+          <FieldInput
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索提供商"
+          />
+          <Button
+            type="button"
+            onClick={handleAddCustomSource}
+            className="h-9 w-full rounded-[var(--radius-shell)] bg-foreground text-background hover:bg-foreground/90"
+          >
+            添加自定义提供商
+          </Button>
+        </div>
 
-          return (
-            <div
-              key={provider.id}
-              className="rounded-[var(--radius-shell)] border border-shell-border bg-shell-panel-muted px-4 py-4"
-            >
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-[14px] font-semibold text-foreground">
-                      {provider.label}
-                    </h3>
-                    {cred?.hasKey ? (
-                      <StatusBadge ok text="已配置" />
-                    ) : (
-                      <StatusBadge ok={false} text="未配置" />
-                    )}
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+          <div className="space-y-2">
+            {sourceList.map((workspace) => {
+              const isSelected = workspace.sourceId === selectedSourceId;
+              const sourceDirty = serializeWorkspace(workspace) !== workspace.baseline;
+              const sourceName = workspace.sourceDraft.name || "未命名提供商";
+
+              return (
+                <button
+                  type="button"
+                  key={workspace.sourceId}
+                  onClick={() => {
+                    setSelectedSourceId(workspace.sourceId);
+                    setError(null);
+                    setTestResult(null);
+                  }}
+                  className={`w-full rounded-[var(--radius-shell)] border px-3 py-3 text-left transition-colors ${
+                    isSelected
+                      ? "border-[color:var(--color-shell-border)] bg-shell-panel"
+                      : "border-[color:var(--color-border-light)] bg-shell-panel/70 hover:bg-shell-panel"
+                  }`}
+                >
+                  <div className="truncate text-[13px] font-semibold text-foreground">
+                    {sourceName}
                   </div>
-                  {cred?.hasKey ? (
-                    <p className="mt-2 font-mono text-[12px] text-muted-foreground">
-                      {cred.masked}
-                    </p>
-                  ) : (
-                    <p className="mt-2 text-[12px] text-muted-foreground">
-                      还没有配置 {provider.label} 的 API Key。
-                    </p>
-                  )}
-                </div>
-
-                {!isEditing ? (
-                  <div className="flex items-center gap-2">
-                    {cred?.hasKey ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => void onDeleteKey(provider.id)}
-                        className="h-8 rounded-[var(--radius-shell)] px-3 text-[12px] text-red-500 hover:bg-red-50"
-                      >
-                        删除
-                      </Button>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--color-text-muted)]">
+                    <span
+                      className={`inline-block h-2 w-2 rounded-full ${
+                        workspace.sourceDraft.enabled ? "bg-emerald-500" : "bg-zinc-400"
+                      }`}
+                    />
+                    <span>{providerTypeLabel(workspace.sourceDraft.providerType)}</span>
+                    <Badge variant="secondary">
+                      {workspace.kind === "builtin" ? "内置" : "自定义"}
+                    </Badge>
+                    {sourceDirty ? (
+                      <Badge variant="warning">
+                        未保存
+                      </Badge>
                     ) : null}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingProvider(provider.id);
-                        setEditingKey("");
-                        setTestResult(null);
-                      }}
-                      className="h-8 rounded-[var(--radius-shell)] border border-shell-border bg-shell-panel-contrast px-3 text-[12px]"
-                    >
-                      {cred?.hasKey ? "更换" : "配置"}
-                    </Button>
                   </div>
-                ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {currentWorkspace ? (
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-muted/60">
+          <div className="flex items-start justify-between border-b border-[color:var(--color-border-light)] px-6 py-5">
+            <div>
+              <div className="text-[20px] font-semibold text-foreground">
+                {currentWorkspace.sourceDraft.name || "未命名提供商"}
               </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
+                <Badge variant="secondary">
+                  {currentWorkspace.kind === "builtin" ? "内置" : "自定义"}
+                </Badge>
+                <Badge variant="default">
+                  {providerTypeLabel(currentWorkspace.sourceDraft.providerType)}
+                </Badge>
+                <Badge variant="secondary">
+                  {sourceModeLabel({
+                    id: currentWorkspace.sourceId,
+                    name: currentWorkspace.sourceDraft.name,
+                    kind: currentWorkspace.kind,
+                    providerType: currentWorkspace.sourceDraft.providerType,
+                    mode: currentWorkspace.sourceDraft.mode,
+                    enabled: currentWorkspace.sourceDraft.enabled,
+                    baseUrl: currentWorkspace.sourceDraft.baseUrl ?? null,
+                  })}
+                </Badge>
+              </div>
+            </div>
 
-              {isEditing ? (
-                <div className="mt-4 space-y-3">
-                  <FieldInput
-                    type="password"
-                    value={editingKey}
-                    onChange={(event) => setEditingKey(event.target.value)}
-                    placeholder={provider.placeholder}
-                    mono
-                    autoFocus
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        void onSaveKey(provider.id);
-                      }
-                      if (event.key === "Escape") {
-                        setEditingProvider(null);
-                        setEditingKey("");
-                        setTestResult(null);
-                      }
-                    }}
-                  />
+            <div className="flex items-center gap-2">
+              <Switch
+                aria-label={`切换 ${currentWorkspace.sourceDraft.name || "当前提供商"} 可用状态`}
+                checked={currentWorkspace.sourceDraft.enabled}
+                onCheckedChange={(checked) =>
+                  updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                    ...workspace,
+                    sourceDraft: {
+                      ...workspace.sourceDraft,
+                      enabled: checked === true,
+                    },
+                  }))
+                }
+              />
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => void onSaveKey(provider.id)}
-                      disabled={isTesting || !editingKey.trim()}
-                      className="h-8 rounded-[var(--radius-shell)] bg-foreground px-4 text-[12px] text-background hover:bg-foreground/90"
+              {currentWorkspace.kind === "custom" ? (
+                <TooltipIconButton
+                  type="button"
+                  tooltip="删除提供商"
+                  aria-label="删除提供商"
+                  onClick={() => void handleDeleteSource()}
+                  className="h-9 w-9 rounded-[var(--radius-shell)] text-red-500 hover:bg-red-50 hover:text-red-600"
+                >
+                  <Trash2Icon className="h-4 w-4" />
+                </TooltipIconButton>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <div className="space-y-4">
+              <SettingsCard
+                title="连接配置"
+                description="这里管理当前提供商的接入方式和认证信息。"
+                className="border border-[color:var(--color-border-light)] bg-shell-panel"
+              >
+                <div className="space-y-4 px-5 py-5">
+                  {currentWorkspace.kind === "custom" ? (
+                    <>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <div className="mb-2 text-[12px] font-medium text-foreground">
+                            提供商类型
+                          </div>
+                          <FieldSelect
+                            value={currentWorkspace.sourceDraft.providerType}
+                            onChange={(value) =>
+                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                                ...workspace,
+                                sourceDraft: {
+                                  ...workspace.sourceDraft,
+                                  providerType: value as ProviderType,
+                                },
+                              }))
+                            }
+                            options={PROVIDER_TYPE_OPTIONS}
+                          />
+                        </div>
+                        <div>
+                          <div className="mb-2 text-[12px] font-medium text-foreground">
+                            名称
+                          </div>
+                          <FieldInput
+                            value={currentWorkspace.sourceDraft.name}
+                            onChange={(event) =>
+                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                                ...workspace,
+                                sourceDraft: {
+                                  ...workspace.sourceDraft,
+                                  name: event.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="例如：公司网关 / 本地中转"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="mb-2 text-[12px] font-medium text-foreground">
+                          Base URL
+                        </div>
+                        <FieldInput
+                          value={currentWorkspace.sourceDraft.baseUrl ?? ""}
+                          onChange={(event) =>
+                            updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                              ...workspace,
+                              sourceDraft: {
+                                ...workspace.sourceDraft,
+                                baseUrl: event.target.value,
+                              },
+                            }))
+                          }
+                          placeholder="https://api.example.com/v1"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-4 py-4">
+                        <label className="inline-flex items-start gap-3 text-[13px] text-foreground">
+                          <Switch
+                            checked={currentWorkspace.sourceDraft.mode === "custom"}
+                            onCheckedChange={(checked) =>
+                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                                ...workspace,
+                                sourceDraft: {
+                                  ...workspace.sourceDraft,
+                                  mode: checked === true ? "custom" : "native",
+                                  baseUrl:
+                                    checked === true
+                                      ? workspace.sourceDraft.baseUrl
+                                      : "",
+                                },
+                              }))
+                            }
+                          />
+                          <span>
+                            <span className="block font-medium text-foreground">
+                              使用自定义中转地址
+                            </span>
+                            <span className="mt-1 block text-[12px] leading-5 text-muted-foreground">
+                              不勾选时使用官方接口；勾选后将通过你填写的 Base URL 请求。
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+
+                      {currentWorkspace.sourceDraft.mode === "custom" ? (
+                        <div>
+                          <div className="mb-2 text-[12px] font-medium text-foreground">
+                            Base URL
+                          </div>
+                          <FieldInput
+                            value={currentWorkspace.sourceDraft.baseUrl ?? ""}
+                            onChange={(event) =>
+                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                                ...workspace,
+                                sourceDraft: {
+                                  ...workspace.sourceDraft,
+                                  baseUrl: event.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="https://api.example.com/v1"
+                          />
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+
+                  <div>
+                    <div className="mb-2 text-[12px] font-medium text-foreground">
+                      API Key
+                    </div>
+                    <div className="relative">
+                      <FieldInput
+                        type={apiKeyVisible ? "text" : "password"}
+                        value={currentWorkspace.apiKeyInput}
+                        onChange={(event) =>
+                          updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                            ...workspace,
+                            apiKeyInput: event.target.value,
+                          }))
+                        }
+                        placeholder={
+                          currentWorkspace.hasStoredCredential
+                            ? `已保存：${currentWorkspace.credentialMasked}`
+                            : "输入新的 API Key"
+                        }
+                        className="pr-11"
+                        mono
+                      />
+                      <TooltipIconButton
+                        type="button"
+                        tooltip={apiKeyVisible ? "隐藏 API Key" : "显示 API Key"}
+                        aria-label={apiKeyVisible ? "隐藏 API Key" : "显示 API Key"}
+                        side="left"
+                        disabled={!currentWorkspace.apiKeyInput}
+                        onClick={() => setApiKeyVisible((current) => !current)}
+                        className="absolute right-1 top-1/2 size-7 -translate-y-1/2 rounded-[calc(var(--radius-shell)-2px)] text-[color:var(--color-text-muted)] hover:bg-shell-panel hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {apiKeyVisible ? (
+                          <EyeOffIcon className="h-4 w-4" />
+                        ) : (
+                          <EyeIcon className="h-4 w-4" />
+                        )}
+                      </TooltipIconButton>
+                    </div>
+                    <p className="mt-2 text-[12px] text-muted-foreground">
+                      {currentWorkspace.apiKeyInput
+                        ? "点击右侧眼睛可查看或隐藏当前输入的密钥。"
+                        : currentWorkspace.hasStoredCredential
+                          ? `当前已保存：${currentWorkspace.credentialMasked}。出于安全考虑，已保存密钥仅显示掩码。`
+                          : "输入后可点击右侧眼睛查看；不修改时会保留当前密钥。"}
+                    </p>
+                  </div>
+                </div>
+              </SettingsCard>
+
+              <SettingsCard
+                title="模型目录"
+                description="所有聊天和后续任务都会通过稳定的模型条目来选择模型。"
+                className="border border-[color:var(--color-border-light)] bg-shell-panel"
+              >
+                <div className="space-y-3 px-5 py-5">
+                  {currentWorkspace.entries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-4 py-4"
                     >
-                      {isTesting ? "验证中…" : "验证并保存"}
-                    </Button>
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-semibold text-foreground">
+                            {getEntryDisplayName(entry)}
+                          </div>
+                          <div className="mt-1 text-[12px] text-muted-foreground">
+                            {getEntryNameHint(entry)}
+                          </div>
+
+                          {entry.builtin ? (
+                            <div className="mt-3 font-mono text-[12px] text-muted-foreground">
+                              {entry.modelId}
+                            </div>
+                          ) : (
+                            <div className="mt-3 max-w-[420px]">
+                              <FieldInput
+                                value={entry.modelId}
+                                onChange={(event) =>
+                                  updateWorkspace(
+                                    currentWorkspace.sourceId,
+                                    (workspace) => ({
+                                      ...workspace,
+                                      entries: workspace.entries.map((item) =>
+                                        item.id === entry.id
+                                          ? {
+                                              ...item,
+                                              modelId: event.target.value,
+                                            }
+                                          : item,
+                                      ),
+                                    }),
+                                  )
+                                }
+                                placeholder="模型 ID，例如 gpt-4o-mini"
+                                mono
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Switch
+                            aria-label={`${getEntryDisplayName(entry)} 可用开关`}
+                            checked={entry.enabled}
+                            onCheckedChange={(checked) => {
+                              if (checked !== true && entry.id === currentModelId) {
+                                setError("默认模型正在使用该条目，无法禁用。");
+                                return;
+                              }
+
+                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                                ...workspace,
+                                entries: workspace.entries.map((item) =>
+                                  item.id === entry.id
+                                    ? { ...item, enabled: checked === true }
+                                    : item,
+                                ),
+                              }));
+                            }}
+                          />
+
+                          <TooltipIconButton
+                            type="button"
+                            tooltip="模型高级项"
+                            size="icon"
+                            onClick={() => handleOpenEntryDialog(entry)}
+                            className="h-8 w-8 rounded-[var(--radius-shell)] bg-shell-panel text-foreground hover:bg-shell-panel-muted"
+                          >
+                            <SlidersHorizontalIcon className="h-4 w-4" />
+                          </TooltipIconButton>
+
+                          {!entry.builtin ? (
+                            <TooltipIconButton
+                              type="button"
+                              tooltip="删除模型"
+                              aria-label="删除模型"
+                              onClick={() => {
+                                if (entry.id === currentModelId) {
+                                  setError("默认模型正在使用该条目，无法删除。");
+                                  return;
+                                }
+
+                                updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                                  ...workspace,
+                                  deletedEntryIds: entry.persistedId
+                                    ? [...workspace.deletedEntryIds, entry.persistedId]
+                                    : workspace.deletedEntryIds,
+                                  entries: workspace.entries.filter(
+                                    (item) => item.id !== entry.id,
+                                  ),
+                                }));
+                              }}
+                              className="h-8 w-8 rounded-[var(--radius-shell)] text-red-500 hover:bg-red-50 hover:text-red-600"
+                            >
+                              <Trash2Icon className="h-4 w-4" />
+                            </TooltipIconButton>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {currentWorkspace.kind === "custom" ? (
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={() => {
-                        setEditingProvider(null);
-                        setEditingKey("");
-                        setTestResult(null);
-                      }}
-                      className="h-8 rounded-[var(--radius-shell)] px-3 text-[12px] text-muted-foreground"
+                      onClick={() =>
+                        updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                          ...workspace,
+                          entries: [
+                            ...workspace.entries,
+                            {
+                              id: `draft-entry:${crypto.randomUUID()}`,
+                              sourceId: workspace.persistedSourceId ?? workspace.sourceId,
+                              name: "",
+                              modelId: "",
+                              enabled: true,
+                              builtin: false,
+                              capabilities: {
+                                vision: null,
+                                imageOutput: null,
+                                toolCalling: null,
+                                reasoning: null,
+                                embedding: null,
+                              },
+                              limits: {
+                                contextWindow: null,
+                                maxOutputTokens: null,
+                              },
+                              detectedCapabilities: {
+                                vision: null,
+                                imageOutput: null,
+                                toolCalling: null,
+                                reasoning: null,
+                                embedding: null,
+                              },
+                              detectedLimits: {
+                                contextWindow: null,
+                                maxOutputTokens: null,
+                              },
+                              providerOptionsText: "",
+                            },
+                          ],
+                        }))
+                      }
+                      className="h-9 rounded-[var(--radius-shell)] bg-shell-panel-contrast px-4 text-[12px] text-foreground hover:bg-shell-panel-muted"
                     >
-                      取消
+                      添加模型条目
                     </Button>
-                    {providerResult && !providerResult.success ? (
-                      <span className="inline-flex items-center gap-1 text-[12px] text-red-500">
-                        <ExclamationCircleIcon className="h-4 w-4" />
-                        {providerResult.error ?? "验证失败"}
-                      </span>
-                    ) : null}
+                  ) : null}
+                </div>
+              </SettingsCard>
+            </div>
+          </div>
+
+          <div className="border-t border-[color:var(--color-border-light)] bg-shell-panel px-6 py-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="text-[12px] text-muted-foreground">
+                {error ? (
+                  <span className="text-red-500">{error}</span>
+                ) : testResult ? (
+                  <span
+                    className={
+                      testResult.success ? "text-emerald-600" : "text-amber-600"
+                    }
+                  >
+                    {testResult.success
+                      ? "连接测试通过"
+                      : testResult.error ?? "连接测试失败"}
+                  </span>
+                ) : dirty ? (
+                  "当前提供商有未保存修改。"
+                ) : (
+                  "当前配置已保存。"
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleTest()}
+                  disabled={testing || saving}
+                  className="h-9 rounded-[var(--radius-shell)] bg-shell-panel-contrast px-4 text-[12px] hover:bg-shell-panel-muted"
+                >
+                  {testing ? "测试中…" : "测试连接"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void handleSave()}
+                  disabled={saving || !dirty}
+                  className="h-9 rounded-[var(--radius-shell)] bg-foreground px-4 text-[12px] text-background hover:bg-foreground/90"
+                >
+                  {saving ? "保存中…" : "保存修改"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <Dialog
+            open={!!currentEntry}
+            onOpenChange={(open) => {
+              if (!open) {
+                handleCancelEntryDialog();
+              }
+            }}
+          >
+            {currentEntry ? (
+              <DialogContent className="max-h-[min(84vh,760px)] max-w-[760px] gap-0 overflow-hidden rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-muted p-0">
+                <div className="shrink-0 border-b border-[color:var(--color-border-light)] px-5 py-4">
+                  <DialogTitle className="text-[18px] text-foreground">
+                    {getEntryDisplayName(currentEntry)}
+                  </DialogTitle>
+                  <p className="mt-2 text-[12px] text-muted-foreground">
+                    这里主要保存模型元数据，供聊天和未来任务统一复用。
+                  </p>
+                </div>
+
+                <div className="min-h-0 overflow-y-auto">
+                  {!currentEntry.builtin ? (
+                    <div className="border-b border-[color:var(--color-border-light)] px-5 py-4">
+                      <div className="mb-2 text-[12px] font-medium text-foreground">
+                        显示名称（可选）
+                      </div>
+                      <FieldInput
+                        value={currentEntry.name}
+                        onChange={(event) =>
+                          updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                            ...workspace,
+                            entries: workspace.entries.map((entry) =>
+                              entry.id === currentEntry.id
+                                ? { ...entry, name: event.target.value }
+                                : entry,
+                            ),
+                          }))
+                        }
+                        placeholder="留空时根据模型 ID 自动生成"
+                        className="h-8"
+                      />
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        当前预览：{getEntryDisplayName(currentEntry)}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="px-5 py-4">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {CAPABILITY_FIELDS.map(({ key, label }) => (
+                        <div
+                          key={key}
+                          className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel px-3 py-3"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0 text-[12px] font-medium text-foreground">
+                              {label}
+                            </div>
+                            <Switch
+                              aria-label={`${label} 开关`}
+                              checked={resolveCapabilityChecked(currentEntry, key)}
+                              onCheckedChange={(checked) =>
+                                updateWorkspace(
+                                  currentWorkspace.sourceId,
+                                  (workspace) => ({
+                                    ...workspace,
+                                    entries: workspace.entries.map((entry) =>
+                                      entry.id === currentEntry.id
+                                        ? {
+                                            ...entry,
+                                            capabilities: {
+                                              ...entry.capabilities,
+                                              [key]: toCapabilityOverrideValue(
+                                                entry.detectedCapabilities[key],
+                                                checked === true,
+                                              ),
+                                            },
+                                          }
+                                        : entry,
+                                    ),
+                                  }),
+                                )
+                              }
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel px-3 py-3">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <div className="text-[12px] font-medium text-foreground">
+                            上下文窗口
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            自动：{formatAutoLimit(currentEntry.detectedLimits.contextWindow)}
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <FieldInput
+                            value={currentEntry.limits.contextWindow?.toString() ?? ""}
+                            onChange={(event) =>
+                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                                ...workspace,
+                                entries: workspace.entries.map((entry) =>
+                                  entry.id === currentEntry.id
+                                    ? {
+                                        ...entry,
+                                        limits: {
+                                          ...entry.limits,
+                                          contextWindow: parseOptionalNumber(
+                                            event.target.value,
+                                          ),
+                                        },
+                                      }
+                                    : entry,
+                                ),
+                              }))
+                            }
+                            placeholder="留空表示自动"
+                            mono
+                            className="h-8"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel px-3 py-3">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <div className="text-[12px] font-medium text-foreground">
+                            最大输出 Tokens
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            自动：
+                            {formatAutoLimit(
+                              currentEntry.detectedLimits.maxOutputTokens,
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <FieldInput
+                            value={currentEntry.limits.maxOutputTokens?.toString() ?? ""}
+                            onChange={(event) =>
+                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                                ...workspace,
+                                entries: workspace.entries.map((entry) =>
+                                  entry.id === currentEntry.id
+                                    ? {
+                                        ...entry,
+                                        limits: {
+                                          ...entry.limits,
+                                          maxOutputTokens: parseOptionalNumber(
+                                            event.target.value,
+                                          ),
+                                        },
+                                      }
+                                    : entry,
+                                ),
+                              }))
+                            }
+                            placeholder="留空表示自动"
+                            mono
+                            className="h-8"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[color:var(--color-border-light)] px-5 py-4">
+                    <div className="mb-2 text-[12px] font-medium text-foreground">
+                      额外参数（JSON，可选）
+                    </div>
+                    <textarea
+                      value={currentEntry.providerOptionsText}
+                      onChange={(event) =>
+                        updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
+                          ...workspace,
+                          entries: workspace.entries.map((entry) =>
+                            entry.id === currentEntry.id
+                              ? { ...entry, providerOptionsText: event.target.value }
+                              : entry,
+                          ),
+                        }))
+                      }
+                      className="min-h-[120px] w-full rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-3 py-2.5 font-mono text-[12px] text-foreground outline-none transition-colors focus:border-ring/40"
+                      placeholder='例如：{ "compat": { "supportsStore": false } }'
+                    />
                   </div>
                 </div>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-    </SettingsCard>
+
+                <div className="shrink-0 border-t border-[color:var(--color-border-light)] bg-shell-panel px-5 py-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="text-[11px] text-muted-foreground">
+                      这里的保存会先应用到当前页面，仍需点击页面底部“保存修改”才会真正写入配置。
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleCancelEntryDialog}
+                        className="h-8 rounded-[var(--radius-shell)] bg-shell-panel-contrast px-3 text-[12px] hover:bg-shell-panel-muted"
+                      >
+                        取消
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleSaveEntryDialog}
+                        disabled={!entryDialogDirty}
+                        className="h-8 rounded-[var(--radius-shell)] bg-foreground px-3 text-[12px] text-background hover:bg-foreground/90"
+                      >
+                        保存并关闭
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </DialogContent>
+            ) : null}
+          </Dialog>
+        </div>
+      ) : (
+        <div className="grid place-items-center rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-muted/60 text-sm text-muted-foreground">
+          请选择一个提供商。
+        </div>
+      )}
+    </div>
   );
 }

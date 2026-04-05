@@ -36,14 +36,21 @@ export const IPC_CHANNELS = {
   settingsGet: "settings:get",
   settingsUpdate: "settings:update",
 
-  // Credentials
-  credentialsGet: "credentials:get",
-  credentialsSet: "credentials:set",
-  credentialsTest: "credentials:test",
-  credentialsDelete: "credentials:delete",
+  // Providers
+  providersListSources: "providers:list-sources",
+  providersGetSource: "providers:get-source",
+  providersSaveSource: "providers:save-source",
+  providersDeleteSource: "providers:delete-source",
+  providersTestSource: "providers:test-source",
+  providersGetCredentials: "providers:get-credentials",
+  providersSetCredentials: "providers:set-credentials",
 
   // Models
-  modelsListAvailable: "models:list-available",
+  modelsListEntries: "models:list-entries",
+  modelsListEntriesBySource: "models:list-entries-by-source",
+  modelsSaveEntry: "models:save-entry",
+  modelsDeleteEntry: "models:delete-entry",
+  modelsGetEntry: "models:get-entry",
 
   // Workspace
   workspaceChange: "workspace:change",
@@ -66,7 +73,8 @@ export const IPC_CHANNELS = {
 
   // UI
   uiGetState: "ui:get-state",
-  uiSetRightPanelOpen: "ui:set-right-panel-open",
+  uiSetDiffPanelOpen: "ui:set-diff-panel-open",
+  uiSetContextPanelOpen: "ui:set-context-panel-open",
 
   // Window
   windowGetState: "window:get-state",

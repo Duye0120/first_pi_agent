@@ -2,14 +2,12 @@ import { app } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import type { Settings } from "../shared/contracts.js";
+import { DEFAULT_MODEL_ENTRY_ID } from "../shared/provider-directory.js";
 
 const SETTINGS_FILE = "settings.json";
 
 const DEFAULT_SETTINGS: Settings = {
-  defaultModel: {
-    provider: "anthropic",
-    model: "claude-sonnet-4-20250514",
-  },
+  defaultModelId: DEFAULT_MODEL_ENTRY_ID,
   thinkingLevel: "off",
   theme: "light",
   customTheme: null,
@@ -29,10 +27,44 @@ const DEFAULT_SETTINGS: Settings = {
   workspace: process.cwd(),
 };
 
+function resolveLegacyDefaultModelId(
+  legacy: unknown,
+): string | undefined {
+  if (!legacy || typeof legacy !== "object") {
+    return undefined;
+  }
+
+  const candidate = legacy as {
+    provider?: string;
+    model?: string;
+  };
+
+  if (
+    candidate.provider === "anthropic" ||
+    candidate.provider === "openai" ||
+    candidate.provider === "google"
+  ) {
+    if (typeof candidate.model === "string" && candidate.model.trim()) {
+      return `builtin:${candidate.provider}:${candidate.model.trim()}`;
+    }
+  }
+
+  return undefined;
+}
+
 function mergeSettings(source?: Partial<Settings> | null): Settings {
+  const sourceWithLegacy = (source ?? {}) as Partial<Settings> & {
+    defaultModel?: unknown;
+  };
+  const defaultModelId =
+    sourceWithLegacy.defaultModelId ??
+    resolveLegacyDefaultModelId(sourceWithLegacy.defaultModel) ??
+    DEFAULT_SETTINGS.defaultModelId;
+
   return {
     ...DEFAULT_SETTINGS,
     ...source,
+    defaultModelId,
     terminal: {
       ...DEFAULT_SETTINGS.terminal,
       ...source?.terminal,

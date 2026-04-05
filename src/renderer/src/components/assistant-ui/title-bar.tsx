@@ -10,7 +10,7 @@ type TitleBarProps = {
 export function TitleBar({ isMaximized, onMinimize, onToggleMaximize, onClose }: TitleBarProps) {
   return (
     <header
-      className="app-drag flex h-10 items-center bg-transparent pl-4 pr-1 text-[11px] text-muted-foreground"
+      className="app-drag flex h-10 items-center bg-transparent pl-4 pr-1 text-[11px] text-[color:var(--color-text-secondary)]"
       onDoubleClick={onToggleMaximize}
     >
       <div className="app-drag flex-1" />

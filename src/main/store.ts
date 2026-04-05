@@ -213,18 +213,46 @@ export function getUiState(): WindowUiState {
   if (existsSync(path)) {
     try {
       const raw = readFileSync(path, "utf-8");
-      return JSON.parse(raw) as WindowUiState;
+      const parsed = JSON.parse(raw) as Partial<WindowUiState> & {
+        rightPanelOpen?: boolean;
+      };
+
+      return {
+        diffPanelOpen:
+          typeof parsed.diffPanelOpen === "boolean"
+            ? parsed.diffPanelOpen
+            : typeof parsed.rightPanelOpen === "boolean"
+              ? parsed.rightPanelOpen
+              : false,
+        contextPanelOpen:
+          typeof parsed.contextPanelOpen === "boolean"
+            ? parsed.contextPanelOpen
+            : false,
+      };
     } catch { /* fall through */ }
   }
 
-  return { rightPanelOpen: false };
+  return {
+    diffPanelOpen: false,
+    contextPanelOpen: false,
+  };
 }
 
-export function setRightPanelOpen(open: boolean): void {
-  const ui = getUiState();
-  ui.rightPanelOpen = open;
+function writeUiState(ui: WindowUiState): void {
   ensureDir(getDataDir());
   atomicWrite(getUiStatePath(), JSON.stringify(ui, null, 2));
+}
+
+export function setDiffPanelOpen(open: boolean): void {
+  const ui = getUiState();
+  ui.diffPanelOpen = open;
+  writeUiState(ui);
+}
+
+export function setContextPanelOpen(open: boolean): void {
+  const ui = getUiState();
+  ui.contextPanelOpen = open;
+  writeUiState(ui);
 }
 
 // ── Groups ────────────────────────────────────────────────────

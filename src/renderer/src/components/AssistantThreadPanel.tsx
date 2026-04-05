@@ -15,12 +15,13 @@ import type {
   ChatMessage,
   ChatSession,
   DesktopApi,
-  ModelSelection,
+  GitBranchSummary,
   SelectedFile,
   ThinkingLevel,
 } from "@shared/contracts";
 import { deriveSessionTitle } from "@renderer/lib/session";
 import { Thread } from "@renderer/components/assistant-ui/thread";
+import type { ContextUsageSummary } from "@renderer/lib/context-usage";
 import {
   selectedFileToCompleteAttachment,
   toPersistedMessageAttachment,
@@ -31,15 +32,19 @@ type AssistantThreadPanelProps = {
   session: ChatSession;
   desktopApi: DesktopApi;
   onPersistSession: (session: ChatSession) => void;
-  currentModel: ModelSelection;
+  currentModelId: string;
   thinkingLevel: ThinkingLevel;
   terminalOpen?: boolean;
   isPickingFiles: boolean;
   onAttachFiles: () => void;
   onPasteFiles: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
-  onModelChange: (model: ModelSelection) => void;
+  onModelChange: (modelEntryId: string) => void;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
+  branchSummary: GitBranchSummary | null;
+  contextSummary: ContextUsageSummary;
+  contextPanelOpen: boolean;
+  onToggleContextPanel: () => void;
 };
 
 function createStep(kind: AgentStep["kind"], id?: string): AgentStep {
@@ -85,6 +90,7 @@ function buildAssistantMessage(response: AgentResponse): ChatMessage {
     content: response.finalText,
     timestamp: new Date(response.endedAt ?? response.startedAt).toISOString(),
     status: response.status === "completed" ? "done" : "error",
+    usage: response.usage,
     steps: response.steps,
   };
 }
@@ -276,7 +282,7 @@ function SessionRuntime({
   session,
   desktopApi,
   onPersistSession,
-  currentModel,
+  currentModelId,
   thinkingLevel,
   terminalOpen = false,
   isPickingFiles,
@@ -285,6 +291,10 @@ function SessionRuntime({
   onRemoveAttachment,
   onModelChange,
   onThinkingLevelChange,
+  branchSummary,
+  contextSummary,
+  contextPanelOpen,
+  onToggleContextPanel,
 }: AssistantThreadPanelProps) {
   const initialMessages = useMemo(
     () => session.messages.map(toThreadMessage),
@@ -378,6 +388,11 @@ function SessionRuntime({
             publish();
             break;
 
+          case "message_end":
+            response.usage = event.usage;
+            publish();
+            break;
+
           case "tool_execution_start": {
             const thinking = response.steps.find(
               (item) => item.kind === "thinking" && item.status === "executing",
@@ -468,10 +483,14 @@ function SessionRuntime({
         onAttachFiles={onAttachFiles}
         onPasteFiles={onPasteFiles}
         onRemoveAttachment={onRemoveAttachment}
-        currentModel={currentModel}
+        currentModelId={currentModelId}
         thinkingLevel={thinkingLevel}
         onModelChange={onModelChange}
         onThinkingLevelChange={onThinkingLevelChange}
+        branchSummary={branchSummary}
+        contextSummary={contextSummary}
+        contextPanelOpen={contextPanelOpen}
+        onToggleContextPanel={onToggleContextPanel}
       />
     </AssistantRuntimeProvider>
   );

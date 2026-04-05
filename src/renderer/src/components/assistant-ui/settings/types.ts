@@ -1,6 +1,5 @@
 import type {
   ChatSessionSummary,
-  ModelSelection,
   Settings,
   ThinkingLevel,
 } from "@shared/contracts";
@@ -17,9 +16,9 @@ export type SettingsSection =
 export type SettingsViewProps = {
   activeSection: SettingsSection;
   settings: Settings | null;
-  currentModel: ModelSelection;
+  currentModelId: string;
   thinkingLevel: ThinkingLevel;
-  onModelChange: (model: ModelSelection) => void;
+  onModelChange: (modelEntryId: string) => void;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
   onSettingsChange: (partial: Partial<Settings>) => void;
   archivedSummaries: ChatSessionSummary[];
