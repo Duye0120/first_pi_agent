@@ -26,7 +26,6 @@ import {
   BrainCircuitIcon,
   CheckIcon,
   CopyIcon,
-  GitBranchIcon,
   LoaderCircleIcon,
   SquareIcon,
 } from "lucide-react";
@@ -43,6 +42,7 @@ import {
   DesktopComposerAddAttachment,
   UserMessageAttachments,
 } from "@renderer/components/assistant-ui/attachment";
+import { BranchSwitcher } from "@renderer/components/assistant-ui/branch-switcher";
 import { Button } from "@renderer/components/assistant-ui/button";
 import { ContextSummaryTrigger } from "@renderer/components/assistant-ui/context-summary-trigger";
 import { MarkdownText } from "@renderer/components/assistant-ui/markdown-text";
@@ -100,6 +100,7 @@ type ThreadProps = {
   isCancelling?: boolean;
   branchSummary?: GitBranchSummary | null;
   contextSummary?: ContextUsageSummary;
+  onBranchChanged?: () => void | Promise<void>;
 };
 
 type ThreadResolvedProps = {
@@ -120,6 +121,7 @@ type ThreadResolvedProps = {
   isCancelling: boolean;
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
+  onBranchChanged: () => void | Promise<void>;
 };
 
 type ThreadRunStatusContextValue = {
@@ -211,6 +213,7 @@ export const Thread: FC<ThreadProps> = ({
   isCancelling = false,
   branchSummary = null,
   contextSummary = EMPTY_CONTEXT_USAGE_SUMMARY,
+  onBranchChanged = () => undefined,
 }) => {
   const [sources, setSources] = useState<ProviderSource[]>([]);
   const [entries, setEntries] = useState<ModelEntry[]>([]);
@@ -296,6 +299,7 @@ export const Thread: FC<ThreadProps> = ({
               isCancelling={isCancelling}
               branchSummary={branchSummary}
               contextSummary={contextSummary}
+              onBranchChanged={onBranchChanged}
             />
           </div>
         </div>
@@ -357,9 +361,20 @@ const Composer: FC<ThreadResolvedProps> = ({
   isCancelling,
   branchSummary,
   contextSummary,
+  onBranchChanged,
 }) => {
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const [inputScrollable, setInputScrollable] = useState(false);
+  const supportsVision =
+    currentModelEntry?.capabilities.vision ??
+    currentModelEntry?.detectedCapabilities.vision ??
+    null;
+  const hasImageAttachments = attachments.some(
+    (attachment) =>
+      attachment.kind === "image" ||
+      attachment.mimeType?.startsWith("image/") === true,
+  );
+  const isVisionBlocked = hasImageAttachments && supportsVision === false;
 
   const syncInputOverflow = useCallback(() => {
     const textarea = composerInputRef.current;
@@ -419,6 +434,7 @@ const Composer: FC<ThreadResolvedProps> = ({
         <ComposerAction
           isPickingFiles={isPickingFiles}
           onAttachFiles={onAttachFiles}
+          attachments={attachments}
           modelOptions={modelOptions}
           currentModelId={currentModelId}
           currentModelEntry={currentModelEntry}
@@ -428,11 +444,18 @@ const Composer: FC<ThreadResolvedProps> = ({
           onCancelRun={onCancelRun}
           runStatusLabel={runStatusLabel}
           isCancelling={isCancelling}
+          isVisionBlocked={isVisionBlocked}
         />
+        {isVisionBlocked ? (
+          <p className="px-1 text-[12px] leading-5 text-[color:var(--color-status-error)]">
+            当前模型不支持图片，请切换到支持视觉的模型后再发送。
+          </p>
+        ) : null}
       </div>
       <ComposerStatusBar
         branchSummary={branchSummary}
         contextSummary={contextSummary}
+        onBranchChanged={onBranchChanged}
       />
     </ComposerPrimitive.Root>
   );
@@ -443,6 +466,7 @@ const ComposerAction: FC<
     ThreadResolvedProps,
     | "isPickingFiles"
     | "onAttachFiles"
+    | "attachments"
     | "modelOptions"
     | "currentModelId"
     | "currentModelEntry"
@@ -452,10 +476,13 @@ const ComposerAction: FC<
     | "onCancelRun"
     | "runStatusLabel"
     | "isCancelling"
-  >
+  > & {
+    isVisionBlocked: boolean;
+  }
 > = ({
   isPickingFiles,
   onAttachFiles,
+  attachments,
   modelOptions,
   currentModelId,
   currentModelEntry,
@@ -465,8 +492,12 @@ const ComposerAction: FC<
   onCancelRun,
   runStatusLabel,
   isCancelling,
+  isVisionBlocked,
 }) => {
   const isThreadRunning = useAuiState((s) => s.thread.isRunning);
+  const composerHasText = useAuiState(
+    (s) => s.composer.text.trim().length > 0,
+  );
   const currentModel = modelOptions.find((model) => model.id === currentModelId);
   const normalizedThinkingLevel = normalizeThinkingLevel(thinkingLevel);
   const effectiveThinkingLevel = getEffectiveThinkingLevel(
@@ -482,6 +513,9 @@ const ComposerAction: FC<
     ? getThinkingLevelLabel(effectiveThinkingLevel)
     : getThinkingHint(currentModelEntry);
   const showStopAction = isThreadRunning || isCancelling;
+  const disableSend =
+    isVisionBlocked ||
+    (!showStopAction && attachments.length === 0 && !composerHasText);
 
   return (
     <div className="relative flex items-center justify-between pt-1">
@@ -575,67 +609,66 @@ const ComposerAction: FC<
           </span>
         </Button>
       ) : (
-        <ComposerPrimitive.Send asChild>
-          <TooltipIconButton
-            tooltip="发送"
-            side="bottom"
-            type="button"
-            variant="default"
-            size="icon"
-            className="size-9 rounded-full bg-[var(--color-accent)] text-white shadow-none hover:bg-[var(--color-accent-hover)]"
-            aria-label="Send message"
-          >
-            <ArrowUpIcon className="size-4" />
-          </TooltipIconButton>
-        </ComposerPrimitive.Send>
+        <>
+          {disableSend ? (
+            <TooltipIconButton
+              tooltip={
+                isVisionBlocked
+                  ? "当前模型不支持图片"
+                  : "请输入消息或附加文件后再发送"
+              }
+              side="bottom"
+              type="button"
+              variant="default"
+              size="icon"
+              disabled
+              className="size-9 rounded-full bg-[var(--color-accent)] text-white shadow-none hover:bg-[var(--color-accent-hover)]"
+              aria-label="Send message"
+            >
+              <ArrowUpIcon className="size-4" />
+            </TooltipIconButton>
+          ) : (
+            <ComposerPrimitive.Send asChild>
+              <TooltipIconButton
+                tooltip="发送"
+                side="bottom"
+                type="button"
+                variant="default"
+                size="icon"
+                className="size-9 rounded-full bg-[var(--color-accent)] text-white shadow-none hover:bg-[var(--color-accent-hover)]"
+                aria-label="Send message"
+              >
+                <ArrowUpIcon className="size-4" />
+              </TooltipIconButton>
+            </ComposerPrimitive.Send>
+          )}
+        </>
       )}
     </div>
   );
 };
 
-function formatBranchLabel(branchSummary: GitBranchSummary | null) {
-  if (!branchSummary) {
-    return "读取中";
-  }
-
-  if (!branchSummary.branchName) {
-    return "非 Git 仓库";
-  }
-
-  if (branchSummary.isDetached) {
-    return `Detached · ${branchSummary.branchName}`;
-  }
-
-  return branchSummary.branchName;
-}
-
 const ComposerStatusBar: FC<{
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
+  onBranchChanged: () => void | Promise<void>;
 }> = ({
   branchSummary,
   contextSummary,
+  onBranchChanged,
 }) => {
-  const branchLabel = formatBranchLabel(branchSummary);
-  const isGitRepo = !!branchSummary?.branchName;
+  const isThreadRunning = useAuiState((s) => s.thread.isRunning);
+  const { runStage, isCancelling } = useThreadRunStatus();
+  const branchInteractionDisabled =
+    isThreadRunning || isCancelling || runStage !== "idle";
 
   return (
     <div className="flex items-center justify-between gap-3 px-1">
-      <div
-        className={cn(
-          "inline-flex min-w-0 max-w-[240px] items-center gap-2 px-1 py-1 text-[12px] font-medium",
-          isGitRepo
-            ? "text-foreground"
-            : "text-[color:var(--color-text-secondary)]",
-        )}
-        aria-label={isGitRepo ? `当前分支 ${branchLabel}` : "当前 workspace 不是 Git 仓库"}
-      >
-        <GitBranchIcon className="size-3.5 shrink-0 text-[color:var(--color-text-secondary)]" />
-        <span className="truncate">{branchLabel}</span>
-        {branchSummary?.hasChanges ? (
-          <span className="size-1.5 shrink-0 rounded-full bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.18)]" />
-        ) : null}
-      </div>
+      <BranchSwitcher
+        branchSummary={branchSummary}
+        disabled={branchInteractionDisabled}
+        onBranchChanged={onBranchChanged}
+      />
 
       <ContextSummaryTrigger summary={contextSummary} />
     </div>

@@ -70,6 +70,9 @@ export const IPC_CHANNELS = {
   gitRevertFile: "git:revert-file",
   gitRevertHunk: "git:revert-hunk",
   gitStatus: "git:status",
+  gitListBranches: "git:list-branches",
+  gitSwitchBranch: "git:switch-branch",
+  gitCreateBranch: "git:create-branch",
 
   // UI
   uiGetState: "ui:get-state",

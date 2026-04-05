@@ -23,7 +23,11 @@ import {
   createCuratedEntry,
   createEmptyCapabilitiesOverride,
   createEmptyLimitsOverride,
+  findKnownModelMetadata,
+  getUnknownModelCapabilities,
+  getUnknownModelLimits,
   getRuntimeApiForProviderType,
+  normalizeKnownModelId,
 } from "../shared/provider-directory.js";
 import { getSettings } from "./settings.js";
 
@@ -178,6 +182,20 @@ function normalizeDetectedLimits(value: Partial<ModelLimits> | null | undefined)
   };
 }
 
+function resolveKnownDetectedMetadata(
+  modelId: string,
+): { detectedCapabilities: ModelCapabilities; detectedLimits: ModelLimits } | null {
+  const metadata = findKnownModelMetadata(modelId);
+  if (!metadata) {
+    return null;
+  }
+
+  return {
+    detectedCapabilities: metadata.detectedCapabilities,
+    detectedLimits: metadata.detectedLimits,
+  };
+}
+
 function readProviderState(): ProviderState {
   const sourcesPath = getUserDataPath(SOURCES_FILE);
   const entriesPath = getUserDataPath(ENTRIES_FILE);
@@ -263,19 +281,28 @@ function readProviderState(): ProviderState {
   const customSourceIds = new Set(customSources.map((source) => source.id));
   const customEntries = persistedEntries
     .filter((entry) => !entry.builtin && customSourceIds.has(entry.sourceId))
-    .map((entry) => ({
-      id: entry.id,
-      sourceId: entry.sourceId,
-      name: entry.name?.trim() || entry.modelId,
-      modelId: entry.modelId?.trim() || entry.id,
-      enabled: entry.enabled ?? true,
-      builtin: false,
-      capabilities: normalizeCapabilitiesOverride(entry.capabilities),
-      limits: normalizeLimitsOverride(entry.limits),
-      providerOptions: normalizeProviderOptions(entry.providerOptions),
-      detectedCapabilities: normalizeDetectedCapabilities(entry.detectedCapabilities),
-      detectedLimits: normalizeDetectedLimits(entry.detectedLimits),
-    }));
+    .map((entry) => {
+      const modelId = entry.modelId?.trim() || entry.id;
+      const knownDetectedMetadata = resolveKnownDetectedMetadata(modelId);
+
+      return {
+        id: entry.id,
+        sourceId: entry.sourceId,
+        name: entry.name?.trim() || modelId,
+        modelId,
+        enabled: entry.enabled ?? true,
+        builtin: false,
+        capabilities: normalizeCapabilitiesOverride(entry.capabilities),
+        limits: normalizeLimitsOverride(entry.limits),
+        providerOptions: normalizeProviderOptions(entry.providerOptions),
+        detectedCapabilities:
+          knownDetectedMetadata?.detectedCapabilities ??
+          normalizeDetectedCapabilities(entry.detectedCapabilities),
+        detectedLimits:
+          knownDetectedMetadata?.detectedLimits ??
+          normalizeDetectedLimits(entry.detectedLimits),
+      } satisfies ModelEntry;
+    });
 
   const entries = sortEntries([...curatedEntries, ...customEntries], sources);
 
@@ -447,6 +474,21 @@ function validateEntryDraft(
     throw new Error("当前 source 不允许新增自定义模型条目。");
   }
 
+  const knownDetectedMetadata = resolveKnownDetectedMetadata(modelId);
+  const shouldReuseExistingDetectedMetadata =
+    !!existing &&
+    normalizeKnownModelId(existing.modelId) === normalizeKnownModelId(modelId);
+  const detectedCapabilities =
+    knownDetectedMetadata?.detectedCapabilities ??
+    (shouldReuseExistingDetectedMetadata
+      ? normalizeDetectedCapabilities(existing?.detectedCapabilities)
+      : getUnknownModelCapabilities());
+  const detectedLimits =
+    knownDetectedMetadata?.detectedLimits ??
+    (shouldReuseExistingDetectedMetadata
+      ? normalizeDetectedLimits(existing?.detectedLimits)
+      : getUnknownModelLimits());
+
   return {
     id: existing?.id ?? `entry:${crypto.randomUUID()}`,
     sourceId: source.id,
@@ -457,17 +499,8 @@ function validateEntryDraft(
     capabilities: normalizeCapabilitiesOverride(draft.capabilities),
     limits: normalizeLimitsOverride(draft.limits),
     providerOptions: normalizeProviderOptions(draft.providerOptions),
-    detectedCapabilities: existing?.detectedCapabilities ?? {
-      vision: null,
-      imageOutput: null,
-      toolCalling: null,
-      reasoning: null,
-      embedding: null,
-    },
-    detectedLimits: existing?.detectedLimits ?? {
-      contextWindow: null,
-      maxOutputTokens: null,
-    },
+    detectedCapabilities,
+    detectedLimits,
   };
 }
 
@@ -672,35 +705,34 @@ export async function testSource(
       state.entries.find(
         (entry) => entry.sourceId === normalized.id && entry.enabled,
       ) ??
-      {
-        id: "probe",
-        sourceId: normalized.id,
-        name: "Probe Model",
-        modelId:
+      (() => {
+        const modelId =
           normalized.providerType === "anthropic"
             ? "claude-haiku-3-5-20241022"
             : normalized.providerType === "openai"
               ? "gpt-4o-mini"
               : normalized.providerType === "google"
                 ? "gemini-2.0-flash"
-                : "",
-        enabled: true,
-        builtin: false,
-        capabilities: createEmptyCapabilitiesOverride(),
-        limits: createEmptyLimitsOverride(),
-        providerOptions: null,
-        detectedCapabilities: {
-          vision: null,
-          imageOutput: null,
-          toolCalling: null,
-          reasoning: null,
-          embedding: null,
-        },
-        detectedLimits: {
-          contextWindow: null,
-          maxOutputTokens: null,
-        },
-      };
+                : "";
+        const knownDetectedMetadata = resolveKnownDetectedMetadata(modelId);
+
+        return {
+          id: "probe",
+          sourceId: normalized.id,
+          name: "Probe Model",
+          modelId,
+          enabled: true,
+          builtin: false,
+          capabilities: createEmptyCapabilitiesOverride(),
+          limits: createEmptyLimitsOverride(),
+          providerOptions: null,
+          detectedCapabilities:
+            knownDetectedMetadata?.detectedCapabilities ??
+            getUnknownModelCapabilities(),
+          detectedLimits:
+            knownDetectedMetadata?.detectedLimits ?? getUnknownModelLimits(),
+        } satisfies ModelEntry;
+      })();
 
     if (!candidateEntry.modelId) {
       return { success: true, models: [] };

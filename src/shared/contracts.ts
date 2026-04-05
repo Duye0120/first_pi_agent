@@ -238,7 +238,7 @@ export type ChatSessionSummary = {
 export type SendMessageInput = {
   sessionId: string;
   text: string;
-  attachmentIds: string[];
+  attachments: SelectedFile[];
 };
 
 export type WindowUiState = {
@@ -249,6 +249,11 @@ export type GitBranchSummary = {
   branchName: string | null;
   isDetached: boolean;
   hasChanges: boolean;
+};
+
+export type GitBranchEntry = {
+  name: string;
+  isCurrent: boolean;
 };
 
 export type GitDiffSource = "unstaged" | "staged" | "all";
@@ -358,6 +363,9 @@ export type DesktopApi = {
   };
   git: {
     getSnapshot: () => Promise<GitDiffOverview>;
+    listBranches: () => Promise<GitBranchEntry[]>;
+    switchBranch: (branchName: string) => Promise<void>;
+    createAndSwitchBranch: (branchName: string) => Promise<void>;
   };
   ui: {
     getState: () => Promise<WindowUiState>;

@@ -883,6 +883,7 @@ export default function App() {
         onRemoveAttachment={removeAttachment}
         onModelChange={handleModelChange}
         onThinkingLevelChange={handleThinkingLevelChange}
+        onBranchChanged={refreshGitOverview}
         branchSummary={gitOverview?.branch ?? null}
         contextSummary={contextSummary}
       />

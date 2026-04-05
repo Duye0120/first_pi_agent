@@ -4,6 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { createTwoFilesPatch, parsePatch } from "diff";
 import type {
+  GitBranchEntry,
   GitBranchSummary,
   GitDiffFile,
   GitDiffOverview,
@@ -112,6 +113,52 @@ async function isGitRepository(workspacePath: string) {
   } catch {
     return false;
   }
+}
+
+function getGitErrorMessage(error: unknown, fallback: string) {
+  if (!error || typeof error !== "object") {
+    return fallback;
+  }
+
+  const candidate = error as {
+    stderr?: unknown;
+    stdout?: unknown;
+    message?: unknown;
+  };
+  const stderr =
+    typeof candidate.stderr === "string" ? candidate.stderr.trim() : "";
+  const stdout =
+    typeof candidate.stdout === "string" ? candidate.stdout.trim() : "";
+
+  if (stderr) return stderr;
+  if (stdout) return stdout;
+  if (typeof candidate.message === "string" && candidate.message.trim()) {
+    return candidate.message.trim();
+  }
+
+  return fallback;
+}
+
+async function ensureGitRepository(workspacePath: string) {
+  const repository = await isGitRepository(workspacePath);
+  if (!repository) {
+    throw new Error("当前 workspace 不是 Git 仓库。");
+  }
+}
+
+async function assertBranchName(workspacePath: string, branchName: string) {
+  const normalizedBranchName = branchName.trim();
+  if (!normalizedBranchName) {
+    throw new Error("分支名不能为空。");
+  }
+
+  try {
+    await runGit(["check-ref-format", "--branch", normalizedBranchName], workspacePath);
+  } catch (error) {
+    throw new Error(getGitErrorMessage(error, "分支名不合法。"));
+  }
+
+  return normalizedBranchName;
 }
 
 async function resolveDiffBase(workspacePath: string) {
@@ -442,4 +489,68 @@ export async function getGitDiffSnapshot(workspacePath: string): Promise<GitDiff
     branch: statusSnapshot.branch,
     sources: Object.fromEntries(sourceSnapshots) as GitDiffOverview["sources"],
   };
+}
+
+export async function listGitBranches(workspacePath: string): Promise<GitBranchEntry[]> {
+  await ensureGitRepository(workspacePath);
+
+  try {
+    const result = await runGit(
+      [
+        "for-each-ref",
+        "--format=%(refname:short)%00%(if)%(HEAD)%(then)1%(else)0%(end)",
+        "refs/heads",
+      ],
+      workspacePath,
+    );
+
+    return result.stdout
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => {
+        const [name, isCurrentFlag] = line.split("\0");
+        return {
+          name: name?.trim() ?? "",
+          isCurrent: isCurrentFlag === "1",
+        } satisfies GitBranchEntry;
+      })
+      .filter((branch) => branch.name.length > 0)
+      .sort((left, right) => {
+        if (left.isCurrent !== right.isCurrent) {
+          return left.isCurrent ? -1 : 1;
+        }
+
+        return left.name.localeCompare(right.name, "en");
+      });
+  } catch (error) {
+    throw new Error(getGitErrorMessage(error, "读取本地分支失败。"));
+  }
+}
+
+export async function switchGitBranch(
+  workspacePath: string,
+  branchName: string,
+): Promise<void> {
+  await ensureGitRepository(workspacePath);
+  const normalizedBranchName = await assertBranchName(workspacePath, branchName);
+
+  try {
+    await runGit(["switch", "--quiet", normalizedBranchName], workspacePath);
+  } catch (error) {
+    throw new Error(getGitErrorMessage(error, "切换分支失败。"));
+  }
+}
+
+export async function createAndSwitchGitBranch(
+  workspacePath: string,
+  branchName: string,
+): Promise<void> {
+  await ensureGitRepository(workspacePath);
+  const normalizedBranchName = await assertBranchName(workspacePath, branchName);
+
+  try {
+    await runGit(["switch", "--quiet", "-c", normalizedBranchName], workspacePath);
+  } catch (error) {
+    throw new Error(getGitErrorMessage(error, "创建并切换分支失败。"));
+  }
 }

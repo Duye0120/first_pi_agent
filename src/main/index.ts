@@ -51,7 +51,12 @@ import {
   setCredentials,
   testSource,
 } from "./providers.js";
-import { getGitDiffSnapshot } from "./git.js";
+import {
+  createAndSwitchGitBranch,
+  getGitDiffSnapshot,
+  listGitBranches,
+  switchGitBranch,
+} from "./git.js";
 import { getSoulFilesStatus } from "./soul.js";
 import {
   setTerminalWindow,
@@ -305,7 +310,7 @@ function registerIpcHandlers() {
         request.handle = handle;
         ensureRequestActive(request);
 
-        await promptAgent(handle, input.text);
+        await promptAgent(handle, input.text, input.attachments);
       } catch (err) {
         if (
           err instanceof ChatRequestCancelledError ||
@@ -429,6 +434,19 @@ function registerIpcHandlers() {
   );
   ipcMain.handle(IPC_CHANNELS.gitStatus, async () =>
     getGitDiffSnapshot(getSettings().workspace),
+  );
+  ipcMain.handle(IPC_CHANNELS.gitListBranches, async () =>
+    listGitBranches(getSettings().workspace),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.gitSwitchBranch,
+    async (_event, branchName: string) =>
+      switchGitBranch(getSettings().workspace, branchName),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.gitCreateBranch,
+    async (_event, branchName: string) =>
+      createAndSwitchGitBranch(getSettings().workspace, branchName),
   );
 
   ipcMain.handle(IPC_CHANNELS.uiGetState, async () => getUiState());

@@ -99,6 +99,11 @@ const desktopApi: DesktopApi = {
   },
   git: {
     getSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.gitStatus),
+    listBranches: () => ipcRenderer.invoke(IPC_CHANNELS.gitListBranches),
+    switchBranch: (branchName: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.gitSwitchBranch, branchName),
+    createAndSwitchBranch: (branchName: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.gitCreateBranch, branchName),
   },
 
   ui: {

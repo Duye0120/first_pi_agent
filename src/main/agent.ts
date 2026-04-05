@@ -8,6 +8,11 @@ import { buildSoulPromptSection } from "./soul.js";
 import { loadMcpConfig, getActiveServers } from "../mcp/config.js";
 import { connectMcpServer, getConnections, disconnectAllMcpServers } from "../mcp/client.js";
 import { getAllMcpTools } from "../mcp/adapter.js";
+import {
+  buildUserPromptMessage,
+  normalizePersistedSessionMessages,
+} from "./chat-message-adapter.js";
+import type { ChatMessage, SelectedFile } from "../shared/contracts.js";
 
 export interface AgentHandle {
   agent: Agent;
@@ -27,7 +32,7 @@ let initGeneration = 0;
 export async function initAgent(
   sessionId: string,
   adapter: ElectronAdapter,
-  existingMessages?: any[],
+  existingMessages?: ChatMessage[],
 ): Promise<AgentHandle> {
   const generation = ++initGeneration;
 
@@ -45,6 +50,11 @@ export async function initAgent(
   } catch {
     resolved = resolveModelEntry("builtin:anthropic:claude-sonnet-4-20250514");
   }
+
+  const normalizedMessages = await normalizePersistedSessionMessages(
+    existingMessages ?? [],
+    resolved.model,
+  );
 
   // Load MCP tools
   const builtinTools = getBuiltinTools(adapter.workspacePath);
@@ -66,8 +76,9 @@ export async function initAgent(
       model: resolved.model,
       thinkingLevel: settings.thinkingLevel,
       tools: [...builtinTools, ...mcpTools],
-      messages: existingMessages ?? [],
+      messages: normalizedMessages,
     },
+    sessionId,
     getApiKey: () => resolved.apiKey,
   });
 
@@ -101,12 +112,15 @@ export async function initAgent(
 export async function promptAgent(
   handle: AgentHandle,
   text: string,
+  attachments: SelectedFile[],
 ): Promise<void> {
-  await handle.agent.prompt({
-    role: "user",
-    content: text,
-    timestamp: Date.now(),
-  });
+  await handle.agent.prompt(
+    await buildUserPromptMessage(
+      text,
+      attachments,
+      handle.agent.state.model.input.includes("image"),
+    ),
+  );
 }
 
 /**

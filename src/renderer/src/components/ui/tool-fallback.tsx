@@ -66,7 +66,7 @@ function ToolFallbackRoot({
       open={isOpen}
       onOpenChange={handleOpenChange}
       className={cn(
-        "aui-tool-fallback-root group/tool-fallback-root mb-2 w-full overflow-hidden rounded-[16px] bg-shell-panel-muted/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] last:mb-0",
+        "aui-tool-fallback-root group/tool-fallback-root mb-1.5 w-full overflow-hidden rounded-[14px] bg-shell-panel-muted/62 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] last:mb-0",
         className,
       )}
       style={
@@ -97,14 +97,14 @@ function formatToolName(toolName: string) {
 function getStatusMeta(status?: ToolCallMessagePartStatus) {
   if (!status || status.type === "complete") {
     return {
-      label: "已完成",
+      label: null,
       tone: "text-emerald-600 bg-emerald-500/10",
     };
   }
 
   if (status.type === "running") {
     return {
-      label: "工具调用中",
+      label: "进行中",
       tone: "text-[var(--color-accent)] bg-[var(--color-accent-subtle)]",
     };
   }
@@ -151,7 +151,7 @@ function ToolFallbackTrigger({
     <CollapsibleTrigger
       data-slot="tool-fallback-trigger"
       className={cn(
-        "aui-tool-fallback-trigger group/trigger flex w-full items-center gap-2.5 px-3.5 py-2 text-sm transition-colors data-[state=open]:bg-white/55 data-[state=closed]:hover:bg-white/45",
+        "aui-tool-fallback-trigger group/trigger flex w-full items-center gap-2 px-3 py-1.5 text-sm transition-colors data-[state=open]:bg-white/52 data-[state=closed]:hover:bg-white/42",
         className,
       )}
       {...props}
@@ -184,14 +184,20 @@ function ToolFallbackTrigger({
           >
             {displayName}
           </span>
-          <span
-            className={cn(
-              "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium",
-              statusMeta.tone,
-            )}
-          >
-            {statusMeta.label}
-          </span>
+          {statusMeta.label ? (
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center rounded-full px-1.75 py-0.5 text-[10px] font-medium",
+                statusMeta.tone,
+              )}
+            >
+              {statusMeta.label}
+            </span>
+          ) : (
+            <span className="shrink-0 text-[11px] font-medium text-[color:var(--color-text-muted)]">
+              已完成
+            </span>
+          )}
         </span>
       </span>
       <ChevronDownIcon
@@ -228,7 +234,7 @@ function ToolFallbackContent({
       )}
       {...props}
     >
-      <div className="flex flex-col gap-2 px-3.5 pb-3 pt-0.5">{children}</div>
+      <div className="flex flex-col gap-1.5 px-3 pb-2.5 pt-0.5">{children}</div>
     </CollapsibleContent>
   );
 }
@@ -246,15 +252,15 @@ function ToolFallbackArgs({
     <div
       data-slot="tool-fallback-args"
       className={cn(
-        "aui-tool-fallback-args rounded-[12px] bg-white/74 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]",
+        "aui-tool-fallback-args rounded-[10px] bg-white/70 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]",
         className,
       )}
       {...props}
     >
-        <p className="mb-2 text-[11px] font-medium text-[color:var(--color-text-muted)]">
+      <p className="mb-1.5 text-[10px] font-medium text-[color:var(--color-text-muted)]">
         参数
       </p>
-      <pre className="aui-tool-fallback-args-value overflow-x-auto whitespace-pre-wrap text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
+      <pre className="aui-tool-fallback-args-value overflow-x-auto whitespace-pre-wrap text-[11px] leading-5 text-[color:var(--color-text-secondary)]">
         {argsText}
       </pre>
     </div>
@@ -274,15 +280,15 @@ function ToolFallbackResult({
     <div
       data-slot="tool-fallback-result"
       className={cn(
-        "aui-tool-fallback-result rounded-[12px] bg-white/74 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]",
+        "aui-tool-fallback-result rounded-[10px] bg-white/70 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]",
         className,
       )}
       {...props}
     >
-      <p className="aui-tool-fallback-result-header mb-2 text-[11px] font-medium text-[color:var(--color-text-muted)]">
+      <p className="aui-tool-fallback-result-header mb-1.5 text-[10px] font-medium text-[color:var(--color-text-muted)]">
         输出
       </p>
-      <pre className="aui-tool-fallback-result-content overflow-x-auto whitespace-pre-wrap text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
+      <pre className="aui-tool-fallback-result-content overflow-x-auto whitespace-pre-wrap text-[11px] leading-5 text-[color:var(--color-text-secondary)]">
         {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
       </pre>
     </div>
@@ -314,7 +320,7 @@ function ToolFallbackError({
     <div
       data-slot="tool-fallback-error"
       className={cn(
-        "aui-tool-fallback-error rounded-[12px] px-3 py-2.5",
+        "aui-tool-fallback-error rounded-[10px] px-2.5 py-2",
         isCancelled
           ? "bg-black/4"
           : "bg-rose-500/8 text-rose-700 dark:text-rose-300",
@@ -322,10 +328,10 @@ function ToolFallbackError({
       )}
       {...props}
     >
-      <p className="aui-tool-fallback-error-header mb-1 text-[11px] font-medium text-[color:var(--color-text-muted)]">
+      <p className="aui-tool-fallback-error-header mb-1 text-[10px] font-medium text-[color:var(--color-text-muted)]">
         {headerText}
       </p>
-      <p className="aui-tool-fallback-error-reason text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
+      <p className="aui-tool-fallback-error-reason text-[11px] leading-5 text-[color:var(--color-text-secondary)]">
         {errorText}
       </p>
     </div>

@@ -268,8 +268,20 @@ export async function readFilePreview(filePath: string): Promise<FilePreviewResu
 }
 
 export async function readImageDataUrl(filePath: string): Promise<string | null> {
+  const imageContent = await readImageContent(filePath);
+  if (!imageContent) {
+    return null;
+  }
+
+  return `data:${imageContent.mimeType};base64,${imageContent.data}`;
+}
+
+export async function readImageContent(
+  filePath: string,
+  preferredMimeType?: string,
+): Promise<{ data: string; mimeType: string } | null> {
   const extension = getExtension(filePath);
-  const kind = inferFileKind(extension);
+  const kind = inferFileKind(extension, preferredMimeType);
 
   if (kind !== "image") {
     return null;
@@ -278,11 +290,15 @@ export async function readImageDataUrl(filePath: string): Promise<string | null>
   try {
     const fileBuffer = await readFile(filePath);
     const mimeType =
+      preferredMimeType?.trim().toLowerCase() ||
       inferMimeTypeFromExtension(extension) ||
       inferMimeTypeFromBuffer(fileBuffer) ||
       "application/octet-stream";
 
-    return `data:${mimeType};base64,${fileBuffer.toString("base64")}`;
+    return {
+      data: fileBuffer.toString("base64"),
+      mimeType,
+    };
   } catch {
     return null;
   }

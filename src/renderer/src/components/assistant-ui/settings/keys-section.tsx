@@ -22,6 +22,11 @@ import {
 import { Switch } from "@renderer/components/assistant-ui/switch";
 import { TooltipIconButton } from "@renderer/components/assistant-ui/tooltip-icon-button";
 import {
+  findKnownModelMetadata,
+  getUnknownModelCapabilities,
+  getUnknownModelLimits,
+} from "@shared/provider-directory";
+import {
   deriveModelEntryName,
   providerTypeLabel,
   sourceModeLabel,
@@ -130,6 +135,39 @@ function serializeEditableEntry(entry: EditableEntry): string {
   });
 }
 
+function getDetectedMetadata(
+  modelId: string,
+  fallback?: {
+    detectedCapabilities: ModelCapabilities;
+    detectedLimits: ModelLimits;
+  },
+): Pick<EditableEntry, "detectedCapabilities" | "detectedLimits"> {
+  const knownMetadata = findKnownModelMetadata(modelId);
+  if (knownMetadata) {
+    return {
+      detectedCapabilities: knownMetadata.detectedCapabilities,
+      detectedLimits: knownMetadata.detectedLimits,
+    };
+  }
+
+  return {
+    detectedCapabilities: fallback
+      ? { ...fallback.detectedCapabilities }
+      : getUnknownModelCapabilities(),
+    detectedLimits: fallback
+      ? { ...fallback.detectedLimits }
+      : getUnknownModelLimits(),
+  };
+}
+
+function applyDetectedMetadata(entry: EditableEntry, modelId: string): EditableEntry {
+  return {
+    ...entry,
+    modelId,
+    ...getDetectedMetadata(modelId),
+  };
+}
+
 function getEntryDisplayName(entry: EditableEntry): string {
   if (entry.builtin) {
     return entry.name;
@@ -153,6 +191,10 @@ function createEditableEntry(entry: ModelEntry): EditableEntry {
   const generatedName = deriveModelEntryName(entry.modelId);
   const customName =
     entry.builtin || entry.name.trim() !== generatedName ? entry.name : "";
+  const detectedMetadata = getDetectedMetadata(entry.modelId, {
+    detectedCapabilities: entry.detectedCapabilities,
+    detectedLimits: entry.detectedLimits,
+  });
 
   return {
     id: entry.id,
@@ -164,8 +206,8 @@ function createEditableEntry(entry: ModelEntry): EditableEntry {
     builtin: entry.builtin,
     capabilities: normalizeCapabilitiesOverride(entry.capabilities),
     limits: { ...entry.limits },
-    detectedCapabilities: { ...entry.detectedCapabilities },
-    detectedLimits: { ...entry.detectedLimits },
+    detectedCapabilities: detectedMetadata.detectedCapabilities,
+    detectedLimits: detectedMetadata.detectedLimits,
     providerOptionsText: entry.providerOptions
       ? JSON.stringify(entry.providerOptions, null, 2)
       : "",
@@ -943,10 +985,10 @@ export function KeysSection({
                                       ...workspace,
                                       entries: workspace.entries.map((item) =>
                                         item.id === entry.id
-                                          ? {
-                                              ...item,
-                                              modelId: event.target.value,
-                                            }
+                                          ? applyDetectedMetadata(
+                                              item,
+                                              event.target.value,
+                                            )
                                           : item,
                                       ),
                                     }),
@@ -1049,15 +1091,10 @@ export function KeysSection({
                                 maxOutputTokens: null,
                               },
                               detectedCapabilities: {
-                                vision: null,
-                                imageOutput: null,
-                                toolCalling: null,
-                                reasoning: null,
-                                embedding: null,
+                                ...getUnknownModelCapabilities(),
                               },
                               detectedLimits: {
-                                contextWindow: null,
-                                maxOutputTokens: null,
+                                ...getUnknownModelLimits(),
                               },
                               providerOptionsText: "",
                             },
@@ -1133,7 +1170,7 @@ export function KeysSection({
                     {getEntryDisplayName(currentEntry)}
                   </DialogTitle>
                   <p className="mt-2 text-[12px] text-muted-foreground">
-                    这里主要保存模型元数据，供聊天和未来任务统一复用。
+                    这里主要保存模型元数据，供聊天和未来任务统一复用。自动值会优先使用内置的主流模型目录。
                   </p>
                 </div>
 

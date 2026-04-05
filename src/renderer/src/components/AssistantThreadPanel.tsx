@@ -45,6 +45,7 @@ type AssistantThreadPanelProps = {
   onRemoveAttachment: (attachmentId: string) => void;
   onModelChange: (modelEntryId: string) => void;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
+  onBranchChanged: () => void | Promise<void>;
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
 };
@@ -74,12 +75,11 @@ function createResponse(id: string): AgentResponse {
 
 function buildUserMessage(text: string, attachments: SelectedFile[]): ChatMessage {
   const trimmed = text.trim();
-  const fallback = attachments.length > 0 ? `附加了 ${attachments.length} 个本地文件。` : "空消息";
 
   return {
     id: crypto.randomUUID(),
     role: "user",
-    content: trimmed || fallback,
+    content: trimmed,
     timestamp: new Date().toISOString(),
     status: "done",
     meta: {
@@ -349,6 +349,7 @@ function SessionRuntime({
   onRemoveAttachment,
   onModelChange,
   onThinkingLevelChange,
+  onBranchChanged,
   branchSummary,
   contextSummary,
 }: AssistantThreadPanelProps) {
@@ -691,7 +692,7 @@ function SessionRuntime({
         .send({
           sessionId: currentSession.id,
           text,
-          attachmentIds: pendingAttachments.map((attachment) => attachment.id),
+          attachments: pendingAttachments,
         })
         .catch((error) => {
           if (settled) return;
@@ -733,6 +734,7 @@ function SessionRuntime({
         isCancelling={isCancelling}
         branchSummary={branchSummary}
         contextSummary={contextSummary}
+        onBranchChanged={onBranchChanged}
       />
     </AssistantRuntimeProvider>
   );

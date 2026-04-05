@@ -7,7 +7,9 @@ export type ContextUsageSummary = {
   contextWindow: number | null;
   latestInputTokens: number | null;
   latestOutputTokens: number | null;
+  estimatedUsedTokens: number | null;
   estimatedRemainingTokens: number | null;
+  usedRatio: number | null;
   remainingRatio: number | null;
 };
 
@@ -16,7 +18,9 @@ export const EMPTY_CONTEXT_USAGE_SUMMARY: ContextUsageSummary = {
   contextWindow: null,
   latestInputTokens: null,
   latestOutputTokens: null,
+  estimatedUsedTokens: null,
   estimatedRemainingTokens: null,
+  usedRatio: null,
   remainingRatio: null,
 };
 
@@ -34,6 +38,7 @@ export function getLatestAssistantUsage(session: ChatSession | null): MessageUsa
     .find(
       (message): message is ChatMessage & { usage: NonNullable<ChatMessage["usage"]> } =>
         message.role === "assistant" &&
+        message.status === "done" &&
         !!message.usage &&
         typeof message.usage.inputTokens === "number" &&
         typeof message.usage.outputTokens === "number",
@@ -49,9 +54,19 @@ export function getContextUsageSummary(
   const usage = getLatestAssistantUsage(session);
   const latestInputTokens = usage?.inputTokens ?? null;
   const latestOutputTokens = usage?.outputTokens ?? null;
+  const estimatedUsedTokens =
+    typeof latestInputTokens === "number" && typeof latestOutputTokens === "number"
+      ? Math.max(latestInputTokens + latestOutputTokens, 0)
+      : null;
   const estimatedRemainingTokens =
-    typeof contextWindow === "number" && typeof latestInputTokens === "number"
-      ? Math.max(contextWindow - latestInputTokens, 0)
+    typeof contextWindow === "number" && typeof estimatedUsedTokens === "number"
+      ? Math.max(contextWindow - estimatedUsedTokens, 0)
+      : null;
+  const usedRatio =
+    typeof estimatedUsedTokens === "number" &&
+    typeof contextWindow === "number" &&
+    contextWindow > 0
+      ? Math.min(1, Math.max(0, estimatedUsedTokens / contextWindow))
       : null;
   const remainingRatio =
     typeof estimatedRemainingTokens === "number" &&
@@ -66,7 +81,9 @@ export function getContextUsageSummary(
       contextWindow,
       latestInputTokens,
       latestOutputTokens,
+      estimatedUsedTokens,
       estimatedRemainingTokens,
+      usedRatio,
       remainingRatio,
     };
   }
@@ -77,7 +94,9 @@ export function getContextUsageSummary(
       contextWindow,
       latestInputTokens,
       latestOutputTokens,
+      estimatedUsedTokens,
       estimatedRemainingTokens,
+      usedRatio,
       remainingRatio,
     };
   }
@@ -88,7 +107,9 @@ export function getContextUsageSummary(
       contextWindow,
       latestInputTokens,
       latestOutputTokens,
+      estimatedUsedTokens,
       estimatedRemainingTokens,
+      usedRatio,
       remainingRatio,
     };
   }
@@ -104,27 +125,58 @@ export function formatTokenCount(value: number | null | undefined) {
   return new Intl.NumberFormat("zh-CN").format(value);
 }
 
-export function formatRemainingPercent(summary: ContextUsageSummary) {
-  if (summary.remainingRatio === null) {
+function formatRatioPercent(ratio: number | null) {
+  if (ratio === null) {
     return null;
   }
 
-  return `${Math.round(summary.remainingRatio * 100)}%`;
+  if (ratio <= 0) {
+    return "0%";
+  }
+
+  if (ratio >= 1) {
+    return "100%";
+  }
+
+  const percent = ratio * 100;
+
+  if (percent < 1) {
+    return "0.1%";
+  }
+
+  if (percent > 99) {
+    return "99.9%";
+  }
+
+  if (percent < 10) {
+    return `${percent.toFixed(1).replace(/\.0$/, "")}%`;
+  }
+
+  return `${Math.round(percent)}%`;
+}
+
+export function formatRemainingPercent(summary: ContextUsageSummary) {
+  return formatRatioPercent(summary.remainingRatio);
+}
+
+export function formatUsedPercent(summary: ContextUsageSummary) {
+  return formatRatioPercent(summary.usedRatio);
 }
 
 export function getContextStatusCopy(summary: ContextUsageSummary) {
+  const usedPercent = formatUsedPercent(summary);
   const remainingPercent = formatRemainingPercent(summary);
 
-  if (remainingPercent) {
-    return `剩余 ${remainingPercent}`;
+  if (usedPercent && remainingPercent) {
+    return `${usedPercent} 已用（剩余 ${remainingPercent}）`;
   }
 
   if (summary.state === "window-only") {
-    return "等待 usage";
+    return "等待首轮 usage";
   }
 
   if (summary.state === "usage-only") {
-    return "缺少窗口上限";
+    return "当前模型未提供 context window";
   }
 
   return "未知";
@@ -132,11 +184,11 @@ export function getContextStatusCopy(summary: ContextUsageSummary) {
 
 export function getContextSummaryDescription(summary: ContextUsageSummary) {
   if (summary.state === "ready") {
-    return "基于最近一次已完成 assistant 回合的输入 tokens 估算。";
+    return "基于最近一次已完成 assistant 回合的 input 与 output tokens 估算。";
   }
 
   if (summary.state === "window-only") {
-    return "模型提供了窗口上限，等待线程产生 usage 后再估算剩余比例。";
+    return "模型已提供窗口上限，等待线程产生 usage 后再估算已用与剩余比例。";
   }
 
   if (summary.state === "usage-only") {

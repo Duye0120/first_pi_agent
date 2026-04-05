@@ -28,12 +28,12 @@ export const AssistantUIReasoning: FC = () => {
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="mb-2 overflow-hidden rounded-[16px] bg-shell-panel-muted/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+      className="mb-1.5 overflow-hidden rounded-[14px] bg-shell-panel-muted/62 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]"
     >
       <CollapsibleTrigger
         className={cn(
-          "group/trigger flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition",
-          open ? "bg-white/55" : "hover:bg-white/45",
+          "group/trigger flex w-full items-center gap-2 px-3 py-1.5 text-left transition",
+          open ? "bg-white/52" : "hover:bg-white/42",
         )}
       >
         <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-subtle)]/72 text-[var(--color-accent)]">
@@ -46,6 +46,11 @@ export const AssistantUIReasoning: FC = () => {
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
           {title}
         </span>
+        {!isRunning ? (
+          <span className="shrink-0 text-[11px] font-medium text-[color:var(--color-text-muted)]">
+            已完成
+          </span>
+        ) : null}
         <ChevronDownIcon
           className={cn(
             "size-4 shrink-0 text-[color:var(--color-text-secondary)] transition-transform duration-200",
@@ -55,8 +60,8 @@ export const AssistantUIReasoning: FC = () => {
         />
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-        <div className="px-3.5 pb-3">
-          <div className="rounded-[12px] bg-white/74 px-3 py-2.5 text-[12px] leading-5.5 whitespace-pre-wrap text-[color:var(--color-text-secondary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
+        <div className="px-3 pb-2.5">
+          <div className="rounded-[10px] bg-white/70 px-2.5 py-2 text-[11px] leading-5 whitespace-pre-wrap text-[color:var(--color-text-secondary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]">
             {reasoning.text}
           </div>
         </div>
