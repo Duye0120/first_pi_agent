@@ -535,6 +535,49 @@ function extractCompat(entry: ModelEntry): Record<string, unknown> | undefined {
   return compat as Record<string, unknown>;
 }
 
+function inferOpenAiCompatibleCompat(
+  source: ProviderSource,
+): Record<string, unknown> | undefined {
+  if (source.providerType !== "openai-compatible") {
+    return undefined;
+  }
+
+  const baseUrl = source.baseUrl?.trim().toLowerCase();
+  if (!baseUrl) {
+    return undefined;
+  }
+
+  // DashScope's OpenAI-compatible endpoints reject the `developer` role and
+  // follow the older `max_tokens` style rather than newer OpenAI defaults.
+  if (baseUrl.includes("dashscope.aliyuncs.com")) {
+    return {
+      supportsStore: false,
+      supportsDeveloperRole: false,
+      supportsReasoningEffort: false,
+      maxTokensField: "max_tokens",
+    };
+  }
+
+  return undefined;
+}
+
+function resolveCompat(
+  source: ProviderSource,
+  entry: ModelEntry,
+): Record<string, unknown> | undefined {
+  const inferredCompat = inferOpenAiCompatibleCompat(source);
+  const explicitCompat = extractCompat(entry);
+
+  if (!inferredCompat && !explicitCompat) {
+    return undefined;
+  }
+
+  return {
+    ...(inferredCompat ?? {}),
+    ...(explicitCompat ?? {}),
+  };
+}
+
 function extractHeaders(entry: ModelEntry): Record<string, string> | undefined {
   const headers = entry.providerOptions?.headers;
   if (!headers || typeof headers !== "object" || Array.isArray(headers)) {
@@ -573,7 +616,7 @@ function buildCustomModel(source: ProviderSource, entry: ModelEntry): Model<any>
     headers: extractHeaders(entry),
     compat:
       source.providerType === "openai-compatible"
-        ? (extractCompat(entry) as any)
+        ? (resolveCompat(source, entry) as any)
         : undefined,
   };
 }

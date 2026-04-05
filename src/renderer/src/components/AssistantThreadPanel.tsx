@@ -73,6 +73,10 @@ function createResponse(id: string): AgentResponse {
   };
 }
 
+function getLatestThinkingStep(steps: AgentStep[]) {
+  return [...steps].reverse().find((step) => step.kind === "thinking");
+}
+
 function buildUserMessage(text: string, attachments: SelectedFile[]): ChatMessage {
   const trimmed = text.trim();
 
@@ -616,6 +620,22 @@ function SessionRuntime({
 
           case "message_end":
             response.usage = event.usage;
+            if (typeof event.finalThinking === "string" && event.finalThinking.trim()) {
+              const existingThinkingStep = getLatestThinkingStep(response.steps);
+
+              if (existingThinkingStep) {
+                if (!existingThinkingStep.thinkingText?.trim()) {
+                  existingThinkingStep.thinkingText = event.finalThinking;
+                }
+              } else {
+                const thinkingStep = createStep("thinking");
+                thinkingStep.thinkingText = event.finalThinking;
+                response.steps.push(thinkingStep);
+              }
+            }
+            if (typeof event.finalText === "string") {
+              response.finalText = event.finalText;
+            }
             publish();
             break;
 

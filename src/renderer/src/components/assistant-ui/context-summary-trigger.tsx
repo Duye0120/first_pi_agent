@@ -190,9 +190,10 @@ export function ContextSummaryTrigger({
           setHoverOpen(true);
         }}
         className={cn(
-          "size-8 rounded-full bg-transparent text-[color:var(--color-text-secondary)] shadow-none",
-          "transition-colors duration-150 ease-out hover:bg-transparent",
-          panelVisible ? "text-foreground" : "hover:text-foreground",
+          "relative z-10 size-8 rounded-full bg-transparent p-0 text-[color:var(--color-text-secondary)] shadow-none",
+          "transition-colors duration-150 ease-out hover:bg-transparent hover:text-foreground",
+          "focus-visible:ring-0 focus-visible:ring-transparent",
+          expanded ? "text-foreground" : null,
         )}
       >
         <ContextUsageIndicator
@@ -252,8 +253,8 @@ export function ContextSummaryTrigger({
             className={cn(
               "absolute bottom-full left-1/2 z-50 mb-3 -translate-x-1/2 origin-bottom overflow-hidden will-change-transform",
               expanded
-                ? "rounded-[20px] bg-shell-panel shadow-[0_20px_48px_rgba(15,23,42,0.16)]"
-                : "rounded-[16px] bg-shell-panel shadow-[0_14px_32px_rgba(15,23,42,0.18)]",
+                ? "rounded-[20px] bg-shell-panel shadow-[0_12px_28px_rgba(0,0,0,0.12)] dark:shadow-[0_16px_34px_rgba(0,0,0,0.36)]"
+                : "rounded-[16px] bg-shell-panel shadow-[0_8px_18px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_24px_rgba(0,0,0,0.28)]",
             )}
             layout
             role={expanded ? "dialog" : "tooltip"}

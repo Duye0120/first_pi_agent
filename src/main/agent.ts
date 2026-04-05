@@ -78,8 +78,8 @@ export async function initAgent(
       tools: [...builtinTools, ...mcpTools],
       messages: normalizedMessages,
     },
-    sessionId,
     getApiKey: () => resolved.apiKey,
+    sessionId,
   });
 
   const unsubscribe = agent.subscribe((event: CoreAgentEvent) => {

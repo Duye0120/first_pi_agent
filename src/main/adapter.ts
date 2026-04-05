@@ -4,6 +4,34 @@ import type { AgentEvent } from "../shared/agent-events.js";
 import { IPC_CHANNELS } from "../shared/ipc.js";
 import { getSettings } from "./settings.js";
 
+function getAssistantFinalText(event: Extract<CoreAgentEvent, { type: "message_end" }>) {
+  if (event.message.role !== "assistant") {
+    return undefined;
+  }
+
+  const text = event.message.content
+    .flatMap((part) =>
+      part.type === "text" && part.text.trim().length > 0 ? [part.text] : [],
+    )
+    .join("");
+
+  return text || undefined;
+}
+
+function getAssistantFinalThinking(event: Extract<CoreAgentEvent, { type: "message_end" }>) {
+  if (event.message.role !== "assistant") {
+    return undefined;
+  }
+
+  const thinking = event.message.content
+    .flatMap((part) =>
+      part.type === "thinking" && part.thinking.trim().length > 0 ? [part.thinking] : [],
+    )
+    .join("\n\n");
+
+  return thinking || undefined;
+}
+
 /**
  * ElectronAdapter: bridges pi-agent-core events to the renderer via IPC.
  * Translates the core's event shapes into our AgentEvent union.
@@ -44,9 +72,23 @@ export class ElectronAdapter {
         this.send({ type: "agent_start", sessionId: this.sessionId, timestamp: now });
         break;
 
-      case "agent_end":
+      case "agent_end": {
+        const errorMessage = [...event.messages]
+          .reverse()
+          .flatMap((message) =>
+            message.role === "assistant" && message.errorMessage
+              ? [message.errorMessage]
+              : [],
+          )[0];
+
+        if (errorMessage) {
+          this.send({ type: "agent_error", message: errorMessage, timestamp: now });
+          break;
+        }
+
         this.send({ type: "agent_end", sessionId: this.sessionId, timestamp: now });
         break;
+      }
 
       case "turn_start":
         this.send({ type: "turn_start", turnIndex: 0, timestamp: now });
@@ -57,15 +99,23 @@ export class ElectronAdapter {
         break;
 
       case "message_start":
+        if (event.message.role !== "assistant") {
+          break;
+        }
         this.send({ type: "message_start", role: "assistant", timestamp: now });
         break;
 
       case "message_end": {
         const msg = event.message;
+        if (msg.role !== "assistant") {
+          break;
+        }
         const usage = msg.role === "assistant" ? msg.usage : undefined;
         this.send({
           type: "message_end",
           usage: usage ? { inputTokens: usage.input, outputTokens: usage.output } : undefined,
+          finalText: getAssistantFinalText(event),
+          finalThinking: getAssistantFinalThinking(event),
           timestamp: now,
         });
         break;

@@ -57,6 +57,8 @@ export function getContextUsageSummary(
   const estimatedUsedTokens =
     typeof latestInputTokens === "number" && typeof latestOutputTokens === "number"
       ? Math.max(latestInputTokens + latestOutputTokens, 0)
+      : typeof contextWindow === "number"
+        ? 0
       : null;
   const estimatedRemainingTokens =
     typeof contextWindow === "number" && typeof estimatedUsedTokens === "number"

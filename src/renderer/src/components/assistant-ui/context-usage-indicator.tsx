@@ -35,15 +35,7 @@ function getIndicatorProgress(summary: ContextUsageSummary) {
     return 1 - summary.remainingRatio;
   }
 
-  if (summary.state === "window-only") {
-    return 0.72;
-  }
-
-  if (summary.state === "usage-only") {
-    return 0.64;
-  }
-
-  return 0.56;
+  return 0;
 }
 
 export function ContextUsageIndicator({

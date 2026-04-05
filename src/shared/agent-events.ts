@@ -55,6 +55,8 @@ export interface MessageEndEvent {
   type: "message_end";
   usage?: { inputTokens: number; outputTokens: number };
   cost?: number;
+  finalText?: string;
+  finalThinking?: string;
   timestamp: number;
 }
 
