@@ -9,6 +9,8 @@ export type SelectableModelOption = {
   value: string;
   label: string;
   description: string;
+  groupId: string;
+  groupLabel: string;
   sourceId: string;
   entry: ModelEntry;
   source: ProviderSource;
@@ -52,14 +54,23 @@ export function buildSelectableModelOptions(
       return {
         value: entry.id,
         label: entry.name,
-        description: `${source.name} · ${providerTypeLabel(source.providerType)}`,
+        description: source.name,
+        groupId: source.id,
+        groupLabel: source.name,
         sourceId: source.id,
         entry,
         source,
       } satisfies SelectableModelOption;
     })
     .filter((option): option is SelectableModelOption => !!option)
-    .sort((left, right) => left.label.localeCompare(right.label, "zh-CN"));
+    .sort((left, right) => {
+      const groupCompare = left.groupLabel.localeCompare(right.groupLabel, "zh-CN");
+      if (groupCompare !== 0) {
+        return groupCompare;
+      }
+
+      return left.label.localeCompare(right.label, "zh-CN");
+    });
 }
 
 export function findEntryLabel(

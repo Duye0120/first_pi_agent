@@ -137,7 +137,7 @@ export type SourceTestResult = {
   models?: string[];
 };
 
-export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ThinkingLevel = "off" | "low" | "medium" | "high" | "xhigh";
 
 export type Settings = {
   defaultModelId: string;
@@ -243,7 +243,6 @@ export type SendMessageInput = {
 
 export type WindowUiState = {
   diffPanelOpen: boolean;
-  contextPanelOpen: boolean;
 };
 
 export type GitBranchSummary = {
@@ -363,7 +362,6 @@ export type DesktopApi = {
   ui: {
     getState: () => Promise<WindowUiState>;
     setDiffPanelOpen: (open: boolean) => Promise<void>;
-    setContextPanelOpen: (open: boolean) => Promise<void>;
   };
   window: {
     getState: () => Promise<WindowFrameState>;

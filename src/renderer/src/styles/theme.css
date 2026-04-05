@@ -58,6 +58,10 @@
   --color-text-muted:        #55657c;
   --color-border:            #dce4ed;
   --color-border-light:      #e8eef5;
+  --color-composer-surface:  #ffffff;
+  --color-composer-control:  #f6f6f3;
+  --color-context-indicator-rest:  #9aa1aa;
+  --color-context-indicator-track: #dde2e7;
 
   /* ── Step Cards ──────────────────────────────────────────── */
   --color-step-bg:           #ffffff;
@@ -154,6 +158,10 @@
   --color-text-muted:        #aeb7c6;
   --color-border:            #32363d;
   --color-border-light:      #2a2e34;
+  --color-composer-surface:  #1b1b1b;
+  --color-composer-control:  #262626;
+  --color-context-indicator-rest:  #9ea4ad;
+  --color-context-indicator-track: #3a4048;
 
   --color-step-bg:           #1f1f1f;
   --color-step-bg-hover:     #262626;

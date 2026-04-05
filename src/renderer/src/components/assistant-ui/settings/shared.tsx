@@ -86,13 +86,15 @@ export function FieldSelect(props: {
   onChange: (value: string) => void;
   options: readonly { value: string; label: string; disabled?: boolean }[];
   className?: string;
+  disabled?: boolean;
 }) {
-  const { options, className = "", value, onChange } = props;
+  const { options, className = "", value, onChange, disabled = false } = props;
 
   return (
     <Select
       value={value}
       onValueChange={onChange}
+      disabled={disabled}
       options={options.map((option) => ({
         value: option.value,
         label: option.label,

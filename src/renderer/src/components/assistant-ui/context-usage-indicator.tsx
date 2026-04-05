@@ -10,22 +10,40 @@ type ContextUsageIndicatorProps = {
 
 function getIndicatorTone(summary: ContextUsageSummary) {
   if (summary.remainingRatio !== null) {
-    if (summary.remainingRatio <= 0.15) {
-      return "stroke-rose-400";
+    const usedRatio = 1 - summary.remainingRatio;
+
+    if (usedRatio >= 0.85) {
+      return "var(--color-status-error)";
     }
 
-    if (summary.remainingRatio <= 0.35) {
-      return "stroke-amber-300";
+    if (usedRatio >= 0.65) {
+      return "var(--terminal-ansi-yellow)";
     }
 
-    return "stroke-[var(--color-accent)]";
+    return "var(--color-context-indicator-rest)";
   }
 
   if (summary.state === "window-only") {
-    return "stroke-[var(--color-accent)]/50";
+    return "var(--color-context-indicator-rest)";
   }
 
-  return "stroke-white/20";
+  return "var(--color-context-indicator-rest)";
+}
+
+function getIndicatorProgress(summary: ContextUsageSummary) {
+  if (summary.remainingRatio !== null) {
+    return 1 - summary.remainingRatio;
+  }
+
+  if (summary.state === "window-only") {
+    return 0.72;
+  }
+
+  if (summary.state === "usage-only") {
+    return 0.64;
+  }
+
+  return 0.56;
 }
 
 export function ContextUsageIndicator({
@@ -36,7 +54,7 @@ export function ContextUsageIndicator({
 }: ContextUsageIndicatorProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const progress = summary.remainingRatio ?? (summary.state === "window-only" ? 1 : 0);
+  const progress = getIndicatorProgress(summary);
   const dashOffset = circumference * (1 - progress);
 
   return (
@@ -60,7 +78,7 @@ export function ContextUsageIndicator({
           r={radius}
           fill="none"
           strokeWidth={strokeWidth}
-          className="stroke-white/10"
+          style={{ stroke: "var(--color-context-indicator-track)" }}
         />
         <circle
           cx={size / 2}
@@ -71,10 +89,10 @@ export function ContextUsageIndicator({
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={dashOffset}
-          className={cn("transition-all duration-300 ease-out", getIndicatorTone(summary))}
+          style={{ stroke: getIndicatorTone(summary) }}
+          className="transition-all duration-300 ease-out"
         />
       </svg>
-      <span className="absolute size-1.5 rounded-full bg-white/50" />
     </span>
   );
 }

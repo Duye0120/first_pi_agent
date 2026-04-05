@@ -224,17 +224,12 @@ export function getUiState(): WindowUiState {
             : typeof parsed.rightPanelOpen === "boolean"
               ? parsed.rightPanelOpen
               : false,
-        contextPanelOpen:
-          typeof parsed.contextPanelOpen === "boolean"
-            ? parsed.contextPanelOpen
-            : false,
       };
     } catch { /* fall through */ }
   }
 
   return {
     diffPanelOpen: false,
-    contextPanelOpen: false,
   };
 }
 
@@ -246,12 +241,6 @@ function writeUiState(ui: WindowUiState): void {
 export function setDiffPanelOpen(open: boolean): void {
   const ui = getUiState();
   ui.diffPanelOpen = open;
-  writeUiState(ui);
-}
-
-export function setContextPanelOpen(open: boolean): void {
-  const ui = getUiState();
-  ui.contextPanelOpen = open;
   writeUiState(ui);
 }
 

@@ -1,8 +1,11 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { Type } from "@mariozechner/pi-ai";
 import { checkShellCommand } from "../security.js";
+import { getSettings } from "../settings.js";
+import { buildShellExecSpawn, resolveShell } from "../shell.js";
 
 const parameters = Type.Object({
   command: Type.String({ description: "要执行的 shell 命令" }),
@@ -19,11 +22,19 @@ type ShellExecDetails = {
   durationMs: number;
 };
 
+const ANSI_ESCAPE_REGEX = /\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g;
+
+function sanitizeShellOutput(text: string): string {
+  return text.replace(ANSI_ESCAPE_REGEX, "");
+}
+
 export function createShellExecTool(workspacePath: string): AgentTool<typeof parameters, ShellExecDetails> {
+  const configuredShell = resolveShell(getSettings().terminal.shell);
+
   return {
     name: "shell_exec",
     label: "执行命令",
-    description: "执行 shell 命令。可以安装依赖、运行测试、查看进程状态等。命令在 workspace 目录下执行。",
+    description: `执行 shell 命令。可以安装依赖、运行测试、查看进程状态等。命令会在 workspace 目录下执行，并使用当前配置的 ${configuredShell.label}。请按对应 shell 语法编写命令。`,
     parameters,
     async execute(_toolCallId, params, signal?, onUpdate?) {
       const check = checkShellCommand(params.command);
@@ -50,21 +61,41 @@ export function createShellExecTool(workspacePath: string): AgentTool<typeof par
         : workspacePath;
       const timeoutSec = Math.min(params.timeout ?? 30, 300);
       const startTime = Date.now();
+      const shell = resolveShell(getSettings().terminal.shell);
+      const shellSpawn = buildShellExecSpawn(shell, params.command);
 
       return new Promise((resolve) => {
-        const isWindows = process.platform === "win32";
-        const shellCmd = isWindows ? "cmd.exe" : "/bin/sh";
-        const shellArgs = isWindows ? ["/c", params.command] : ["-c", params.command];
-
-        const child = spawn(shellCmd, shellArgs, {
+        const child = spawn(shellSpawn.command, shellSpawn.args, {
           cwd,
           env: { ...process.env },
           stdio: ["ignore", "pipe", "pipe"],
+          windowsHide: true,
         });
 
         let stdout = "";
         let stderr = "";
         let killed = false;
+        const stdoutDecoder = new StringDecoder("utf8");
+        const stderrDecoder = new StringDecoder("utf8");
+
+        const pushOutput = (stream: "stdout" | "stderr", text: string) => {
+          const normalizedText = sanitizeShellOutput(text);
+
+          if (!normalizedText) {
+            return;
+          }
+
+          if (stream === "stdout") {
+            stdout += normalizedText;
+          } else {
+            stderr += normalizedText;
+          }
+
+          onUpdate?.({
+            content: [{ type: "text", text: normalizedText }],
+            details: { type: stream, data: normalizedText } as any,
+          });
+        };
 
         // Timeout handling
         const timer = setTimeout(() => {
@@ -84,26 +115,17 @@ export function createShellExecTool(workspacePath: string): AgentTool<typeof par
         }
 
         child.stdout.on("data", (chunk: Buffer) => {
-          const text = chunk.toString();
-          stdout += text;
-          // Stream update to frontend
-          onUpdate?.({
-            content: [{ type: "text", text }],
-            details: { type: "stdout", data: text } as any,
-          });
+          pushOutput("stdout", stdoutDecoder.write(chunk));
         });
 
         child.stderr.on("data", (chunk: Buffer) => {
-          const text = chunk.toString();
-          stderr += text;
-          onUpdate?.({
-            content: [{ type: "text", text }],
-            details: { type: "stderr", data: text } as any,
-          });
+          pushOutput("stderr", stderrDecoder.write(chunk));
         });
 
         child.on("close", (code) => {
           clearTimeout(timer);
+          pushOutput("stdout", stdoutDecoder.end());
+          pushOutput("stderr", stderrDecoder.end());
           const durationMs = Date.now() - startTime;
           const exitCode = code ?? (killed ? -1 : 0);
 
@@ -141,6 +163,8 @@ export function createShellExecTool(workspacePath: string): AgentTool<typeof par
 
         child.on("error", (err) => {
           clearTimeout(timer);
+          stdoutDecoder.end();
+          stderrDecoder.end();
           resolve({
             content: [{ type: "text", text: `命令执行失败: ${err.message}` }],
             details: {

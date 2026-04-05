@@ -1,6 +1,10 @@
 "use client";
 
-import { BrainCircuitIcon, ChevronDownIcon } from "lucide-react";
+import {
+  BrainCircuitIcon,
+  ChevronDownIcon,
+  LoaderCircleIcon,
+} from "lucide-react";
 import { type FC, useState } from "react";
 import { useMessagePartReasoning } from "@assistant-ui/react";
 
@@ -17,30 +21,44 @@ export const AssistantUIReasoning: FC = () => {
 
   if (!reasoning.text?.trim()) return null;
 
+  const isRunning = reasoning.status.type === "running";
+  const title = isRunning ? "思考中" : "思考";
+
   return (
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="mb-3 overflow-hidden rounded-[var(--radius-shell)] bg-shell-panel-muted/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+      className="mb-2 overflow-hidden rounded-[16px] bg-shell-panel-muted/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
     >
       <CollapsibleTrigger
         className={cn(
-          "flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted-foreground transition hover:bg-background",
-          open && "bg-background/40",
+          "group/trigger flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition",
+          open ? "bg-white/55" : "hover:bg-white/45",
         )}
       >
-        <BrainCircuitIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="flex-1 font-medium">Reasoning</span>
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-subtle)]/72 text-[var(--color-accent)]">
+          {isRunning ? (
+            <LoaderCircleIcon className="size-3.5 animate-spin" />
+          ) : (
+            <BrainCircuitIcon className="size-3.5" />
+          )}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+          {title}
+        </span>
         <ChevronDownIcon
           className={cn(
-            "size-3.5 shrink-0 transition-transform duration-200",
-            open && "rotate-180",
+            "size-4 shrink-0 text-[color:var(--color-text-secondary)] transition-transform duration-200",
+            "group-data-[state=closed]/trigger:-rotate-90",
+            "group-data-[state=open]/trigger:rotate-0",
           )}
         />
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-        <div className="px-3 py-2.5 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
-          {reasoning.text}
+        <div className="px-3.5 pb-3">
+          <div className="rounded-[12px] bg-white/74 px-3 py-2.5 text-[12px] leading-5.5 whitespace-pre-wrap text-[color:var(--color-text-secondary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
+            {reasoning.text}
+          </div>
         </div>
       </CollapsibleContent>
     </Collapsible>

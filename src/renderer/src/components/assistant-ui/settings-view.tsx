@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ModelEntry, ProviderSource, SoulFilesStatus } from "@shared/contracts";
 import { buildSelectableModelOptions, findEntryLabel, loadProviderDirectory } from "@renderer/lib/provider-directory";
+import {
+  canConfigureThinking,
+  getEffectiveThinkingLevel,
+  getThinkingHint,
+  getThinkingOptionsForModel,
+  normalizeThinkingLevel,
+} from "@renderer/lib/thinking-levels";
 import { SECTION_META } from "./settings/constants";
 import { AboutSection } from "./settings/about-section";
 import { AppearanceSection } from "./settings/appearance-section";
@@ -78,6 +85,22 @@ export function SettingsView({
     return nextOptions;
   }, [currentModelId, entries, sources]);
 
+  const currentModelEntry = useMemo(
+    () => entries.find((entry) => entry.id === currentModelId) ?? null,
+    [currentModelId, entries],
+  );
+  const normalizedThinkingLevel = normalizeThinkingLevel(thinkingLevel);
+  const effectiveThinkingLevel = getEffectiveThinkingLevel(
+    currentModelEntry,
+    normalizedThinkingLevel,
+  );
+  const thinkingOptions = useMemo(
+    () => getThinkingOptionsForModel(currentModelEntry, effectiveThinkingLevel),
+    [currentModelEntry, effectiveThinkingLevel],
+  );
+  const thinkingEnabled = canConfigureThinking(currentModelEntry);
+  const thinkingHint = getThinkingHint(currentModelEntry);
+
   if (!settings) {
     return (
       <div className="grid h-full place-items-center bg-shell-panel px-6 text-sm text-muted-foreground">
@@ -108,7 +131,10 @@ export function SettingsView({
             {activeSection === "general" ? (
               <GeneralSection
                 currentModelId={currentModelId}
-                thinkingLevel={thinkingLevel}
+                thinkingLevel={effectiveThinkingLevel}
+                canConfigureThinking={thinkingEnabled}
+                thinkingHint={thinkingHint}
+                thinkingOptions={thinkingOptions}
                 modelOptions={modelOptions}
                 onModelChange={onModelChange}
                 onThinkingLevelChange={onThinkingLevelChange}

@@ -1,16 +1,21 @@
 import type { ThinkingLevel } from "@shared/contracts";
-import { THINKING_LEVELS } from "./constants";
 import { FieldSelect, SettingsCard, SettingsRow } from "./shared";
 
 export function GeneralSection({
   currentModelId,
   thinkingLevel,
+  canConfigureThinking,
+  thinkingHint,
+  thinkingOptions,
   modelOptions,
   onModelChange,
   onThinkingLevelChange,
 }: {
   currentModelId: string;
   thinkingLevel: ThinkingLevel;
+  canConfigureThinking: boolean;
+  thinkingHint: string;
+  thinkingOptions: { value: ThinkingLevel; label: string }[];
   modelOptions: { value: string; label: string; disabled?: boolean }[];
   onModelChange: (modelEntryId: string) => void;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
@@ -33,15 +38,23 @@ export function GeneralSection({
 
       <SettingsRow
         label="默认思考强度"
-        hint="越高越偏向深度推理，但响应会更慢。"
+        hint={thinkingHint}
       >
         <FieldSelect
-          value={thinkingLevel}
+          value={canConfigureThinking ? thinkingLevel : "__unsupported__"}
           onChange={(value) => onThinkingLevelChange(value as ThinkingLevel)}
-          options={THINKING_LEVELS.map((level) => ({
-            value: level.value,
-            label: level.label,
-          }))}
+          disabled={!canConfigureThinking}
+          options={
+            canConfigureThinking
+              ? thinkingOptions
+              : [
+                  {
+                    value: "__unsupported__",
+                    label: "当前模型不支持单独设置",
+                    disabled: true,
+                  },
+                ]
+          }
         />
       </SettingsRow>
     </SettingsCard>

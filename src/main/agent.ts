@@ -19,6 +19,7 @@ export interface AgentHandle {
 }
 
 let currentHandle: AgentHandle | null = null;
+let initGeneration = 0;
 
 /**
  * Create and initialize an Agent instance for a session.
@@ -28,9 +29,11 @@ export async function initAgent(
   adapter: ElectronAdapter,
   existingMessages?: any[],
 ): Promise<AgentHandle> {
+  const generation = ++initGeneration;
+
   // Destroy previous agent if exists
   if (currentHandle) {
-    destroyAgent(currentHandle);
+    await destroyAgent(currentHandle);
   }
 
   const settings = getSettings();
@@ -80,6 +83,14 @@ export async function initAgent(
     runtimeSignature: resolved.runtimeSignature,
     thinkingLevel: settings.thinkingLevel,
   };
+
+  if (generation !== initGeneration) {
+    unsubscribe();
+    agent.abort();
+    await disconnectAllMcpServers();
+    throw new Error("Agent initialization superseded.");
+  }
+
   currentHandle = handle;
   return handle;
 }
@@ -138,6 +149,7 @@ function buildSystemPrompt(workspacePath: string): string {
     "- web_fetch: 获取网页内容并转换为纯文本",
     "",
     "使用工具时，路径相对于用户的 workspace 目录。",
+    "shell_exec 会使用当前配置的 shell；Windows 下通常是 PowerShell。请按对应 shell 的语法写命令，不要默认使用 bash 专属语法。",
     "执行命令前请确认命令的安全性。",
   ].join("\n");
 

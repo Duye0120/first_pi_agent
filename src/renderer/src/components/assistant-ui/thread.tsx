@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   useCallback,
   useEffect,
   useMemo,
@@ -25,6 +27,7 @@ import {
   CheckIcon,
   CopyIcon,
   GitBranchIcon,
+  LoaderCircleIcon,
   SquareIcon,
 } from "lucide-react";
 import type {
@@ -41,7 +44,7 @@ import {
   UserMessageAttachments,
 } from "@renderer/components/assistant-ui/attachment";
 import { Button } from "@renderer/components/assistant-ui/button";
-import { ContextUsageIndicator } from "@renderer/components/assistant-ui/context-usage-indicator";
+import { ContextSummaryTrigger } from "@renderer/components/assistant-ui/context-summary-trigger";
 import { MarkdownText } from "@renderer/components/assistant-ui/markdown-text";
 import {
   ModelSelector,
@@ -49,11 +52,15 @@ import {
 } from "@renderer/components/assistant-ui/model-selector";
 import {
   EMPTY_CONTEXT_USAGE_SUMMARY,
-  getContextStatusCopy,
   type ContextUsageSummary,
 } from "@renderer/lib/context-usage";
 import { Reasoning } from "@renderer/components/assistant-ui/reasoning";
-import { Select } from "@renderer/components/assistant-ui/select";
+import {
+  SelectContent,
+  SelectItem,
+  SelectRoot,
+  SelectTrigger,
+} from "@renderer/components/assistant-ui/select";
 import { ToolFallback } from "@renderer/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@renderer/components/assistant-ui/tooltip-icon-button";
 import {
@@ -65,6 +72,15 @@ import {
   findEntryLabel,
   loadProviderDirectory,
 } from "@renderer/lib/provider-directory";
+import {
+  canConfigureThinking,
+  getEffectiveThinkingLevel,
+  getThinkingHint,
+  getThinkingLevelLabel,
+  getThinkingOptionsForModel,
+  normalizeThinkingLevel,
+} from "@renderer/lib/thinking-levels";
+import type { ChatRunStage } from "@renderer/lib/chat-run-status";
 import { cn } from "@renderer/lib/utils";
 
 type ThreadProps = {
@@ -78,10 +94,12 @@ type ThreadProps = {
   thinkingLevel?: ThinkingLevel;
   onModelChange?: (modelEntryId: string) => void;
   onThinkingLevelChange?: (level: ThinkingLevel) => void;
+  onCancelRun?: () => void;
+  runStage?: ChatRunStage;
+  runStatusLabel?: string;
+  isCancelling?: boolean;
   branchSummary?: GitBranchSummary | null;
   contextSummary?: ContextUsageSummary;
-  contextPanelOpen?: boolean;
-  onToggleContextPanel?: () => void;
 };
 
 type ThreadResolvedProps = {
@@ -92,23 +110,33 @@ type ThreadResolvedProps = {
   onPasteFiles: (files: File[]) => void;
   onRemoveAttachment: (attachmentId: string) => void;
   currentModelId: string;
+  currentModelEntry: ModelEntry | null;
   thinkingLevel: ThinkingLevel;
   onModelChange: (modelEntryId: string) => void;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
+  onCancelRun: () => void;
+  runStage: ChatRunStage;
+  runStatusLabel: string;
+  isCancelling: boolean;
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
-  contextPanelOpen: boolean;
-  onToggleContextPanel: () => void;
 };
 
-const THINKING_LEVELS: { value: ThinkingLevel; label: string }[] = [
-  { value: "off", label: "关闭" },
-  { value: "minimal", label: "极低" },
-  { value: "low", label: "低" },
-  { value: "medium", label: "中" },
-  { value: "high", label: "高" },
-  { value: "xhigh", label: "极高" },
-];
+type ThreadRunStatusContextValue = {
+  runStage: ChatRunStage;
+  runStatusLabel: string;
+  isCancelling: boolean;
+};
+
+const ThreadRunStatusContext = createContext<ThreadRunStatusContextValue>({
+  runStage: "idle",
+  runStatusLabel: "",
+  isCancelling: false,
+});
+
+function useThreadRunStatus() {
+  return useContext(ThreadRunStatusContext);
+}
 
 function buildModelOptions(
   sources: ProviderSource[],
@@ -119,6 +147,8 @@ function buildModelOptions(
     id: model.value,
     name: model.label,
     description: model.description,
+    groupId: model.groupId,
+    groupLabel: model.groupLabel,
     icon: <BotIcon className="size-4" />,
     disabled: false,
   }));
@@ -175,10 +205,12 @@ export const Thread: FC<ThreadProps> = ({
   thinkingLevel = "off",
   onModelChange = () => undefined,
   onThinkingLevelChange = () => undefined,
+  onCancelRun = () => undefined,
+  runStage = "idle",
+  runStatusLabel = "",
+  isCancelling = false,
   branchSummary = null,
   contextSummary = EMPTY_CONTEXT_USAGE_SUMMARY,
-  contextPanelOpen = false,
-  onToggleContextPanel = () => undefined,
 }) => {
   const [sources, setSources] = useState<ProviderSource[]>([]);
   const [entries, setEntries] = useState<ModelEntry[]>([]);
@@ -204,57 +236,71 @@ export const Thread: FC<ThreadProps> = ({
     () => buildModelOptions(sources, entries, currentModelId),
     [currentModelId, entries, sources],
   );
+  const currentModelEntry = useMemo(
+    () => entries.find((entry) => entry.id === currentModelId) ?? null,
+    [currentModelId, entries],
+  );
 
   return (
-    <ThreadPrimitive.Root
-      className="@container flex h-full min-h-0 flex-col bg-shell-panel"
-      style={{
-        ["--thread-max-width" as string]: "56rem",
-        ["--composer-radius" as string]: "8px",
-        ["--composer-padding" as string]: "12px",
-      }}
+    <ThreadRunStatusContext.Provider
+      value={{ runStage, runStatusLabel, isCancelling }}
     >
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <ThreadPrimitive.Viewport
-          turnAnchor="top"
-          className="relative mr-3 min-h-0 flex-1 overflow-x-auto overflow-y-auto scroll-smooth pl-8 pr-5 pt-3"
-        >
-          <AuiIf condition={(s) => s.thread.isEmpty}>
-            <ThreadWelcome />
-          </AuiIf>
+      <ThreadPrimitive.Root
+        className="@container flex h-full min-h-0 flex-col bg-shell-panel"
+        style={{
+          ["--thread-max-width" as string]: "56rem",
+          ["--composer-radius" as string]: "8px",
+          ["--composer-padding" as string]: "12px",
+        }}
+      >
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <ThreadPrimitive.Viewport
+            turnAnchor="bottom"
+            autoScroll
+            scrollToBottomOnInitialize
+            scrollToBottomOnThreadSwitch
+            className="relative mr-3 min-h-0 flex-1 overflow-x-auto overflow-y-auto scroll-smooth pl-8 pr-5 pt-3"
+          >
+            <AuiIf condition={(s) => s.thread.isEmpty}>
+              <ThreadWelcome />
+            </AuiIf>
 
-          <ThreadPrimitive.Messages>
-            {() => <ThreadMessage />}
-          </ThreadPrimitive.Messages>
-        </ThreadPrimitive.Viewport>
+            <ThreadPrimitive.Messages>
+              {() => <ThreadMessage />}
+            </ThreadPrimitive.Messages>
+          </ThreadPrimitive.Viewport>
 
-        <div
-          className={
-            terminalOpen
-              ? "relative mx-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-2 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel/85 to-transparent px-8 pb-3 pt-4"
-              : "relative mx-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-3 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel to-transparent px-8 pb-5 pt-9 md:pb-6"
-          }
-        >
-          <ThreadScrollToBottom />
-          <Composer
-            attachments={attachments}
-            isPickingFiles={isPickingFiles}
-            modelOptions={modelOptions}
-            onAttachFiles={onAttachFiles}
-            onPasteFiles={onPasteFiles}
-            onRemoveAttachment={onRemoveAttachment}
-            currentModelId={currentModelId}
-            thinkingLevel={thinkingLevel}
-            onModelChange={onModelChange}
-            onThinkingLevelChange={onThinkingLevelChange}
-            branchSummary={branchSummary}
-            contextSummary={contextSummary}
-            contextPanelOpen={contextPanelOpen}
-            onToggleContextPanel={onToggleContextPanel}
-          />
+          <div
+            className={
+              terminalOpen
+                ? "relative mx-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-2 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel/85 to-transparent px-8 pb-3 pt-4"
+                : "relative mx-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-3 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel to-transparent px-8 pb-5 pt-9 md:pb-6"
+            }
+          >
+            <ThreadScrollToBottom />
+            <Composer
+              attachments={attachments}
+              isPickingFiles={isPickingFiles}
+              modelOptions={modelOptions}
+              onAttachFiles={onAttachFiles}
+              onPasteFiles={onPasteFiles}
+              onRemoveAttachment={onRemoveAttachment}
+              currentModelId={currentModelId}
+              currentModelEntry={currentModelEntry}
+              thinkingLevel={thinkingLevel}
+              onModelChange={onModelChange}
+              onThinkingLevelChange={onThinkingLevelChange}
+              onCancelRun={onCancelRun}
+              runStage={runStage}
+              runStatusLabel={runStatusLabel}
+              isCancelling={isCancelling}
+              branchSummary={branchSummary}
+              contextSummary={contextSummary}
+            />
+          </div>
         </div>
-      </div>
-    </ThreadPrimitive.Root>
+      </ThreadPrimitive.Root>
+    </ThreadRunStatusContext.Provider>
   );
 };
 
@@ -302,13 +348,15 @@ const Composer: FC<ThreadResolvedProps> = ({
   onPasteFiles,
   onRemoveAttachment,
   currentModelId,
+  currentModelEntry,
   thinkingLevel,
   onModelChange,
   onThinkingLevelChange,
+  onCancelRun,
+  runStatusLabel,
+  isCancelling,
   branchSummary,
   contextSummary,
-  contextPanelOpen,
-  onToggleContextPanel,
 }) => {
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const [inputScrollable, setInputScrollable] = useState(false);
@@ -342,18 +390,18 @@ const Composer: FC<ThreadResolvedProps> = ({
   }, [syncInputOverflow]);
 
   return (
-    <ComposerPrimitive.Root className="relative flex w-full flex-col">
+    <ComposerPrimitive.Root className="relative flex w-full flex-col gap-1.5">
       <ComposerAttachmentSync
         attachments={attachments}
         onRemoveAttachment={onRemoveAttachment}
       />
-      <div className="flex w-full flex-col gap-2 rounded-(--composer-radius) bg-shell-panel-muted p-(--composer-padding) shadow-[0_10px_30px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.03)] transition-shadow focus-within:ring-2 focus-within:ring-ring/12">
+      <div className="flex w-full flex-col gap-2 rounded-[12px] bg-[color:var(--color-composer-surface)] p-(--composer-padding) shadow-[0_12px_32px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] transition-shadow focus-within:ring-2 focus-within:ring-ring/12">
         <ComposerAttachments />
 
         <ComposerPrimitive.Input
           placeholder="向 Pi Agent 提问..."
           ref={composerInputRef}
-          className={`min-h-0 w-full resize-none bg-transparent px-1 py-1 text-[15px] leading-6 outline-none placeholder:text-muted-foreground/80 ${
+          className={`min-h-0 w-full resize-none bg-transparent px-1 py-1 text-[15px] leading-6 text-foreground outline-none placeholder:text-[color:var(--color-text-secondary)]/85 ${
             inputScrollable ? "overflow-y-auto pr-2" : "overflow-y-hidden"
           }`}
           minRows={1}
@@ -373,17 +421,19 @@ const Composer: FC<ThreadResolvedProps> = ({
           onAttachFiles={onAttachFiles}
           modelOptions={modelOptions}
           currentModelId={currentModelId}
+          currentModelEntry={currentModelEntry}
           thinkingLevel={thinkingLevel}
           onModelChange={onModelChange}
           onThinkingLevelChange={onThinkingLevelChange}
-        />
-        <ComposerStatusBar
-          branchSummary={branchSummary}
-          contextSummary={contextSummary}
-          contextPanelOpen={contextPanelOpen}
-          onToggleContextPanel={onToggleContextPanel}
+          onCancelRun={onCancelRun}
+          runStatusLabel={runStatusLabel}
+          isCancelling={isCancelling}
         />
       </div>
+      <ComposerStatusBar
+        branchSummary={branchSummary}
+        contextSummary={contextSummary}
+      />
     </ComposerPrimitive.Root>
   );
 };
@@ -395,19 +445,44 @@ const ComposerAction: FC<
     | "onAttachFiles"
     | "modelOptions"
     | "currentModelId"
+    | "currentModelEntry"
     | "thinkingLevel"
     | "onModelChange"
     | "onThinkingLevelChange"
+    | "onCancelRun"
+    | "runStatusLabel"
+    | "isCancelling"
   >
 > = ({
   isPickingFiles,
   onAttachFiles,
   modelOptions,
   currentModelId,
+  currentModelEntry,
   thinkingLevel,
   onModelChange,
   onThinkingLevelChange,
+  onCancelRun,
+  runStatusLabel,
+  isCancelling,
 }) => {
+  const isThreadRunning = useAuiState((s) => s.thread.isRunning);
+  const currentModel = modelOptions.find((model) => model.id === currentModelId);
+  const normalizedThinkingLevel = normalizeThinkingLevel(thinkingLevel);
+  const effectiveThinkingLevel = getEffectiveThinkingLevel(
+    currentModelEntry,
+    normalizedThinkingLevel,
+  );
+  const thinkingOptions = getThinkingOptionsForModel(
+    currentModelEntry,
+    effectiveThinkingLevel,
+  );
+  const thinkingEnabled = canConfigureThinking(currentModelEntry);
+  const thinkingTitle = thinkingEnabled
+    ? getThinkingLevelLabel(effectiveThinkingLevel)
+    : getThinkingHint(currentModelEntry);
+  const showStopAction = isThreadRunning || isCancelling;
+
   return (
     <div className="relative flex items-center justify-between pt-1">
       <div className="flex items-center gap-1.5">
@@ -415,34 +490,91 @@ const ComposerAction: FC<
           isPickingFiles={isPickingFiles}
           onAttachFiles={onAttachFiles}
         />
-        <ModelSelector
+        <ModelSelector.Root
           models={modelOptions}
           value={currentModelId}
           onValueChange={onModelChange}
-          variant="outline"
-          size="sm"
-          contentClassName="min-w-[220px]"
-        />
-        <Select
-          value={thinkingLevel}
-          onValueChange={(value) =>
-            onThinkingLevelChange(value as ThinkingLevel)
-          }
-          options={THINKING_LEVELS.map((level) => ({
-            value: level.value,
-            textValue: level.label,
-            label: (
-              <span className="flex items-center gap-2">
-                <BrainCircuitIcon className="size-4 shrink-0" />
-                <span>{level.label}</span>
-              </span>
-            ),
-          }))}
-          className="h-8 rounded-md bg-shell-panel-elevated text-[12px]"
-          placeholder="思考强度"
-        />
+        >
+          <ModelSelector.Trigger
+            variant="outline"
+            size="sm"
+            title={currentModel?.name ?? "选择模型"}
+            aria-label={currentModel?.name ? `当前模型：${currentModel.name}` : "选择模型"}
+            className="h-8 rounded-md bg-[color:var(--color-composer-control)] px-2 text-[12px] shadow-none hover:bg-shell-panel-contrast"
+          >
+            <BotIcon className="size-4 shrink-0" />
+          </ModelSelector.Trigger>
+          <ModelSelector.Content
+            side="top"
+            align="start"
+            sideOffset={8}
+            className="min-w-[220px]"
+          />
+        </ModelSelector.Root>
+        {thinkingEnabled ? (
+          <SelectRoot
+            value={effectiveThinkingLevel}
+            onValueChange={(value) =>
+              onThinkingLevelChange(value as ThinkingLevel)
+            }
+          >
+            <SelectTrigger
+              variant="outline"
+              size="sm"
+              title={thinkingTitle}
+              aria-label={`当前思考强度：${thinkingTitle}`}
+              className="h-8 rounded-md bg-[color:var(--color-composer-control)] px-2 text-[12px] shadow-none hover:bg-shell-panel-contrast"
+            >
+              <BrainCircuitIcon className="size-4 shrink-0" />
+            </SelectTrigger>
+            <SelectContent side="top" align="start" sideOffset={8}>
+              {thinkingOptions.map((level) => (
+                <SelectItem
+                  key={level.value}
+                  value={level.value}
+                  textValue={level.label}
+                >
+                  <span className="flex items-center gap-2">
+                    <BrainCircuitIcon className="size-4 shrink-0" />
+                    <span>{level.label}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </SelectRoot>
+        ) : (
+          <div
+            title={thinkingTitle}
+            aria-label={thinkingTitle}
+            className="flex h-8 items-center justify-center rounded-md px-2 text-[color:var(--color-text-secondary)]"
+          >
+            <BrainCircuitIcon className="size-4 shrink-0 opacity-55" />
+          </div>
+        )}
       </div>
-      <AuiIf condition={(s) => !s.thread.isRunning}>
+      {showStopAction ? (
+        <Button
+          type="button"
+          variant="default"
+          onClick={() => {
+            if (!isCancelling) {
+              onCancelRun();
+            }
+          }}
+          disabled={isCancelling}
+          className="flex h-9 items-center gap-2 rounded-full bg-[var(--color-accent)] px-3 text-white shadow-none hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-100"
+          aria-label={isCancelling ? runStatusLabel || "正在停止…" : "停止生成"}
+        >
+          {isCancelling ? (
+            <LoaderCircleIcon className="size-3.5 animate-spin" />
+          ) : (
+            <SquareIcon className="size-3 fill-current" />
+          )}
+          <span className="text-[13px] font-medium">
+            {isCancelling ? runStatusLabel || "正在停止…" : "停止"}
+          </span>
+        </Button>
+      ) : (
         <ComposerPrimitive.Send asChild>
           <TooltipIconButton
             tooltip="发送"
@@ -456,20 +588,7 @@ const ComposerAction: FC<
             <ArrowUpIcon className="size-4" />
           </TooltipIconButton>
         </ComposerPrimitive.Send>
-      </AuiIf>
-      <AuiIf condition={(s) => s.thread.isRunning}>
-        <ComposerPrimitive.Cancel asChild>
-          <Button
-            type="button"
-            variant="default"
-            size="icon"
-            className="size-8 rounded-full bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]"
-            aria-label="停止生成"
-          >
-            <SquareIcon className="size-3 fill-current" />
-          </Button>
-        </ComposerPrimitive.Cancel>
-      </AuiIf>
+      )}
     </div>
   );
 };
@@ -493,62 +612,137 @@ function formatBranchLabel(branchSummary: GitBranchSummary | null) {
 const ComposerStatusBar: FC<{
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
-  contextPanelOpen: boolean;
-  onToggleContextPanel: () => void;
 }> = ({
   branchSummary,
   contextSummary,
-  contextPanelOpen,
-  onToggleContextPanel,
 }) => {
   const branchLabel = formatBranchLabel(branchSummary);
   const isGitRepo = !!branchSummary?.branchName;
 
   return (
-    <div className="flex items-center justify-between gap-3 pt-1">
+    <div className="flex items-center justify-between gap-3 px-1">
       <div
         className={cn(
-          "inline-flex min-w-0 items-center gap-2 rounded-full px-3 py-1.5 text-[11px]",
+          "inline-flex min-w-0 max-w-[240px] items-center gap-2 px-1 py-1 text-[12px] font-medium",
           isGitRepo
-            ? "bg-shell-panel text-foreground"
-            : "bg-shell-panel/60 text-muted-foreground",
+            ? "text-foreground"
+            : "text-[color:var(--color-text-secondary)]",
         )}
         aria-label={isGitRepo ? `当前分支 ${branchLabel}` : "当前 workspace 不是 Git 仓库"}
       >
-        <GitBranchIcon className="size-3.5 shrink-0" />
-        <span className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
-          Branch
-        </span>
+        <GitBranchIcon className="size-3.5 shrink-0 text-[color:var(--color-text-secondary)]" />
         <span className="truncate">{branchLabel}</span>
         {branchSummary?.hasChanges ? (
-          <span className="size-1.5 shrink-0 rounded-full bg-amber-300" />
+          <span className="size-1.5 shrink-0 rounded-full bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.18)]" />
         ) : null}
       </div>
 
-      <button
-        type="button"
-        onClick={onToggleContextPanel}
-        aria-pressed={contextPanelOpen}
-        aria-label={contextPanelOpen ? "收起 Context 面板" : "展开 Context 面板"}
-        className={cn(
-          "inline-flex items-center gap-2 rounded-full px-2.5 py-1.5 text-left transition-colors",
-          contextPanelOpen
-            ? "bg-shell-panel text-foreground"
-            : "bg-shell-panel/60 text-muted-foreground hover:bg-shell-panel hover:text-foreground",
-        )}
-      >
-        <ContextUsageIndicator summary={contextSummary} size={28} strokeWidth={3} />
-        <span className="min-w-0">
-          <span className="block text-[10px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
-            Context
-          </span>
-          <span className="block truncate text-[11px]">
-            {getContextStatusCopy(contextSummary)}
-          </span>
-        </span>
-      </button>
+      <ContextSummaryTrigger summary={contextSummary} />
     </div>
   );
+};
+
+const AssistantRunningNotice: FC<{ label: string; compact?: boolean }> = ({
+  label,
+  compact = false,
+}) => {
+  return (
+    <div
+      className={cn(
+        "inline-flex w-fit items-center gap-2 rounded-full bg-shell-panel-muted/85 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+        compact && "mb-3 text-[13px]",
+      )}
+    >
+      <LoaderCircleIcon className="size-3.5 shrink-0 animate-spin" />
+      <span>{label}</span>
+    </div>
+  );
+};
+
+const AssistantCancelledNotice: FC<{ compact?: boolean }> = ({
+  compact = false,
+}) => {
+  return (
+    <div
+      className={cn(
+        "inline-flex w-fit items-center gap-2 rounded-full bg-shell-panel-muted/75 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+        compact && "mb-3 text-[13px]",
+      )}
+    >
+      <SquareIcon className="size-3 shrink-0 fill-current" />
+      <span>已停止</span>
+    </div>
+  );
+};
+
+const AssistantMessageTextPart: FC = () => {
+  const { runStatusLabel } = useThreadRunStatus();
+  const text = useAuiState((s) =>
+    s.part.type === "text" ? s.part.text : "",
+  );
+  const status = useAuiState((s) => s.part.status);
+  const hasVisibleProgressPart = useAuiState((s) =>
+    s.message.parts.some(
+      (part) =>
+        (part.type === "reasoning" &&
+          typeof part.text === "string" &&
+          part.text.trim().length > 0) ||
+        part.type === "tool-call",
+    ),
+  );
+
+  if (text.trim()) {
+    return <MarkdownText />;
+  }
+
+  if (!hasVisibleProgressPart && status?.type === "running" && runStatusLabel) {
+    return <AssistantRunningNotice label={runStatusLabel} />;
+  }
+
+  if (
+    !hasVisibleProgressPart &&
+    status?.type === "incomplete" &&
+    status.reason === "cancelled"
+  ) {
+    return <AssistantCancelledNotice />;
+  }
+
+  return null;
+};
+
+const AssistantMessageStatus: FC = () => {
+  const { runStatusLabel } = useThreadRunStatus();
+  const status = useAuiState((s) => s.message.status);
+  const isLast = useAuiState((s) => s.message.isLast);
+  const hasTextContent = useAuiState((s) =>
+    s.message.parts.some(
+      (part) =>
+        part.type === "text" &&
+        typeof part.text === "string" &&
+        part.text.trim().length > 0,
+    ),
+  );
+  const hasVisibleProgressPart = useAuiState((s) =>
+    s.message.parts.some(
+      (part) =>
+        (part.type === "reasoning" &&
+          typeof part.text === "string" &&
+          part.text.trim().length > 0) ||
+        part.type === "tool-call",
+    ),
+  );
+
+  if (!isLast || hasTextContent || hasVisibleProgressPart) return null;
+
+  if (status?.type === "running" && runStatusLabel) {
+    return <AssistantRunningNotice label={runStatusLabel} compact />;
+  }
+
+  if (status?.type === "incomplete" && status.reason === "cancelled") {
+    return <AssistantCancelledNotice compact />;
+  }
+
+  return null;
 };
 
 const MessageError: FC = () => {
@@ -568,9 +762,10 @@ const AssistantMessage: FC = () => {
       data-role="assistant"
     >
       <div className="wrap-break-word px-1 py-1 text-[15px] leading-7 text-foreground">
+        <AssistantMessageStatus />
         <MessagePrimitive.Parts
           components={{
-            Text: () => <MarkdownText />,
+            Text: AssistantMessageTextPart,
             Reasoning: () => <Reasoning />,
             tools: {
               Fallback: ToolFallback,

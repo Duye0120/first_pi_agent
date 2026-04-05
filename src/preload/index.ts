@@ -104,7 +104,6 @@ const desktopApi: DesktopApi = {
   ui: {
     getState: () => ipcRenderer.invoke(IPC_CHANNELS.uiGetState),
     setDiffPanelOpen: (open: boolean) => ipcRenderer.invoke(IPC_CHANNELS.uiSetDiffPanelOpen, open),
-    setContextPanelOpen: (open: boolean) => ipcRenderer.invoke(IPC_CHANNELS.uiSetContextPanelOpen, open),
   },
   window: {
     getState: () => ipcRenderer.invoke(IPC_CHANNELS.windowGetState),

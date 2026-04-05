@@ -74,7 +74,6 @@ export const IPC_CHANNELS = {
   // UI
   uiGetState: "ui:get-state",
   uiSetDiffPanelOpen: "ui:set-diff-panel-open",
-  uiSetContextPanelOpen: "ui:set-context-panel-open",
 
   // Window
   windowGetState: "window:get-state",

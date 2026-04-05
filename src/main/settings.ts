@@ -1,7 +1,7 @@
 import { app } from "electron";
 import fs from "node:fs";
 import path from "node:path";
-import type { Settings } from "../shared/contracts.js";
+import type { Settings, ThinkingLevel } from "../shared/contracts.js";
 import { DEFAULT_MODEL_ENTRY_ID } from "../shared/provider-directory.js";
 
 const SETTINGS_FILE = "settings.json";
@@ -26,6 +26,21 @@ const DEFAULT_SETTINGS: Settings = {
   },
   workspace: process.cwd(),
 };
+
+function normalizeThinkingLevel(value: unknown): ThinkingLevel {
+  switch (value) {
+    case "off":
+    case "low":
+    case "medium":
+    case "high":
+    case "xhigh":
+      return value;
+    case "minimal":
+      return "low";
+    default:
+      return DEFAULT_SETTINGS.thinkingLevel;
+  }
+}
 
 function resolveLegacyDefaultModelId(
   legacy: unknown,
@@ -65,6 +80,7 @@ function mergeSettings(source?: Partial<Settings> | null): Settings {
     ...DEFAULT_SETTINGS,
     ...source,
     defaultModelId,
+    thinkingLevel: normalizeThinkingLevel(sourceWithLegacy.thinkingLevel),
     terminal: {
       ...DEFAULT_SETTINGS.terminal,
       ...source?.terminal,

@@ -129,3 +129,19 @@ export function getContextStatusCopy(summary: ContextUsageSummary) {
 
   return "未知";
 }
+
+export function getContextSummaryDescription(summary: ContextUsageSummary) {
+  if (summary.state === "ready") {
+    return "基于最近一次已完成 assistant 回合的输入 tokens 估算。";
+  }
+
+  if (summary.state === "window-only") {
+    return "模型提供了窗口上限，等待线程产生 usage 后再估算剩余比例。";
+  }
+
+  if (summary.state === "usage-only") {
+    return "线程已有 usage，但当前模型没有提供 context window。";
+  }
+
+  return "当前模型和线程都还没有足够信息，暂时无法估算上下文余量。";
+}

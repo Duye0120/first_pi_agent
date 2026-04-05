@@ -21,7 +21,6 @@ import {
   renameGroup,
   renameSession,
   saveSession,
-  setContextPanelOpen,
   setDiffPanelOpen,
   setSessionGroup,
   unarchiveSession,
@@ -33,6 +32,7 @@ import {
   initAgent,
   promptAgent,
   cancelAgent,
+  destroyAgent,
   getCurrentHandle,
 } from "./agent.js";
 import { getSettings, updateSettings } from "./settings.js";
@@ -67,6 +67,22 @@ let adapter: ElectronAdapter | null = null;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIN_WINDOW_WIDTH = 920;
 const MIN_WINDOW_HEIGHT = 600;
+
+type PendingChatRequest = {
+  id: string;
+  sessionId: string;
+  cancelled: boolean;
+  handle: ReturnType<typeof getCurrentHandle>;
+};
+
+class ChatRequestCancelledError extends Error {
+  constructor() {
+    super("Chat request cancelled.");
+    this.name = "ChatRequestCancelledError";
+  }
+}
+
+let pendingChatRequest: PendingChatRequest | null = null;
 
 function getPreloadPath() {
   return join(__dirname, "../preload/index.mjs");
@@ -168,6 +184,12 @@ function requireMainWindow() {
   return mainWindow;
 }
 
+function ensureRequestActive(request: PendingChatRequest) {
+  if (pendingChatRequest?.id !== request.id || request.cancelled) {
+    throw new ChatRequestCancelledError();
+  }
+}
+
 function registerIpcHandlers() {
   ipcMain.handle(IPC_CHANNELS.filesPick, async () =>
     pickFiles(requireMainWindow()),
@@ -235,43 +257,95 @@ function registerIpcHandlers() {
     IPC_CHANNELS.chatSend,
     async (_event, input: SendMessageInput) => {
       if (!adapter) return;
-      const settings = getSettings();
-      const resolvedModel = resolveModelEntry(settings.defaultModelId);
-
-      // Ensure agent is initialized for this session
-      let handle = getCurrentHandle();
-      if (
-        !handle ||
-        handle.sessionId !== input.sessionId ||
-        handle.modelEntryId !== resolvedModel.entry.id ||
-        handle.runtimeSignature !== resolvedModel.runtimeSignature ||
-        handle.thinkingLevel !== settings.thinkingLevel
-      ) {
-        const session = await loadSession(input.sessionId);
-        handle = await initAgent(
-          input.sessionId,
-          adapter,
-          session?.messages ?? [],
-        );
+      if (pendingChatRequest) {
+        pendingChatRequest.cancelled = true;
+        if (pendingChatRequest.handle) {
+          await destroyAgent(pendingChatRequest.handle);
+          pendingChatRequest.handle = null;
+        }
       }
 
+      const request: PendingChatRequest = {
+        id: crypto.randomUUID(),
+        sessionId: input.sessionId,
+        cancelled: false,
+        handle: null,
+      };
+      pendingChatRequest = request;
+
+      let createdHandle = false;
+
       try {
+        ensureRequestActive(request);
+
+        const settings = getSettings();
+        const resolvedModel = resolveModelEntry(settings.defaultModelId);
+
+        ensureRequestActive(request);
+
+        let handle = getCurrentHandle();
+        if (
+          !handle ||
+          handle.sessionId !== input.sessionId ||
+          handle.modelEntryId !== resolvedModel.entry.id ||
+          handle.runtimeSignature !== resolvedModel.runtimeSignature ||
+          handle.thinkingLevel !== settings.thinkingLevel
+        ) {
+          const session = await loadSession(input.sessionId);
+          ensureRequestActive(request);
+
+          handle = await initAgent(
+            input.sessionId,
+            adapter,
+            session?.messages ?? [],
+          );
+          createdHandle = true;
+        }
+
+        request.handle = handle;
+        ensureRequestActive(request);
+
         await promptAgent(handle, input.text);
       } catch (err) {
+        if (
+          err instanceof ChatRequestCancelledError ||
+          request.cancelled ||
+          pendingChatRequest?.id !== request.id
+        ) {
+          if (createdHandle && request.handle) {
+            await destroyAgent(request.handle);
+          }
+          return;
+        }
+
         // Send error event to renderer
         adapter.send({
           type: "agent_error",
           message: err instanceof Error ? err.message : "Agent 执行失败",
           timestamp: Date.now(),
         });
+      } finally {
+        if (pendingChatRequest?.id === request.id) {
+          pendingChatRequest = null;
+        }
       }
       // Return void — response comes via agent events
     },
   );
 
   ipcMain.handle(IPC_CHANNELS.agentCancel, async () => {
+    if (pendingChatRequest) {
+      pendingChatRequest.cancelled = true;
+      if (pendingChatRequest.handle) {
+        cancelAgent(pendingChatRequest.handle);
+      }
+      return;
+    }
+
     const handle = getCurrentHandle();
-    if (handle) cancelAgent(handle);
+    if (handle) {
+      cancelAgent(handle);
+    }
   });
 
   // Settings
@@ -361,10 +435,6 @@ function registerIpcHandlers() {
   ipcMain.handle(
     IPC_CHANNELS.uiSetDiffPanelOpen,
     async (_event, open: boolean) => setDiffPanelOpen(open),
-  );
-  ipcMain.handle(
-    IPC_CHANNELS.uiSetContextPanelOpen,
-    async (_event, open: boolean) => setContextPanelOpen(open),
   );
 
   ipcMain.handle(IPC_CHANNELS.windowGetState, async () => {

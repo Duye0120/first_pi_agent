@@ -22,7 +22,6 @@ import type {
 } from "@shared/contracts";
 import { AssistantThreadPanel } from "@renderer/components/assistant-ui/assistant-thread-panel";
 import { Button } from "@renderer/components/assistant-ui/button";
-import { ContextSidePanel } from "@renderer/components/assistant-ui/context-side-panel";
 import { DiffPanel } from "@renderer/components/assistant-ui/diff-panel";
 import {
   SettingsView,
@@ -46,17 +45,12 @@ const ACTIVE_SESSION_STORAGE_KEY = "first-pi-agent.active-session-id";
 const SIDEBAR_WIDTH_STORAGE_KEY = "first-pi-agent.sidebar-width";
 const LEGACY_RIGHT_PANEL_SIZE_STORAGE_KEY = "first-pi-agent.right-panel-size";
 const DIFF_PANEL_SIZE_STORAGE_KEY = "first-pi-agent.diff-panel-size";
-const CONTEXT_PANEL_SIZE_STORAGE_KEY = "first-pi-agent.context-panel-size";
 const DEFAULT_SIDEBAR_SIZE = 18;
 const MIN_SIDEBAR_SIZE = 14;
 const MAX_SIDEBAR_SIZE = 28;
 const DEFAULT_DIFF_PANEL_SIZE = 28;
 const MIN_DIFF_PANEL_SIZE = 20;
 const MAX_DIFF_PANEL_SIZE = 44;
-const DEFAULT_CONTEXT_PANEL_SIZE = 18;
-const MIN_CONTEXT_PANEL_SIZE = 14;
-const MAX_CONTEXT_PANEL_SIZE = 28;
-const MIN_MAIN_PANEL_SIZE = 34;
 const ROOT_UI_THEME_DATASET = "theme";
 
 function clampSidebarSize(size: number) {
@@ -65,19 +59,6 @@ function clampSidebarSize(size: number) {
 
 function clampDiffPanelSize(size: number) {
   return Math.min(MAX_DIFF_PANEL_SIZE, Math.max(MIN_DIFF_PANEL_SIZE, size));
-}
-
-function clampContextPanelSize(size: number) {
-  return Math.min(MAX_CONTEXT_PANEL_SIZE, Math.max(MIN_CONTEXT_PANEL_SIZE, size));
-}
-
-function clampContextPanelSizeForDualLayout(size: number, diffPanelSize: number) {
-  const maxSize = Math.min(
-    MAX_CONTEXT_PANEL_SIZE,
-    100 - clampDiffPanelSize(diffPanelSize) - MIN_MAIN_PANEL_SIZE,
-  );
-
-  return Math.min(maxSize, Math.max(MIN_CONTEXT_PANEL_SIZE, size));
 }
 
 function toSidebarPercentageSize(size: number) {
@@ -158,7 +139,6 @@ export default function App() {
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [diffPanelOpen, setDiffPanelOpen] = useState(false);
-  const [contextPanelOpen, setContextPanelOpen] = useState(false);
   const [frameState, setFrameState] = useState<WindowFrameState>({
     isMaximized: false,
   });
@@ -185,14 +165,6 @@ export default function App() {
       LEGACY_RIGHT_PANEL_SIZE_STORAGE_KEY,
       DEFAULT_DIFF_PANEL_SIZE,
       clampDiffPanelSize,
-    ),
-  );
-  const [contextPanelSize, setContextPanelSize] = useState(() =>
-    readStoredPanelSize(
-      CONTEXT_PANEL_SIZE_STORAGE_KEY,
-      null,
-      DEFAULT_CONTEXT_PANEL_SIZE,
-      clampContextPanelSize,
     ),
   );
   const [currentModelId, setCurrentModelId] = useState(
@@ -229,23 +201,6 @@ export default function App() {
       String(clampDiffPanelSize(diffPanelSize)),
     );
   }, [diffPanelSize]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      CONTEXT_PANEL_SIZE_STORAGE_KEY,
-      String(clampContextPanelSize(contextPanelSize)),
-    );
-  }, [contextPanelSize]);
-
-  useEffect(() => {
-    if (!diffPanelOpen || !contextPanelOpen) {
-      return;
-    }
-
-    setContextPanelSize((current) =>
-      clampContextPanelSizeForDualLayout(current, diffPanelSize),
-    );
-  }, [contextPanelOpen, diffPanelOpen, diffPanelSize]);
 
   useEffect(() => {
     if (!settings) {
@@ -401,7 +356,6 @@ export default function App() {
       ]);
 
       setDiffPanelOpen(uiState.diffPanelOpen);
-      setContextPanelOpen(uiState.contextPanelOpen);
       setFrameState(frame);
       setSummaries(sessionSummaries);
       setArchivedSummaries(archivedList);
@@ -774,31 +728,11 @@ export default function App() {
     [activeSession, persistSession],
   );
 
-  const clearAttachments = useCallback(() => {
-    if (!activeSession || activeSession.attachments.length === 0) {
-      return;
-    }
-
-    const nextSession: ChatSession = {
-      ...activeSession,
-      attachments: [],
-      updatedAt: new Date().toISOString(),
-    };
-
-    persistSession(nextSession);
-  }, [activeSession, persistSession]);
-
   const toggleDiffPanel = useCallback(() => {
     const nextOpen = !diffPanelOpen;
     setDiffPanelOpen(nextOpen);
     void desktopApi?.ui.setDiffPanelOpen(nextOpen);
   }, [desktopApi, diffPanelOpen]);
-
-  const toggleContextPanel = useCallback(() => {
-    const nextOpen = !contextPanelOpen;
-    setContextPanelOpen(nextOpen);
-    void desktopApi?.ui.setContextPanelOpen(nextOpen);
-  }, [contextPanelOpen, desktopApi]);
 
   const handleShellLayoutChanged = useCallback((layout: Record<string, number>) => {
     const nextSidebarSize = layout["shell-sidebar"];
@@ -813,33 +747,6 @@ export default function App() {
       setDiffPanelSize(clampDiffPanelSize(nextDiffPanelSize));
     }
   }, []);
-
-  const handleContextOnlyLayoutChanged = useCallback((layout: Record<string, number>) => {
-    const nextContextSize = layout["thread-context"];
-    if (typeof nextContextSize === "number" && Number.isFinite(nextContextSize)) {
-      setContextPanelSize(clampContextPanelSize(nextContextSize));
-    }
-  }, []);
-
-  const handleDualOuterLayoutChanged = useCallback((layout: Record<string, number>) => {
-    const nextDiffPanelSize = layout["thread-diff"];
-    if (typeof nextDiffPanelSize === "number" && Number.isFinite(nextDiffPanelSize)) {
-      setDiffPanelSize(clampDiffPanelSize(nextDiffPanelSize));
-    }
-  }, []);
-
-  const handleDualInnerLayoutChanged = useCallback((layout: Record<string, number>) => {
-    const nextContextInnerSize = layout["thread-context"];
-    if (typeof nextContextInnerSize !== "number" || !Number.isFinite(nextContextInnerSize)) {
-      return;
-    }
-
-    const availableLeftSize = 100 - clampDiffPanelSize(diffPanelSize);
-    const nextAbsoluteContextSize = (availableLeftSize * nextContextInnerSize) / 100;
-    setContextPanelSize(
-      clampContextPanelSizeForDualLayout(nextAbsoluteContextSize, diffPanelSize),
-    );
-  }, [diffPanelSize]);
 
   const handleToggleMaximize = useCallback(() => {
     if (!desktopApi) {
@@ -903,19 +810,6 @@ export default function App() {
   );
 
   const normalizedDiffPanelSize = clampDiffPanelSize(diffPanelSize);
-  const normalizedContextPanelSize = contextPanelOpen && diffPanelOpen
-    ? clampContextPanelSizeForDualLayout(contextPanelSize, normalizedDiffPanelSize)
-    : clampContextPanelSize(contextPanelSize);
-  const dualLeftSize = 100 - normalizedDiffPanelSize;
-  const dualContextInnerSize = (normalizedContextPanelSize / dualLeftSize) * 100;
-  const dualMainInnerSize = 100 - dualContextInnerSize;
-  const dualMainMinSize = (MIN_MAIN_PANEL_SIZE / dualLeftSize) * 100;
-  const dualContextMinSize = (MIN_CONTEXT_PANEL_SIZE / dualLeftSize) * 100;
-  const dualContextMaxSize =
-    (Math.min(
-      MAX_CONTEXT_PANEL_SIZE,
-      dualLeftSize - MIN_MAIN_PANEL_SIZE,
-    ) / dualLeftSize) * 100;
 
   if (booting) {
     return (
@@ -991,8 +885,6 @@ export default function App() {
         onThinkingLevelChange={handleThinkingLevelChange}
         branchSummary={gitOverview?.branch ?? null}
         contextSummary={contextSummary}
-        contextPanelOpen={contextPanelOpen}
-        onToggleContextPanel={toggleContextPanel}
       />
     ) : (
       <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
@@ -1005,94 +897,6 @@ export default function App() {
       <section className="flex h-full min-h-0 flex-col bg-shell-panel">
         {threadContent}
       </section>
-    ) : contextPanelOpen && diffPanelOpen ? (
-      <ResizablePanelGroup
-        orientation="horizontal"
-        className="min-h-0 bg-shell-panel"
-        onLayoutChanged={handleDualOuterLayoutChanged}
-        resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
-      >
-        <ResizablePanel
-          id="thread-main-context"
-          defaultSize={toPercentageSize(100 - normalizedDiffPanelSize)}
-          minSize={`${MIN_MAIN_PANEL_SIZE + MIN_CONTEXT_PANEL_SIZE}%`}
-        >
-          <ResizablePanelGroup
-            orientation="horizontal"
-            className="min-h-0 bg-shell-panel"
-            onLayoutChanged={handleDualInnerLayoutChanged}
-            resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
-          >
-            <ResizablePanel
-              id="thread-main"
-              defaultSize={toPercentageSize(dualMainInnerSize)}
-              minSize={toPercentageSize(dualMainMinSize)}
-            >
-              <section className="flex h-full min-h-0 flex-col bg-shell-panel">
-                {threadContent}
-              </section>
-            </ResizablePanel>
-            <ResizableHandle className="-mx-px w-px" />
-            <ResizablePanel
-              id="thread-context"
-              defaultSize={toPercentageSize(dualContextInnerSize)}
-              minSize={toPercentageSize(dualContextMinSize)}
-              maxSize={toPercentageSize(dualContextMaxSize)}
-            >
-              <ContextSidePanel
-                session={activeSession}
-                summary={contextSummary}
-                onRemoveAttachment={removeAttachment}
-                onClearAttachments={clearAttachments}
-              />
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </ResizablePanel>
-        <ResizableHandle className="-mx-px w-px" />
-        <ResizablePanel
-          id="thread-diff"
-          defaultSize={toPercentageSize(normalizedDiffPanelSize)}
-          minSize={`${MIN_DIFF_PANEL_SIZE}%`}
-          maxSize={`${MAX_DIFF_PANEL_SIZE}%`}
-        >
-          <DiffPanel
-            overview={gitOverview}
-            isLoading={gitOverviewLoading}
-            onRefresh={refreshGitOverview}
-          />
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    ) : contextPanelOpen ? (
-      <ResizablePanelGroup
-        orientation="horizontal"
-        className="min-h-0 bg-shell-panel"
-        onLayoutChanged={handleContextOnlyLayoutChanged}
-        resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
-      >
-        <ResizablePanel
-          id="thread-main"
-          defaultSize={toPercentageSize(100 - normalizedContextPanelSize)}
-          minSize={`${100 - MAX_CONTEXT_PANEL_SIZE}%`}
-        >
-          <section className="flex h-full min-h-0 flex-col bg-shell-panel">
-            {threadContent}
-          </section>
-        </ResizablePanel>
-        <ResizableHandle className="-mx-px w-px" />
-        <ResizablePanel
-          id="thread-context"
-          defaultSize={toPercentageSize(normalizedContextPanelSize)}
-          minSize={`${MIN_CONTEXT_PANEL_SIZE}%`}
-          maxSize={`${MAX_CONTEXT_PANEL_SIZE}%`}
-        >
-          <ContextSidePanel
-            session={activeSession}
-            summary={contextSummary}
-            onRemoveAttachment={removeAttachment}
-            onClearAttachments={clearAttachments}
-          />
-        </ResizablePanel>
-      </ResizablePanelGroup>
     ) : diffPanelOpen ? (
       <ResizablePanelGroup
         orientation="horizontal"

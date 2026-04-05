@@ -17,9 +17,12 @@ import { useAssistantApi } from "@assistant-ui/react";
 import { cn } from "@renderer/lib/utils";
 import {
   SelectRoot,
+  SelectGroup,
+  SelectLabel,
   SelectTrigger,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   selectTriggerVariants,
 } from "@renderer/components/assistant-ui/select";
 
@@ -27,6 +30,8 @@ export type ModelOption = {
   id: string;
   name: string;
   description?: string;
+  groupId?: string;
+  groupLabel?: string;
   icon?: ReactNode;
   disabled?: boolean;
 };
@@ -141,6 +146,24 @@ function ModelSelectorContent({
   ...props
 }: ModelSelectorContentProps) {
   const { models } = useModelSelectorContext();
+  const groupedModels = models.reduce<
+    Array<{ id: string; label: string; models: ModelOption[] }>
+  >((groups, model) => {
+    const groupId = model.groupId ?? "__default__";
+    const existingGroup = groups.find((group) => group.id === groupId);
+
+    if (existingGroup) {
+      existingGroup.models.push(model);
+      return groups;
+    }
+
+    groups.push({
+      id: groupId,
+      label: model.groupLabel ?? "",
+      models: [model],
+    });
+    return groups;
+  }, []);
 
   return (
     <SelectContent
@@ -148,14 +171,23 @@ function ModelSelectorContent({
       className={cn("min-w-[180px]", className)}
       {...props}
     >
-      {children ??
-        models.map((model) => (
-          <ModelSelectorItem
-            key={model.id}
-            model={model}
-            {...(model.disabled ? { disabled: true } : undefined)}
-          />
-        ))}
+      {children ?? groupedModels.map((group, index) => (
+        <SelectGroup key={group.id}>
+          {group.label ? (
+            <SelectLabel className="px-3 pb-1.5 pt-2 text-[11px] font-medium tracking-[0.02em] text-[color:var(--color-text-secondary)]">
+              {group.label}
+            </SelectLabel>
+          ) : null}
+          {group.models.map((model) => (
+            <ModelSelectorItem
+              key={model.id}
+              model={model}
+              {...(model.disabled ? { disabled: true } : undefined)}
+            />
+          ))}
+          {index < groupedModels.length - 1 ? <SelectSeparator className="my-2" /> : null}
+        </SelectGroup>
+      ))}
     </SelectContent>
   );
 }
@@ -178,14 +210,16 @@ function ModelSelectorItem({
       value={model.id}
       textValue={model.name}
       className={cn(
-        "relative flex w-full cursor-pointer select-none items-center gap-2 rounded-lg py-2 pr-9 pl-3 text-sm outline-none",
-        "focus:bg-accent focus:text-accent-foreground",
+        "relative flex w-full cursor-pointer select-none items-center gap-2 rounded-lg py-2 pr-9 pl-3 text-sm text-foreground outline-none transition-colors",
+        "data-[state=checked]:bg-shell-panel-contrast data-[state=checked]:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]",
+        "data-[highlighted]:bg-shell-panel-muted data-[highlighted]:text-foreground",
+        "focus:bg-shell-panel-muted focus:text-foreground",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
       {...props}
     >
-      <span className="absolute right-3 flex size-4 items-center justify-center">
+      <span className="absolute right-3 flex size-4 items-center justify-center text-foreground">
         <SelectPrimitive.ItemIndicator>
           <CheckIcon className="size-4" />
         </SelectPrimitive.ItemIndicator>
@@ -200,17 +234,13 @@ function ModelSelectorItem({
           <span className="truncate font-medium text-[12px]">{model.name}</span>
         </span>
       </SelectPrimitive.ItemText>
-      {model.description && (
-        <span className="truncate text-xs text-muted-foreground">
-          {model.description}
-        </span>
-      )}
     </SelectPrimitive.Item>
   );
 }
 
 export type ModelSelectorProps = Omit<ModelSelectorRootProps, "children"> &
   VariantProps<typeof selectTriggerVariants> & {
+    className?: string;
     contentClassName?: string;
   };
 
@@ -221,6 +251,7 @@ const ModelSelectorImpl = ({
   models,
   variant,
   size,
+  className,
   contentClassName,
   ...forwardedProps
 }: ModelSelectorProps) => {
@@ -248,7 +279,7 @@ const ModelSelectorImpl = ({
       onValueChange={onValueChange}
       {...forwardedProps}
     >
-      <ModelSelectorTrigger variant={variant} size={size} />
+      <ModelSelectorTrigger variant={variant} size={size} className={className} />
       <ModelSelectorContent className={contentClassName} />
     </ModelSelectorRoot>
   );

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AssistantRuntimeProvider,
   useLocalRuntime,
@@ -23,6 +23,10 @@ import { deriveSessionTitle } from "@renderer/lib/session";
 import { Thread } from "@renderer/components/assistant-ui/thread";
 import type { ContextUsageSummary } from "@renderer/lib/context-usage";
 import {
+  getRunStatusLabel,
+  type ChatRunStage,
+} from "@renderer/lib/chat-run-status";
+import {
   selectedFileToCompleteAttachment,
   toPersistedMessageAttachment,
   type PersistedMessageAttachment,
@@ -43,9 +47,11 @@ type AssistantThreadPanelProps = {
   onThinkingLevelChange: (level: ThinkingLevel) => void;
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
-  contextPanelOpen: boolean;
-  onToggleContextPanel: () => void;
 };
+
+const CONNECTING_STAGE_DELAY_MS = 220;
+const SLOW_CONNECTION_HINT_DELAY_MS = 4_000;
+const CANCEL_RESET_DELAY_MS = 320;
 
 function createStep(kind: AgentStep["kind"], id?: string): AgentStep {
   return {
@@ -105,6 +111,56 @@ function safeArgsText(value: unknown) {
   }
 }
 
+function normalizeLineEndings(text: string) {
+  return text.replace(/\r\n|\n\r|\r/g, "\n");
+}
+
+function getToolResultText(result: unknown): string | null {
+  if (typeof result === "string") {
+    return normalizeLineEndings(result);
+  }
+
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const candidate = result as {
+    content?: unknown;
+  };
+
+  if (!Array.isArray(candidate.content)) {
+    return null;
+  }
+
+  const textParts = candidate.content
+    .flatMap((part) => {
+      if (!part || typeof part !== "object") {
+        return [];
+      }
+
+      const contentPart = part as {
+        type?: unknown;
+        text?: unknown;
+      };
+
+      if (
+        contentPart.type === "text" &&
+        typeof contentPart.text === "string" &&
+        contentPart.text.trim()
+      ) {
+        return [normalizeLineEndings(contentPart.text)];
+      }
+
+      return [];
+    });
+
+  return textParts.length > 0 ? textParts.join("\n\n") : null;
+}
+
+function getToolResultDisplay(result: unknown): unknown {
+  return getToolResultText(result) ?? result;
+}
+
 function buildAssistantParts(steps: AgentStep[], finalText: string): ThreadAssistantMessagePart[] {
   const parts: ThreadAssistantMessagePart[] = [];
 
@@ -120,8 +176,10 @@ function buildAssistantParts(steps: AgentStep[], finalText: string): ThreadAssis
     if (step.kind === "tool_call") {
       const result =
         step.status === "executing"
-          ? step.streamOutput
-          : step.toolError ?? step.toolResult ?? step.streamOutput;
+          ? getToolResultDisplay(step.streamOutput)
+          : getToolResultDisplay(
+              step.toolError ?? step.toolResult ?? step.streamOutput,
+            );
 
       parts.push({
         type: "tool-call",
@@ -293,43 +351,202 @@ function SessionRuntime({
   onThinkingLevelChange,
   branchSummary,
   contextSummary,
-  contextPanelOpen,
-  onToggleContextPanel,
 }: AssistantThreadPanelProps) {
-  const initialMessages = useMemo(
-    () => session.messages.map(toThreadMessage),
-    [session.messages],
+  const latestSessionRef = useRef(session);
+  const latestPersistSessionRef = useRef(onPersistSession);
+  const cancelRunRef = useRef<(() => void) | null>(null);
+  const activeRunTokenRef = useRef<string | null>(null);
+  const stageTransitionTimerRef = useRef<number | null>(null);
+  const slowConnectionTimerRef = useRef<number | null>(null);
+  const resetRunStateTimerRef = useRef<number | null>(null);
+  const [runStage, setRunStage] = useState<ChatRunStage>("idle");
+  const [isSlowConnection, setIsSlowConnection] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const initialMessagesRef = useRef<ThreadMessageLike[]>(
+    session.messages.map(toThreadMessage),
   );
+  const initialMessages = initialMessagesRef.current;
+
+  useEffect(() => {
+    latestSessionRef.current = session;
+  }, [session]);
+
+  useEffect(() => {
+    latestPersistSessionRef.current = onPersistSession;
+  }, [onPersistSession]);
+
+  const clearConnectionTimers = useCallback(() => {
+    if (stageTransitionTimerRef.current !== null) {
+      window.clearTimeout(stageTransitionTimerRef.current);
+      stageTransitionTimerRef.current = null;
+    }
+
+    if (slowConnectionTimerRef.current !== null) {
+      window.clearTimeout(slowConnectionTimerRef.current);
+      slowConnectionTimerRef.current = null;
+    }
+  }, []);
+
+  const clearResetRunStateTimer = useCallback(() => {
+    if (resetRunStateTimerRef.current !== null) {
+      window.clearTimeout(resetRunStateTimerRef.current);
+      resetRunStateTimerRef.current = null;
+    }
+  }, []);
+
+  const clearRunFeedbackTimers = useCallback(() => {
+    clearConnectionTimers();
+    clearResetRunStateTimer();
+  }, [clearConnectionTimers, clearResetRunStateTimer]);
+
+  const beginRunFeedback = useCallback(() => {
+    const runToken = crypto.randomUUID();
+    activeRunTokenRef.current = runToken;
+    clearRunFeedbackTimers();
+    setRunStage("sending");
+    setIsSlowConnection(false);
+    setIsCancelling(false);
+
+    stageTransitionTimerRef.current = window.setTimeout(() => {
+      if (activeRunTokenRef.current !== runToken) return;
+
+      setRunStage((current) =>
+        current === "sending" ? "connecting" : current,
+      );
+    }, CONNECTING_STAGE_DELAY_MS);
+
+    slowConnectionTimerRef.current = window.setTimeout(() => {
+      if (activeRunTokenRef.current !== runToken) return;
+
+      setRunStage((current) =>
+        current === "sending" || current === "connecting"
+          ? "connecting"
+          : current,
+      );
+      setIsSlowConnection(true);
+    }, SLOW_CONNECTION_HINT_DELAY_MS);
+
+    return runToken;
+  }, [clearRunFeedbackTimers]);
+
+  const advanceRunFeedback = useCallback(
+    (runToken: string, nextStage: Exclude<ChatRunStage, "idle">) => {
+      if (activeRunTokenRef.current !== runToken) return;
+
+      if (nextStage !== "sending" && nextStage !== "connecting") {
+        clearConnectionTimers();
+        setIsSlowConnection(false);
+      }
+
+      if (nextStage === "cancelling") {
+        setIsCancelling(true);
+      } else {
+        setIsCancelling(false);
+      }
+
+      setRunStage((current) =>
+        current === "cancelling" && nextStage !== "cancelling"
+          ? current
+          : nextStage,
+      );
+    },
+    [clearConnectionTimers],
+  );
+
+  const finishRunFeedback = useCallback(
+    (runToken: string, status: AgentResponse["status"]) => {
+      if (activeRunTokenRef.current !== runToken) return;
+
+      clearConnectionTimers();
+      clearResetRunStateTimer();
+      setIsSlowConnection(false);
+
+      if (status === "cancelled") {
+        setRunStage("cancelling");
+        setIsCancelling(true);
+        resetRunStateTimerRef.current = window.setTimeout(() => {
+          if (activeRunTokenRef.current !== runToken) return;
+
+          activeRunTokenRef.current = null;
+          resetRunStateTimerRef.current = null;
+          setRunStage("idle");
+          setIsCancelling(false);
+          setIsSlowConnection(false);
+        }, CANCEL_RESET_DELAY_MS);
+        return;
+      }
+
+      activeRunTokenRef.current = null;
+      setRunStage("idle");
+      setIsCancelling(false);
+    },
+    [clearConnectionTimers, clearResetRunStateTimer],
+  );
+
+  useEffect(() => () => {
+    clearRunFeedbackTimers();
+    activeRunTokenRef.current = null;
+  }, [clearRunFeedbackTimers]);
+
+  const runStatusLabel = useMemo(
+    () => getRunStatusLabel(runStage, { isSlowConnection }),
+    [isSlowConnection, runStage],
+  );
+
+  const handleCancelRun = useCallback(() => {
+    cancelRunRef.current?.();
+  }, []);
 
   const chatModel = useMemo<ChatModelAdapter>(() => ({
     run: async function* ({ messages, abortSignal }) {
+      const currentSession = latestSessionRef.current;
       const text = extractUserText(messages);
-      const pendingAttachments = session.attachments;
+      const pendingAttachments = currentSession.attachments;
       const title =
-        session.messages.length === 0 ? deriveSessionTitle(text, pendingAttachments) : session.title;
+        currentSession.messages.length === 0
+          ? deriveSessionTitle(text, pendingAttachments)
+          : currentSession.title;
 
       const userMessage = buildUserMessage(text, pendingAttachments);
       const sessionAfterUserMessage: ChatSession = {
-        ...session,
+        ...currentSession,
         title,
-        messages: [...session.messages, userMessage],
+        messages: [...currentSession.messages, userMessage],
         draft: "",
         attachments: [],
         updatedAt: userMessage.timestamp,
       };
 
-      onPersistSession(sessionAfterUserMessage);
+      latestPersistSessionRef.current(sessionAfterUserMessage);
 
+      const runToken = beginRunFeedback();
       const response = createResponse(crypto.randomUUID());
       const queue = createRunQueue();
 
       let settled = false;
+      let cleanedUp = false;
+      let unsubscribe: () => void = () => {};
+      let abort: (() => void) | null = null;
 
       const publish = () => {
+        if (settled) return;
+
         queue.push({
           content: buildAssistantParts(response.steps, response.finalText),
           status: buildRuntimeStatus(response),
         });
+      };
+
+      const cleanup = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        unsubscribe();
+        if (abort) {
+          abortSignal.removeEventListener("abort", abort);
+        }
+        if (cancelRunRef.current === abort) {
+          cancelRunRef.current = null;
+        }
       };
 
       const finalize = (nextStatus: AgentResponse["status"]) => {
@@ -337,6 +554,8 @@ function SessionRuntime({
         settled = true;
         response.status = nextStatus;
         response.endedAt = Date.now();
+        cleanup();
+        finishRunFeedback(runToken, nextStatus);
 
         for (const step of response.steps) {
           if (step.status === "executing") {
@@ -352,7 +571,7 @@ function SessionRuntime({
 
         if (nextStatus === "completed" || nextStatus === "error") {
           const assistantMessage = buildAssistantMessage(response);
-          onPersistSession({
+          latestPersistSessionRef.current({
             ...sessionAfterUserMessage,
             messages: [...sessionAfterUserMessage.messages, assistantMessage],
             updatedAt: assistantMessage.timestamp,
@@ -363,12 +582,17 @@ function SessionRuntime({
       };
 
       const handleEvent = (event: AgentEvent) => {
+        if (settled) return;
+
         switch (event.type) {
           case "agent_start":
+            advanceRunFeedback(runToken, "connecting");
             publish();
             break;
 
           case "thinking_delta": {
+            advanceRunFeedback(runToken, "thinking");
+
             let step = response.steps.find(
               (item) => item.kind === "thinking" && item.status === "executing",
             );
@@ -384,6 +608,7 @@ function SessionRuntime({
           }
 
           case "text_delta":
+            advanceRunFeedback(runToken, "responding");
             response.finalText += event.delta;
             publish();
             break;
@@ -394,6 +619,8 @@ function SessionRuntime({
             break;
 
           case "tool_execution_start": {
+            advanceRunFeedback(runToken, "tool");
+
             const thinking = response.steps.find(
               (item) => item.kind === "thinking" && item.status === "executing",
             );
@@ -433,7 +660,9 @@ function SessionRuntime({
           }
 
           case "agent_error":
-            response.finalText += response.finalText ? `\n\n**错误：** ${event.message}` : `**错误：** ${event.message}`;
+            response.finalText += response.finalText
+              ? `\n\n**错误：** ${event.message}`
+              : `**错误：** ${event.message}`;
             finalize("error");
             break;
 
@@ -443,32 +672,43 @@ function SessionRuntime({
         }
       };
 
-      const unsubscribe = desktopApi.agent.onEvent(handleEvent);
+      unsubscribe = desktopApi.agent.onEvent(handleEvent);
 
-      const abort = () => {
-        void desktopApi.agent.cancel();
-        finalize("cancelled");
-      };
-
-      abortSignal.addEventListener("abort", abort, { once: true });
-
-      void desktopApi.chat.send({
-        sessionId: session.id,
-        text,
-        attachmentIds: pendingAttachments.map((attachment) => attachment.id),
-      }).catch((error) => {
+      abort = () => {
         if (settled) return;
 
-        response.finalText = error instanceof Error ? error.message : "发送失败，请稍后重试。";
-        finalize("error");
-      }).finally(() => {
-        unsubscribe();
-        abortSignal.removeEventListener("abort", abort);
-      });
+        advanceRunFeedback(runToken, "cancelling");
+        void desktopApi.agent.cancel().catch(() => undefined);
+        finalize("cancelled");
+      };
+      const abortHandler = abort;
+      cancelRunRef.current = abortHandler;
+
+      abortSignal.addEventListener("abort", abortHandler, { once: true });
+      publish();
+
+      void desktopApi.chat
+        .send({
+          sessionId: currentSession.id,
+          text,
+          attachmentIds: pendingAttachments.map((attachment) => attachment.id),
+        })
+        .catch((error) => {
+          if (settled) return;
+
+          response.finalText =
+            error instanceof Error ? error.message : "发送失败，请稍后重试。";
+          finalize("error");
+        });
 
       yield* queue.drain();
     },
-  }), [desktopApi, onPersistSession, session]);
+  }), [
+    advanceRunFeedback,
+    beginRunFeedback,
+    desktopApi,
+    finishRunFeedback,
+  ]);
 
   const runtime = useLocalRuntime(chatModel, {
     initialMessages,
@@ -487,10 +727,12 @@ function SessionRuntime({
         thinkingLevel={thinkingLevel}
         onModelChange={onModelChange}
         onThinkingLevelChange={onThinkingLevelChange}
+        onCancelRun={handleCancelRun}
+        runStage={runStage}
+        runStatusLabel={runStatusLabel}
+        isCancelling={isCancelling}
         branchSummary={branchSummary}
         contextSummary={contextSummary}
-        contextPanelOpen={contextPanelOpen}
-        onToggleContextPanel={onToggleContextPanel}
       />
     </AssistantRuntimeProvider>
   );

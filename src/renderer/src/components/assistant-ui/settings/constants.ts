@@ -1,4 +1,5 @@
 import type { Settings, ThinkingLevel } from "@shared/contracts";
+import { THINKING_LEVEL_OPTIONS } from "@renderer/lib/thinking-levels";
 import type { SettingsSection } from "./types";
 
 export const SETTINGS_SECTIONS: {
@@ -24,12 +25,7 @@ export const SETTINGS_SECTIONS: {
 ] as const;
 
 export const THINKING_LEVELS: { value: ThinkingLevel; label: string }[] = [
-  { value: "off", label: "关闭" },
-  { value: "minimal", label: "极低" },
-  { value: "low", label: "低" },
-  { value: "medium", label: "中" },
-  { value: "high", label: "高" },
-  { value: "xhigh", label: "极高" },
+  ...THINKING_LEVEL_OPTIONS,
 ];
 
 export const THEME_OPTIONS: { value: Settings["theme"]; label: string }[] = [
