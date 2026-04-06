@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EyeIcon, EyeOffIcon, SlidersHorizontalIcon, Trash2Icon } from "lucide-react";
+import {
+  EyeIcon,
+  EyeOffIcon,
+  SlidersHorizontalIcon,
+  Trash2Icon,
+} from "lucide-react";
 import type {
   ModelCapabilities,
   ModelCapabilitiesOverride,
@@ -18,6 +23,7 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  DialogFooter,
 } from "@renderer/components/assistant-ui/dialog";
 import { Switch } from "@renderer/components/assistant-ui/switch";
 import { TooltipIconButton } from "@renderer/components/assistant-ui/tooltip-icon-button";
@@ -161,7 +167,10 @@ function getDetectedMetadata(
   };
 }
 
-function applyDetectedMetadata(entry: EditableEntry, modelId: string): EditableEntry {
+function applyDetectedMetadata(
+  entry: EditableEntry,
+  modelId: string,
+): EditableEntry {
   return {
     ...entry,
     modelId,
@@ -385,7 +394,9 @@ export function KeysSection({
       try {
         const sources = await desktopApi.providers.listSources();
         const credentialsList = await Promise.all(
-          sources.map((source) => desktopApi.providers.getCredentials(source.id)),
+          sources.map((source) =>
+            desktopApi.providers.getCredentials(source.id),
+          ),
         );
         const credentialsMap = new Map(
           credentialsList.map((item) => [item.sourceId, item]),
@@ -452,6 +463,10 @@ export function KeysSection({
         );
       })
       .sort((left, right) => {
+        if (left.sourceDraft.enabled !== right.sourceDraft.enabled) {
+          return left.sourceDraft.enabled ? -1 : 1;
+        }
+
         if (left.kind !== right.kind) {
           return left.kind === "builtin" ? -1 : 1;
         }
@@ -463,11 +478,14 @@ export function KeysSection({
       });
   }, [search, workspaces]);
 
-  const currentWorkspace = selectedSourceId ? workspaces[selectedSourceId] : null;
+  const currentWorkspace = selectedSourceId
+    ? workspaces[selectedSourceId]
+    : null;
   const currentEntry =
     currentWorkspace && editingEntryId
-      ? currentWorkspace.entries.find((entry) => entry.id === editingEntryId) ??
-        null
+      ? (currentWorkspace.entries.find(
+          (entry) => entry.id === editingEntryId,
+        ) ?? null)
       : null;
   const entryDialogDirty =
     currentEntry && editingEntrySnapshot
@@ -498,14 +516,11 @@ export function KeysSection({
     [],
   );
 
-  const handleOpenEntryDialog = useCallback(
-    (entry: EditableEntry) => {
-      setEditingEntryId(entry.id);
-      setEditingEntrySnapshot(cloneEditableEntry(entry));
-      setError(null);
-    },
-    [],
-  );
+  const handleOpenEntryDialog = useCallback((entry: EditableEntry) => {
+    setEditingEntryId(entry.id);
+    setEditingEntrySnapshot(cloneEditableEntry(entry));
+    setError(null);
+  }, []);
 
   const handleCancelEntryDialog = useCallback(() => {
     if (currentWorkspace && editingEntrySnapshot) {
@@ -549,8 +564,9 @@ export function KeysSection({
 
     if (!currentWorkspace.persistedSourceId) {
       const nextSourceId =
-        Object.keys(workspaces).find((id) => id !== currentWorkspace.sourceId) ??
-        null;
+        Object.keys(workspaces).find(
+          (id) => id !== currentWorkspace.sourceId,
+        ) ?? null;
 
       setWorkspaces((current) => {
         const next = { ...current };
@@ -563,7 +579,9 @@ export function KeysSection({
     }
 
     try {
-      await desktopApi.providers.deleteSource(currentWorkspace.persistedSourceId);
+      await desktopApi.providers.deleteSource(
+        currentWorkspace.persistedSourceId,
+      );
       await reload();
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "删除失败");
@@ -689,7 +707,8 @@ export function KeysSection({
           <div className="space-y-2">
             {sourceList.map((workspace) => {
               const isSelected = workspace.sourceId === selectedSourceId;
-              const sourceDirty = serializeWorkspace(workspace) !== workspace.baseline;
+              const sourceDirty =
+                serializeWorkspace(workspace) !== workspace.baseline;
               const sourceName = workspace.sourceDraft.name || "未命名提供商";
 
               return (
@@ -701,10 +720,10 @@ export function KeysSection({
                     setError(null);
                     setTestResult(null);
                   }}
-                  className={`w-full rounded-[var(--radius-shell)] border px-3 py-3 text-left transition-colors ${
+                  className={`w-full rounded-[var(--radius-shell)] border-y border-r border-l-4 px-3 py-2 text-left transition-colors ${
                     isSelected
-                      ? "border-[color:var(--color-shell-border)] bg-shell-panel"
-                      : "border-[color:var(--color-border-light)] bg-shell-panel/70 hover:bg-shell-panel"
+                      ? "border-l-[color:var(--color-accent)] border-y-[color:var(--color-shell-border)] border-r-[color:var(--color-shell-border)] bg-shell-panel"
+                      : "border-l-transparent border-y-[color:var(--color-border-light)] border-r-[color:var(--color-border-light)] bg-shell-panel/70 hover:bg-shell-panel"
                   }`}
                 >
                   <div className="truncate text-[13px] font-semibold text-foreground">
@@ -712,18 +731,25 @@ export function KeysSection({
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--color-text-muted)]">
                     <span
+                      title={
+                        workspace.sourceDraft.enabled
+                          ? "已配置/已连接"
+                          : "未配置"
+                      }
                       className={`inline-block h-2 w-2 rounded-full ${
-                        workspace.sourceDraft.enabled ? "bg-emerald-500" : "bg-zinc-400"
+                        workspace.sourceDraft.enabled
+                          ? "bg-emerald-500"
+                          : "bg-zinc-400"
                       }`}
                     />
-                    <span>{providerTypeLabel(workspace.sourceDraft.providerType)}</span>
+                    <span>
+                      {providerTypeLabel(workspace.sourceDraft.providerType)}
+                    </span>
                     <Badge variant="secondary">
                       {workspace.kind === "builtin" ? "内置" : "自定义"}
                     </Badge>
                     {sourceDirty ? (
-                      <Badge variant="warning">
-                        未保存
-                      </Badge>
+                      <Badge variant="warning">未保存</Badge>
                     ) : null}
                   </div>
                 </button>
@@ -808,13 +834,16 @@ export function KeysSection({
                           <FieldSelect
                             value={currentWorkspace.sourceDraft.providerType}
                             onChange={(value) =>
-                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                                ...workspace,
-                                sourceDraft: {
-                                  ...workspace.sourceDraft,
-                                  providerType: value as ProviderType,
-                                },
-                              }))
+                              updateWorkspace(
+                                currentWorkspace.sourceId,
+                                (workspace) => ({
+                                  ...workspace,
+                                  sourceDraft: {
+                                    ...workspace.sourceDraft,
+                                    providerType: value as ProviderType,
+                                  },
+                                }),
+                              )
                             }
                             options={PROVIDER_TYPE_OPTIONS}
                           />
@@ -826,13 +855,16 @@ export function KeysSection({
                           <FieldInput
                             value={currentWorkspace.sourceDraft.name}
                             onChange={(event) =>
-                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                                ...workspace,
-                                sourceDraft: {
-                                  ...workspace.sourceDraft,
-                                  name: event.target.value,
-                                },
-                              }))
+                              updateWorkspace(
+                                currentWorkspace.sourceId,
+                                (workspace) => ({
+                                  ...workspace,
+                                  sourceDraft: {
+                                    ...workspace.sourceDraft,
+                                    name: event.target.value,
+                                  },
+                                }),
+                              )
                             }
                             placeholder="例如：公司网关 / 本地中转"
                           />
@@ -846,13 +878,16 @@ export function KeysSection({
                         <FieldInput
                           value={currentWorkspace.sourceDraft.baseUrl ?? ""}
                           onChange={(event) =>
-                            updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                              ...workspace,
-                              sourceDraft: {
-                                ...workspace.sourceDraft,
-                                baseUrl: event.target.value,
-                              },
-                            }))
+                            updateWorkspace(
+                              currentWorkspace.sourceId,
+                              (workspace) => ({
+                                ...workspace,
+                                sourceDraft: {
+                                  ...workspace.sourceDraft,
+                                  baseUrl: event.target.value,
+                                },
+                              }),
+                            )
                           }
                           placeholder="https://api.example.com/v1"
                         />
@@ -863,19 +898,25 @@ export function KeysSection({
                       <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-4 py-4">
                         <label className="inline-flex items-start gap-3 text-[13px] text-foreground">
                           <Switch
-                            checked={currentWorkspace.sourceDraft.mode === "custom"}
+                            checked={
+                              currentWorkspace.sourceDraft.mode === "custom"
+                            }
                             onCheckedChange={(checked) =>
-                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                                ...workspace,
-                                sourceDraft: {
-                                  ...workspace.sourceDraft,
-                                  mode: checked === true ? "custom" : "native",
-                                  baseUrl:
-                                    checked === true
-                                      ? workspace.sourceDraft.baseUrl
-                                      : "",
-                                },
-                              }))
+                              updateWorkspace(
+                                currentWorkspace.sourceId,
+                                (workspace) => ({
+                                  ...workspace,
+                                  sourceDraft: {
+                                    ...workspace.sourceDraft,
+                                    mode:
+                                      checked === true ? "custom" : "native",
+                                    baseUrl:
+                                      checked === true
+                                        ? workspace.sourceDraft.baseUrl
+                                        : "",
+                                  },
+                                }),
+                              )
                             }
                           />
                           <span>
@@ -883,7 +924,8 @@ export function KeysSection({
                               使用自定义中转地址
                             </span>
                             <span className="mt-1 block text-[12px] leading-5 text-muted-foreground">
-                              不勾选时使用官方接口；勾选后将通过你填写的 Base URL 请求。
+                              不勾选时使用官方接口；勾选后将通过你填写的 Base
+                              URL 请求。
                             </span>
                           </span>
                         </label>
@@ -897,13 +939,16 @@ export function KeysSection({
                           <FieldInput
                             value={currentWorkspace.sourceDraft.baseUrl ?? ""}
                             onChange={(event) =>
-                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                                ...workspace,
-                                sourceDraft: {
-                                  ...workspace.sourceDraft,
-                                  baseUrl: event.target.value,
-                                },
-                              }))
+                              updateWorkspace(
+                                currentWorkspace.sourceId,
+                                (workspace) => ({
+                                  ...workspace,
+                                  sourceDraft: {
+                                    ...workspace.sourceDraft,
+                                    baseUrl: event.target.value,
+                                  },
+                                }),
+                              )
                             }
                             placeholder="https://api.example.com/v1"
                           />
@@ -921,10 +966,13 @@ export function KeysSection({
                         type={apiKeyVisible ? "text" : "password"}
                         value={currentWorkspace.apiKeyInput}
                         onChange={(event) =>
-                          updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                            ...workspace,
-                            apiKeyInput: event.target.value,
-                          }))
+                          updateWorkspace(
+                            currentWorkspace.sourceId,
+                            (workspace) => ({
+                              ...workspace,
+                              apiKeyInput: event.target.value,
+                            }),
+                          )
                         }
                         placeholder={
                           currentWorkspace.hasStoredCredential
@@ -936,8 +984,12 @@ export function KeysSection({
                       />
                       <TooltipIconButton
                         type="button"
-                        tooltip={apiKeyVisible ? "隐藏 API Key" : "显示 API Key"}
-                        aria-label={apiKeyVisible ? "隐藏 API Key" : "显示 API Key"}
+                        tooltip={
+                          apiKeyVisible ? "隐藏 API Key" : "显示 API Key"
+                        }
+                        aria-label={
+                          apiKeyVisible ? "隐藏 API Key" : "显示 API Key"
+                        }
                         side="left"
                         disabled={!currentWorkspace.apiKeyInput}
                         onClick={() => setApiKeyVisible((current) => !current)}
@@ -966,79 +1018,34 @@ export function KeysSection({
                 description="所有聊天和后续任务都会通过稳定的模型条目来选择模型。"
                 className="border border-[color:var(--color-border-light)] bg-shell-panel"
               >
-                <div className="space-y-3 px-5 py-5">
-                  {currentWorkspace.entries.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-4 py-4"
-                    >
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[13px] font-semibold text-foreground">
+                <div className="px-5 py-2">
+                  {[...currentWorkspace.entries]
+                    .sort((a, b) =>
+                      a.enabled === b.enabled ? 0 : a.enabled ? -1 : 1,
+                    )
+                    .map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="flex items-center justify-between gap-3 border-b border-[color:var(--color-border-light)] py-3 last:border-0"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="truncate text-[13px] font-medium text-foreground">
                             {getEntryDisplayName(entry)}
-                          </div>
-                          <div className="mt-1 text-[12px] text-muted-foreground">
-                            {getEntryNameHint(entry)}
-                          </div>
-
-                          {entry.builtin ? (
-                            <div className="mt-3 font-mono text-[12px] text-muted-foreground">
-                              {entry.modelId}
-                            </div>
-                          ) : (
-                            <div className="mt-3 max-w-[420px]">
-                              <FieldInput
-                                value={entry.modelId}
-                                onChange={(event) =>
-                                  updateWorkspace(
-                                    currentWorkspace.sourceId,
-                                    (workspace) => ({
-                                      ...workspace,
-                                      entries: workspace.entries.map((item) =>
-                                        item.id === entry.id
-                                          ? applyDetectedMetadata(
-                                              item,
-                                              event.target.value,
-                                            )
-                                          : item,
-                                      ),
-                                    }),
-                                  )
-                                }
-                                placeholder="模型 ID，例如 gpt-4o-mini"
-                                mono
-                              />
-                            </div>
+                          </span>
+                          {!entry.builtin && (
+                            <span className="rounded bg-shell-panel-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              Manual
+                            </span>
                           )}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Switch
-                            aria-label={`${getEntryDisplayName(entry)} 可用开关`}
-                            checked={entry.enabled}
-                            onCheckedChange={(checked) => {
-                              if (checked !== true && entry.id === currentModelId) {
-                                setError("默认模型正在使用该条目，无法禁用。");
-                                return;
-                              }
-
-                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                                ...workspace,
-                                entries: workspace.entries.map((item) =>
-                                  item.id === entry.id
-                                    ? { ...item, enabled: checked === true }
-                                    : item,
-                                ),
-                              }));
-                            }}
-                          />
-
+                        <div className="flex shrink-0 items-center gap-2">
                           <TooltipIconButton
                             type="button"
                             tooltip="模型高级项"
                             size="icon"
                             onClick={() => handleOpenEntryDialog(entry)}
-                            className="h-8 w-8 rounded-[var(--radius-shell)] bg-shell-panel text-foreground hover:bg-shell-panel-muted"
+                            className="h-8 w-8 rounded-[var(--radius-shell)] text-muted-foreground hover:bg-shell-panel-muted hover:text-foreground"
                           >
                             <SlidersHorizontalIcon className="h-4 w-4" />
                           </TooltipIconButton>
@@ -1050,72 +1057,113 @@ export function KeysSection({
                               aria-label="删除模型"
                               onClick={() => {
                                 if (entry.id === currentModelId) {
-                                  setError("默认模型正在使用该条目，无法删除。");
+                                  setError(
+                                    "默认模型正在使用该条目，无法删除。",
+                                  );
                                   return;
                                 }
 
-                                updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                                  ...workspace,
-                                  deletedEntryIds: entry.persistedId
-                                    ? [...workspace.deletedEntryIds, entry.persistedId]
-                                    : workspace.deletedEntryIds,
-                                  entries: workspace.entries.filter(
-                                    (item) => item.id !== entry.id,
-                                  ),
-                                }));
+                                updateWorkspace(
+                                  currentWorkspace.sourceId,
+                                  (workspace) => ({
+                                    ...workspace,
+                                    deletedEntryIds: entry.persistedId
+                                      ? [
+                                          ...workspace.deletedEntryIds,
+                                          entry.persistedId,
+                                        ]
+                                      : workspace.deletedEntryIds,
+                                    entries: workspace.entries.filter(
+                                      (item) => item.id !== entry.id,
+                                    ),
+                                  }),
+                                );
                               }}
-                              className="h-8 w-8 rounded-[var(--radius-shell)] text-red-500 hover:bg-red-50 hover:text-red-600"
+                              className="h-8 w-8 rounded-[var(--radius-shell)] text-muted-foreground hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20"
                             >
                               <Trash2Icon className="h-4 w-4" />
                             </TooltipIconButton>
                           ) : null}
+
+                          <Switch
+                            aria-label={`${getEntryDisplayName(entry)} 可用开关`}
+                            checked={entry.enabled}
+                            disabled={!currentWorkspace.sourceDraft.enabled}
+                            onCheckedChange={(checked) => {
+                              if (
+                                checked !== true &&
+                                entry.id === currentModelId
+                              ) {
+                                setError("默认模型正在使用该条目，无法禁用。");
+                                return;
+                              }
+
+                              updateWorkspace(
+                                currentWorkspace.sourceId,
+                                (workspace) => ({
+                                  ...workspace,
+                                  entries: workspace.entries.map((item) =>
+                                    item.id === entry.id
+                                      ? { ...item, enabled: checked === true }
+                                      : item,
+                                  ),
+                                }),
+                              );
+                            }}
+                          />
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
 
                   {currentWorkspace.kind === "custom" ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() =>
-                        updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                          ...workspace,
-                          entries: [
-                            ...workspace.entries,
-                            {
-                              id: `draft-entry:${crypto.randomUUID()}`,
-                              sourceId: workspace.persistedSourceId ?? workspace.sourceId,
-                              name: "",
-                              modelId: "",
-                              enabled: true,
-                              builtin: false,
-                              capabilities: {
-                                vision: null,
-                                imageOutput: null,
-                                toolCalling: null,
-                                reasoning: null,
-                                embedding: null,
-                              },
-                              limits: {
-                                contextWindow: null,
-                                maxOutputTokens: null,
-                              },
-                              detectedCapabilities: {
-                                ...getUnknownModelCapabilities(),
-                              },
-                              detectedLimits: {
-                                ...getUnknownModelLimits(),
-                              },
-                              providerOptionsText: "",
-                            },
-                          ],
-                        }))
-                      }
-                      className="h-9 rounded-[var(--radius-shell)] bg-shell-panel-contrast px-4 text-[12px] text-foreground hover:bg-shell-panel-muted"
-                    >
-                      添加模型条目
-                    </Button>
+                    <div className="mt-2 py-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() =>
+                          updateWorkspace(
+                            currentWorkspace.sourceId,
+                            (workspace) => ({
+                              ...workspace,
+                              entries: [
+                                ...workspace.entries,
+                                {
+                                  id: `draft-entry:${crypto.randomUUID()}`,
+                                  sourceId:
+                                    workspace.persistedSourceId ??
+                                    workspace.sourceId,
+                                  name: "New Model",
+                                  modelId: "new-model-id",
+                                  enabled: true,
+                                  builtin: false,
+                                  capabilities: {
+                                    vision: null,
+                                    imageOutput: null,
+                                    toolCalling: null,
+                                    reasoning: null,
+                                    embedding: null,
+                                  },
+                                  limits: {
+                                    contextWindow: null,
+                                    maxOutputTokens: null,
+                                  },
+                                  detectedCapabilities: {
+                                    ...getUnknownModelCapabilities(),
+                                  },
+                                  detectedLimits: {
+                                    ...getUnknownModelLimits(),
+                                  },
+                                  providerOptionsText: "",
+                                },
+                              ],
+                            }),
+                          )
+                        }
+                        className="h-8 rounded-[var(--radius-shell)] px-3 text-[12px] text-foreground hover:bg-shell-panel-muted"
+                      >
+                        + 添加模型条目
+                      </Button>
+                    </div>
                   ) : null}
                 </div>
               </SettingsCard>
@@ -1135,7 +1183,7 @@ export function KeysSection({
                   >
                     {testResult.success
                       ? "连接测试通过"
-                      : testResult.error ?? "连接测试失败"}
+                      : (testResult.error ?? "连接测试失败")}
                   </span>
                 ) : dirty ? (
                   "当前提供商有未保存修改。"
@@ -1158,7 +1206,11 @@ export function KeysSection({
                   type="button"
                   onClick={() => void handleSave()}
                   disabled={saving || !dirty}
-                  className="h-9 rounded-[var(--radius-shell)] bg-foreground px-4 text-[12px] text-background hover:bg-foreground/90"
+                  className={`h-9 rounded-[var(--radius-shell)] px-4 text-[12px] ${
+                    dirty && !saving
+                      ? "animate-pulse bg-[color:var(--color-accent)] text-white hover:bg-[color:var(--color-accent-hover)] shadow-sm"
+                      : "bg-foreground text-background hover:bg-foreground/90"
+                  }`}
                 >
                   {saving ? "保存中…" : "保存修改"}
                 </Button>
@@ -1175,7 +1227,7 @@ export function KeysSection({
             }}
           >
             {currentEntry ? (
-              <DialogContent className="max-h-[min(84vh,760px)] max-w-[760px] gap-0 overflow-hidden rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-muted p-0">
+              <DialogContent className="flex max-h-[min(84vh,760px)] max-w-[760px] flex-col gap-0 overflow-hidden rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel p-0 shadow-lg">
                 <div className="shrink-0 border-b border-[color:var(--color-border-light)] px-5 py-4">
                   <DialogTitle className="text-[18px] text-foreground">
                     {getEntryDisplayName(currentEntry)}
@@ -1194,14 +1246,17 @@ export function KeysSection({
                       <FieldInput
                         value={currentEntry.name}
                         onChange={(event) =>
-                          updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                            ...workspace,
-                            entries: workspace.entries.map((entry) =>
-                              entry.id === currentEntry.id
-                                ? { ...entry, name: event.target.value }
-                                : entry,
-                            ),
-                          }))
+                          updateWorkspace(
+                            currentWorkspace.sourceId,
+                            (workspace) => ({
+                              ...workspace,
+                              entries: workspace.entries.map((entry) =>
+                                entry.id === currentEntry.id
+                                  ? { ...entry, name: event.target.value }
+                                  : entry,
+                              ),
+                            }),
+                          )
                         }
                         placeholder="留空时根据模型 ID 自动生成"
                         className="h-8"
@@ -1213,11 +1268,40 @@ export function KeysSection({
                   ) : null}
 
                   <div className="px-5 py-4">
+                    {!currentEntry.builtin ? (
+                      <div className="mb-4">
+                        <div className="mb-2 text-[12px] font-medium text-foreground">
+                          模型 ID
+                        </div>
+                        <FieldInput
+                          value={currentEntry.modelId}
+                          onChange={(event) =>
+                            updateWorkspace(
+                              currentWorkspace.sourceId,
+                              (workspace) => ({
+                                ...workspace,
+                                entries: workspace.entries.map((entry) =>
+                                  entry.id === currentEntry.id
+                                    ? applyDetectedMetadata(
+                                        entry,
+                                        event.target.value,
+                                      )
+                                    : entry,
+                                ),
+                              }),
+                            )
+                          }
+                          placeholder="模型 ID，例如 gpt-4o-mini"
+                          className="h-8"
+                          mono
+                        />
+                      </div>
+                    ) : null}
                     <div className="grid gap-3 md:grid-cols-2">
                       {CAPABILITY_FIELDS.map(({ key, label }) => (
                         <div
                           key={key}
-                          className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel px-3 py-3"
+                          className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-3 py-3"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0 text-[12px] font-medium text-foreground">
@@ -1225,7 +1309,10 @@ export function KeysSection({
                             </div>
                             <Switch
                               aria-label={`${label} 开关`}
-                              checked={resolveCapabilityChecked(currentEntry, key)}
+                              checked={resolveCapabilityChecked(
+                                currentEntry,
+                                key,
+                              )}
                               onCheckedChange={(checked) =>
                                 updateWorkspace(
                                   currentWorkspace.sourceId,
@@ -1255,35 +1342,44 @@ export function KeysSection({
                     </div>
 
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel px-3 py-3">
+                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-3 py-3">
                         <div className="flex items-baseline justify-between gap-3">
                           <div className="text-[12px] font-medium text-foreground">
                             上下文窗口
                           </div>
                           <div className="text-[11px] text-muted-foreground">
-                            自动：{formatAutoLimit(currentEntry.detectedLimits.contextWindow)}
+                            自动：
+                            {formatAutoLimit(
+                              currentEntry.detectedLimits.contextWindow,
+                            )}
                           </div>
                         </div>
                         <div className="mt-2">
                           <FieldInput
-                            value={currentEntry.limits.contextWindow?.toString() ?? ""}
+                            value={
+                              currentEntry.limits.contextWindow?.toString() ??
+                              ""
+                            }
                             onChange={(event) =>
-                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                                ...workspace,
-                                entries: workspace.entries.map((entry) =>
-                                  entry.id === currentEntry.id
-                                    ? {
-                                        ...entry,
-                                        limits: {
-                                          ...entry.limits,
-                                          contextWindow: parseOptionalNumber(
-                                            event.target.value,
-                                          ),
-                                        },
-                                      }
-                                    : entry,
-                                ),
-                              }))
+                              updateWorkspace(
+                                currentWorkspace.sourceId,
+                                (workspace) => ({
+                                  ...workspace,
+                                  entries: workspace.entries.map((entry) =>
+                                    entry.id === currentEntry.id
+                                      ? {
+                                          ...entry,
+                                          limits: {
+                                            ...entry.limits,
+                                            contextWindow: parseOptionalNumber(
+                                              event.target.value,
+                                            ),
+                                          },
+                                        }
+                                      : entry,
+                                  ),
+                                }),
+                              )
                             }
                             placeholder="留空表示自动"
                             mono
@@ -1292,7 +1388,7 @@ export function KeysSection({
                         </div>
                       </div>
 
-                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel px-3 py-3">
+                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-3 py-3">
                         <div className="flex items-baseline justify-between gap-3">
                           <div className="text-[12px] font-medium text-foreground">
                             最大输出 Tokens
@@ -1306,24 +1402,31 @@ export function KeysSection({
                         </div>
                         <div className="mt-2">
                           <FieldInput
-                            value={currentEntry.limits.maxOutputTokens?.toString() ?? ""}
+                            value={
+                              currentEntry.limits.maxOutputTokens?.toString() ??
+                              ""
+                            }
                             onChange={(event) =>
-                              updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                                ...workspace,
-                                entries: workspace.entries.map((entry) =>
-                                  entry.id === currentEntry.id
-                                    ? {
-                                        ...entry,
-                                        limits: {
-                                          ...entry.limits,
-                                          maxOutputTokens: parseOptionalNumber(
-                                            event.target.value,
-                                          ),
-                                        },
-                                      }
-                                    : entry,
-                                ),
-                              }))
+                              updateWorkspace(
+                                currentWorkspace.sourceId,
+                                (workspace) => ({
+                                  ...workspace,
+                                  entries: workspace.entries.map((entry) =>
+                                    entry.id === currentEntry.id
+                                      ? {
+                                          ...entry,
+                                          limits: {
+                                            ...entry.limits,
+                                            maxOutputTokens:
+                                              parseOptionalNumber(
+                                                event.target.value,
+                                              ),
+                                          },
+                                        }
+                                      : entry,
+                                  ),
+                                }),
+                              )
                             }
                             placeholder="留空表示自动"
                             mono
@@ -1341,14 +1444,20 @@ export function KeysSection({
                     <textarea
                       value={currentEntry.providerOptionsText}
                       onChange={(event) =>
-                        updateWorkspace(currentWorkspace.sourceId, (workspace) => ({
-                          ...workspace,
-                          entries: workspace.entries.map((entry) =>
-                            entry.id === currentEntry.id
-                              ? { ...entry, providerOptionsText: event.target.value }
-                              : entry,
-                          ),
-                        }))
+                        updateWorkspace(
+                          currentWorkspace.sourceId,
+                          (workspace) => ({
+                            ...workspace,
+                            entries: workspace.entries.map((entry) =>
+                              entry.id === currentEntry.id
+                                ? {
+                                    ...entry,
+                                    providerOptionsText: event.target.value,
+                                  }
+                                : entry,
+                            ),
+                          }),
+                        )
                       }
                       className="min-h-[120px] w-full rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-3 py-2.5 font-mono text-[12px] text-foreground outline-none transition-colors focus:border-ring/40"
                       placeholder='例如：{ "compat": { "supportsStore": false } }'
@@ -1357,7 +1466,7 @@ export function KeysSection({
                 </div>
 
                 <div className="shrink-0 border-t border-[color:var(--color-border-light)] bg-shell-panel px-5 py-3">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <DialogFooter className="flex-col gap-3 sm:space-x-0 md:flex-row md:items-center md:justify-between">
                     <div className="text-[11px] text-muted-foreground">
                       这里的保存会先应用到当前页面，仍需点击页面底部“保存修改”才会真正写入配置。
                     </div>
@@ -1379,7 +1488,7 @@ export function KeysSection({
                         保存并关闭
                       </Button>
                     </div>
-                  </div>
+                  </DialogFooter>
                 </div>
               </DialogContent>
             ) : null}

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -209,25 +215,25 @@ export function BranchSwitcher({
       return;
     }
 
-      setSubmitting(true);
-      setError(null);
+    setSubmitting(true);
+    setError(null);
 
-      try {
-        await window.desktopApi.git.createAndSwitchBranch(normalizedBranchName);
-        setBranches((current) =>
-          markCurrentBranch(
-            current.some((branch) => branch.name === normalizedBranchName)
-              ? current
-              : [...current, { name: normalizedBranchName, isCurrent: true }],
-            normalizedBranchName,
-          ),
-        );
-        setHasLoadedBranches(true);
-        await onBranchChanged?.();
-        handleOpenChange(false);
-      } catch (nextError) {
-        setError(getErrorMessage(nextError));
-      } finally {
+    try {
+      await window.desktopApi.git.createAndSwitchBranch(normalizedBranchName);
+      setBranches((current) =>
+        markCurrentBranch(
+          current.some((branch) => branch.name === normalizedBranchName)
+            ? current
+            : [...current, { name: normalizedBranchName, isCurrent: true }],
+          normalizedBranchName,
+        ),
+      );
+      setHasLoadedBranches(true);
+      await onBranchChanged?.();
+      handleOpenChange(false);
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
       setSubmitting(false);
     }
   }, [draftBranchName, handleOpenChange, onBranchChanged, submitting]);
@@ -259,7 +265,9 @@ export function BranchSwitcher({
           variant="ghost"
           disabled={disabled}
           title={
-            disabled ? "聊天运行中，暂时不能切换分支" : `当前分支 ${branchLabel}`
+            disabled
+              ? "聊天运行中，暂时不能切换分支"
+              : `当前分支 ${branchLabel}`
           }
           className={cn(
             "h-8 min-w-0 max-w-[260px] rounded-full bg-shell-panel-muted/55 px-3 text-[12px] font-medium text-foreground shadow-none hover:bg-shell-panel-muted/78",
@@ -362,7 +370,7 @@ export function BranchSwitcher({
             </div>
           ) : null}
 
-          <div className="rounded-[14px] bg-shell-panel-muted/58 p-2">
+          <div className="border-t border-slate-900/10 pt-2 dark:border-white/10">
             {isCreateMode ? (
               <div className="flex flex-col gap-2">
                 <input
@@ -414,7 +422,7 @@ export function BranchSwitcher({
                   setIsCreateMode(true);
                   setError(null);
                 }}
-                className="group flex w-full items-center gap-2 rounded-[12px] px-3 py-2.5 text-left text-[13px] font-medium text-foreground transition-all duration-150 hover:bg-slate-900/[0.06] focus-visible:bg-slate-900/[0.06] focus-visible:outline-none"
+                className="group flex w-full items-center gap-2 rounded-[12px] px-3 py-2.5 text-left text-[13px] font-medium text-foreground transition-all duration-150 hover:bg-shell-panel-muted focus-visible:bg-shell-panel-muted focus-visible:outline-none"
               >
                 <PlusIcon className="size-4 shrink-0 transition-transform duration-150 group-hover:translate-x-[1px]" />
                 <span>创建并检出新分支…</span>

@@ -227,6 +227,12 @@ export const Thread: FC<ThreadProps> = ({
   useEffect(() => {
     let cancelled = false;
 
+    if (!visible) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
     void (async () => {
       if (!window.desktopApi) return;
       const nextDirectory = await loadProviderDirectory(window.desktopApi);
@@ -239,7 +245,7 @@ export const Thread: FC<ThreadProps> = ({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [visible]);
 
   const modelOptions = useMemo(
     () => buildModelOptions(sources, entries, currentModelId),

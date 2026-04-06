@@ -28,12 +28,14 @@ export const AssistantUIReasoning: FC = () => {
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="mb-1.5 overflow-hidden rounded-[14px] bg-shell-panel-muted/62 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]"
+      className="mb-1.5 overflow-hidden rounded-[14px] bg-shell-panel-muted/62 dark:bg-shell-panel-muted/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
     >
       <CollapsibleTrigger
         className={cn(
           "group/trigger flex w-full items-center gap-2 px-3 py-1.5 text-left transition",
-          open ? "bg-white/52" : "hover:bg-white/42",
+          open
+            ? "bg-white/52 dark:bg-black/20"
+            : "hover:bg-white/42 dark:hover:bg-black/20",
         )}
       >
         <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-subtle)]/72 text-[var(--color-accent)]">
@@ -61,7 +63,7 @@ export const AssistantUIReasoning: FC = () => {
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
         <div className="px-3 pb-2.5">
-          <div className="rounded-[10px] bg-white/70 px-2.5 py-2 text-[11px] leading-5 whitespace-pre-wrap text-[color:var(--color-text-secondary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]">
+          <div className="rounded-[10px] bg-white/70 dark:bg-black/20 px-2.5 py-2 text-[11px] leading-5 whitespace-pre-wrap text-[color:var(--color-text-secondary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
             {reasoning.text}
           </div>
         </div>
@@ -71,4 +73,3 @@ export const AssistantUIReasoning: FC = () => {
 };
 
 export { AssistantUIReasoning as Reasoning };
-

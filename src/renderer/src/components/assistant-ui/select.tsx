@@ -102,7 +102,7 @@ const SelectContent = ({
       position={position}
       sideOffset={6}
       className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl bg-[color:var(--color-composer-surface)] p-1.5 text-foreground ring-1 ring-[color:var(--color-border-light)] shadow-[0_20px_44px_rgba(15,23,42,0.14),0_6px_18px_rgba(15,23,42,0.08)]",
+        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl bg-[color:var(--color-composer-surface)] dark:bg-zinc-900 p-1.5 text-foreground ring-1 ring-[color:var(--color-border-light)] dark:ring-white/10 shadow-[0_20px_44px_rgba(15,23,42,0.14),0_6px_18px_rgba(15,23,42,0.08)] dark:shadow-[0_20px_44px_rgba(0,0,0,0.5)]",
         "data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in",
         "data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out",
         "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
@@ -146,9 +146,9 @@ const SelectItem = ({
     data-slot="select-item"
     className={cn(
       "relative flex w-full cursor-pointer select-none items-center gap-2 rounded-lg py-2 pr-9 pl-3 text-[13px] font-medium text-foreground outline-none transition-colors",
-      "data-[state=checked]:bg-shell-panel-contrast data-[state=checked]:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]",
-      "data-[highlighted]:bg-shell-panel-muted data-[highlighted]:text-foreground",
-      "focus:bg-shell-panel-muted focus:text-foreground",
+      "data-[state=checked]:bg-shell-panel-contrast dark:data-[state=checked]:bg-white/10 data-[state=checked]:shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:data-[state=checked]:shadow-none",
+      "data-[highlighted]:bg-shell-panel-muted dark:data-[highlighted]:bg-white/5 data-[highlighted]:text-foreground",
+      "focus:bg-shell-panel-muted dark:focus:bg-white/5 focus:text-foreground",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       "[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
       className,
@@ -170,7 +170,7 @@ const SelectSeparator = ({
 }: ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>) => (
   <SelectPrimitive.Separator
     data-slot="select-separator"
-    className={cn("-mx-1 my-1 h-px bg-border", className)}
+    className={cn("-mx-1 my-1 h-px bg-border dark:bg-white/10", className)}
     {...props}
   />
 );
@@ -201,7 +201,7 @@ function Select({ options, placeholder, className, ...props }: SelectProps) {
       <SelectPrimitive.Trigger
         className={cn(
           "cursor-pointer flex items-center gap-1.5 rounded-md py-1 pr-2 pl-3 text-sm outline-none transition-colors",
-          "text-muted-foreground hover:bg-muted hover:text-foreground",
+          "text-muted-foreground hover:bg-muted dark:hover:bg-white/10 hover:text-foreground",
           "disabled:cursor-not-allowed disabled:opacity-50",
           !selectedOption && placeholder && "italic opacity-70",
           className,

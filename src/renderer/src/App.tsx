@@ -244,20 +244,23 @@ export default function App() {
       return;
     }
 
-    void desktopApi.models.getEntry(currentModelId).then((entry) => {
-      if (!cancelled) {
-        setCurrentContextWindow(resolveContextWindow(entry));
-      }
-    }).catch(() => {
-      if (!cancelled) {
-        setCurrentContextWindow(null);
-      }
-    });
+    void desktopApi.models
+      .getEntry(currentModelId)
+      .then((entry) => {
+        if (!cancelled) {
+          setCurrentContextWindow(resolveContextWindow(entry));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCurrentContextWindow(null);
+        }
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [currentModelId, desktopApi]);
+  }, [activeSessionId, currentModelId, desktopApi, mainView]);
 
   const refreshGitOverview = useCallback(async () => {
     if (!desktopApi?.git) {
@@ -1018,36 +1021,31 @@ export default function App() {
       </div>
     );
 
-  const threadContent =
+  const settingsOverlay =
     mainView === "settings" ? (
-      <SettingsView
-        activeSection={settingsSection}
-        settings={settings}
-        currentModelId={currentModelId}
-        thinkingLevel={thinkingLevel}
-        onModelChange={handleModelChange}
-        onThinkingLevelChange={handleThinkingLevelChange}
-        onSettingsChange={handleSettingsChange}
-        archivedSummaries={archivedSummaries}
-        onOpenArchivedSession={openArchivedSessionFromSettings}
-        onUnarchiveSession={(sessionId) => {
-          void unarchiveSession(sessionId);
-        }}
-        onDeleteSession={(sessionId) => {
-          void deleteSessionPermanently(sessionId);
-        }}
-      />
-    ) : (
-      threadRuntimeLayer
-    );
+      <div className="absolute inset-0 z-10 min-h-0 bg-shell-panel">
+        <SettingsView
+          activeSection={settingsSection}
+          settings={settings}
+          currentModelId={currentModelId}
+          thinkingLevel={thinkingLevel}
+          onModelChange={handleModelChange}
+          onThinkingLevelChange={handleThinkingLevelChange}
+          onSettingsChange={handleSettingsChange}
+          archivedSummaries={archivedSummaries}
+          onOpenArchivedSession={openArchivedSessionFromSettings}
+          onUnarchiveSession={(sessionId) => {
+            void unarchiveSession(sessionId);
+          }}
+          onDeleteSession={(sessionId) => {
+            void deleteSessionPermanently(sessionId);
+          }}
+        />
+      </div>
+    ) : null;
 
   const threadPanels =
-    mainView !== "thread" ? (
-      <section className="flex h-full min-h-0 flex-col bg-shell-panel">
-        {threadContent}
-        <div className="hidden">{threadRuntimeLayer}</div>
-      </section>
-    ) : diffPanelOpen ? (
+    diffPanelOpen ? (
       <ResizablePanelGroup
         orientation="horizontal"
         className="min-h-0 bg-shell-panel"
@@ -1060,7 +1058,7 @@ export default function App() {
           minSize={`${100 - MAX_DIFF_PANEL_SIZE}%`}
         >
           <section className="flex h-full min-h-0 flex-col bg-shell-panel">
-            {threadContent}
+            {threadRuntimeLayer}
           </section>
         </ResizablePanel>
         <ResizableHandle className="-mx-px w-px" />
@@ -1079,7 +1077,7 @@ export default function App() {
       </ResizablePanelGroup>
     ) : (
       <section className="flex h-full min-h-0 flex-col bg-shell-panel">
-        {threadContent}
+        {threadRuntimeLayer}
       </section>
     );
 
@@ -1159,8 +1157,9 @@ export default function App() {
               ) : null}
             </div>
 
-            <div className="min-h-0 flex-1 bg-shell-panel">
+            <div className="relative min-h-0 flex-1 bg-shell-panel">
               {threadPanels}
+              {settingsOverlay}
             </div>
 
             {mainView === "thread" ? (

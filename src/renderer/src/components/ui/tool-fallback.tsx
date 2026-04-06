@@ -66,7 +66,7 @@ function ToolFallbackRoot({
       open={isOpen}
       onOpenChange={handleOpenChange}
       className={cn(
-        "aui-tool-fallback-root group/tool-fallback-root mb-1.5 w-full overflow-hidden rounded-[14px] bg-shell-panel-muted/62 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] last:mb-0",
+        "aui-tool-fallback-root group/tool-fallback-root mb-1.5 w-full overflow-hidden rounded-[14px] bg-shell-panel-muted/62 dark:bg-shell-panel-muted/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] last:mb-0",
         className,
       )}
       style={
@@ -119,7 +119,7 @@ function getStatusMeta(status?: ToolCallMessagePartStatus) {
   if (status.reason === "cancelled") {
     return {
       label: "已停止",
-      tone: "text-[color:var(--color-text-secondary)] bg-black/5",
+      tone: "text-[color:var(--color-text-secondary)] bg-black/5 dark:bg-white/5",
     };
   }
 
@@ -151,7 +151,7 @@ function ToolFallbackTrigger({
     <CollapsibleTrigger
       data-slot="tool-fallback-trigger"
       className={cn(
-        "aui-tool-fallback-trigger group/trigger flex w-full items-center gap-2 px-3 py-1.5 text-sm transition-colors data-[state=open]:bg-white/52 data-[state=closed]:hover:bg-white/42",
+        "aui-tool-fallback-trigger group/trigger flex w-full items-center gap-2 px-3 py-1.5 text-sm transition-colors data-[state=open]:bg-white/52 dark:data-[state=open]:bg-black/20 data-[state=closed]:hover:bg-white/42 dark:data-[state=closed]:hover:bg-black/20",
         className,
       )}
       {...props}
@@ -252,7 +252,7 @@ function ToolFallbackArgs({
     <div
       data-slot="tool-fallback-args"
       className={cn(
-        "aui-tool-fallback-args rounded-[10px] bg-white/70 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]",
+        "aui-tool-fallback-args rounded-[10px] bg-white/70 dark:bg-black/20 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
         className,
       )}
       {...props}
@@ -280,7 +280,7 @@ function ToolFallbackResult({
     <div
       data-slot="tool-fallback-result"
       className={cn(
-        "aui-tool-fallback-result rounded-[10px] bg-white/70 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]",
+        "aui-tool-fallback-result rounded-[10px] bg-white/70 dark:bg-black/20 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
         className,
       )}
       {...props}
@@ -322,7 +322,7 @@ function ToolFallbackError({
       className={cn(
         "aui-tool-fallback-error rounded-[10px] px-2.5 py-2",
         isCancelled
-          ? "bg-black/4"
+          ? "bg-black/4 dark:bg-white/5"
           : "bg-rose-500/8 text-rose-700 dark:text-rose-300",
         className,
       )}
@@ -348,9 +348,7 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
     status?.type === "incomplete" && status.reason === "cancelled";
 
   return (
-    <ToolFallbackRoot
-      className={cn(isCancelled && "bg-shell-panel-muted/58")}
-    >
+    <ToolFallbackRoot className={cn(isCancelled && "bg-shell-panel-muted/58")}>
       <ToolFallbackTrigger toolName={toolName} status={status} />
       <ToolFallbackContent>
         <ToolFallbackError status={status} />
