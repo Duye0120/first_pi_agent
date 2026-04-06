@@ -235,8 +235,12 @@ export type ChatSessionSummary = {
   groupId?: string;
 };
 
-export type SendMessageInput = {
+export type AgentRunScope = {
   sessionId: string;
+  runId: string;
+};
+
+export type SendMessageInput = AgentRunScope & {
   text: string;
   attachments: SelectedFile[];
 };
@@ -326,7 +330,7 @@ export type DesktopApi = {
   };
   agent: {
     onEvent: (callback: (event: AgentEvent) => void) => () => void;
-    cancel: () => Promise<void>;
+    cancel: (scope: AgentRunScope) => Promise<void>;
     confirmResponse: (response: ConfirmationResponse) => Promise<void>;
   };
   settings: {

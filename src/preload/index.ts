@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  AgentRunScope,
   ChatSession,
   DesktopApi,
   SessionGroup,
@@ -45,7 +46,7 @@ const desktopApi: DesktopApi = {
       ipcRenderer.on(IPC_CHANNELS.agentEvent, handler);
       return () => { ipcRenderer.removeListener(IPC_CHANNELS.agentEvent, handler); };
     },
-    cancel: () => ipcRenderer.invoke(IPC_CHANNELS.agentCancel),
+    cancel: (scope: AgentRunScope) => ipcRenderer.invoke(IPC_CHANNELS.agentCancel, scope),
     confirmResponse: (response: ConfirmationResponse) =>
       ipcRenderer.invoke(IPC_CHANNELS.agentConfirmResponse, response),
   },

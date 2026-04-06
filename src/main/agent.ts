@@ -6,7 +6,7 @@ import { resolveModelEntry } from "./providers.js";
 import { getBuiltinTools } from "./tools/index.js";
 import { buildSoulPromptSection } from "./soul.js";
 import { loadMcpConfig, getActiveServers } from "../mcp/config.js";
-import { connectMcpServer, getConnections, disconnectAllMcpServers } from "../mcp/client.js";
+import { McpConnectionManager } from "../mcp/client.js";
 import { getAllMcpTools } from "../mcp/adapter.js";
 import {
   buildUserPromptMessage,
@@ -21,10 +21,21 @@ export interface AgentHandle {
   modelEntryId: string;
   runtimeSignature: string;
   thinkingLevel: string;
+  mcpManager: McpConnectionManager;
+  activeRunId: string | null;
 }
 
-let currentHandle: AgentHandle | null = null;
-let initGeneration = 0;
+const handlesBySession = new Map<string, AgentHandle>();
+const initGenerations = new Map<string, number>();
+
+function subscribeToAgent(
+  agent: Agent,
+  adapter: ElectronAdapter,
+): () => void {
+  return agent.subscribe((event: CoreAgentEvent) => {
+    adapter.handleCoreEvent(event);
+  });
+}
 
 /**
  * Create and initialize an Agent instance for a session.
@@ -34,15 +45,15 @@ export async function initAgent(
   adapter: ElectronAdapter,
   existingMessages?: ChatMessage[],
 ): Promise<AgentHandle> {
-  const generation = ++initGeneration;
+  const generation = (initGenerations.get(sessionId) ?? 0) + 1;
+  initGenerations.set(sessionId, generation);
 
-  // Destroy previous agent if exists
-  if (currentHandle) {
-    await destroyAgent(currentHandle);
+  const existingHandle = handlesBySession.get(sessionId);
+  if (existingHandle) {
+    await destroyAgent(existingHandle);
   }
 
   const settings = getSettings();
-  adapter.setSessionId(sessionId);
 
   let resolved;
   try {
@@ -58,17 +69,22 @@ export async function initAgent(
 
   // Load MCP tools
   const builtinTools = getBuiltinTools(adapter.workspacePath);
+  const mcpManager = new McpConnectionManager();
   let mcpTools: any[] = [];
   try {
     const mcpConfig = loadMcpConfig(adapter.workspacePath);
     const servers = getActiveServers(mcpConfig);
     for (const [name, cfg] of servers) {
       try {
-        await connectMcpServer(name, cfg);
-      } catch { /* skip failing servers */ }
+        await mcpManager.connectServer(name, cfg);
+      } catch {
+        /* skip failing servers */
+      }
     }
-    mcpTools = await getAllMcpTools(getConnections());
-  } catch { /* MCP init failure is non-fatal */ }
+    mcpTools = await getAllMcpTools(mcpManager.getConnections());
+  } catch {
+    /* MCP init failure is non-fatal */
+  }
 
   const agent = new Agent({
     initialState: {
@@ -82,9 +98,7 @@ export async function initAgent(
     sessionId,
   });
 
-  const unsubscribe = agent.subscribe((event: CoreAgentEvent) => {
-    adapter.handleCoreEvent(event);
-  });
+  const unsubscribe = subscribeToAgent(agent, adapter);
 
   const handle: AgentHandle = {
     agent,
@@ -93,17 +107,29 @@ export async function initAgent(
     modelEntryId: resolved.entry.id,
     runtimeSignature: resolved.runtimeSignature,
     thinkingLevel: settings.thinkingLevel,
+    mcpManager,
+    activeRunId: null,
   };
 
-  if (generation !== initGeneration) {
+  if (initGenerations.get(sessionId) !== generation) {
     unsubscribe();
     agent.abort();
-    await disconnectAllMcpServers();
+    await mcpManager.disconnectAll();
     throw new Error("Agent initialization superseded.");
   }
 
-  currentHandle = handle;
+  handlesBySession.set(sessionId, handle);
   return handle;
+}
+
+export function bindHandleToRun(
+  handle: AgentHandle,
+  adapter: ElectronAdapter,
+  runId: string,
+): void {
+  handle.unsubscribe();
+  handle.unsubscribe = subscribeToAgent(handle.agent, adapter);
+  handle.activeRunId = runId;
 }
 
 /**
@@ -130,23 +156,39 @@ export function cancelAgent(handle: AgentHandle): void {
   handle.agent.abort();
 }
 
+export function completeRun(handle: AgentHandle, runId: string): void {
+  if (handle.activeRunId === runId) {
+    handle.activeRunId = null;
+  }
+}
+
 /**
  * Destroy an agent handle and clean up resources.
  */
 export async function destroyAgent(handle: AgentHandle): Promise<void> {
   handle.unsubscribe();
   handle.agent.abort();
-  if (currentHandle === handle) {
-    currentHandle = null;
+  handle.activeRunId = null;
+  if (handlesBySession.get(handle.sessionId) === handle) {
+    handlesBySession.delete(handle.sessionId);
   }
-  await disconnectAllMcpServers();
+  await handle.mcpManager.disconnectAll();
 }
 
 /**
- * Get the current agent handle (if any).
+ * Destroy all active agent handles.
  */
-export function getCurrentHandle(): AgentHandle | null {
-  return currentHandle;
+export async function destroyAllAgents(): Promise<void> {
+  await Promise.allSettled(
+    [...handlesBySession.values()].map((handle) => destroyAgent(handle)),
+  );
+}
+
+/**
+ * Get the current handle for a session (if any).
+ */
+export function getHandle(sessionId: string): AgentHandle | null {
+  return handlesBySession.get(sessionId) ?? null;
 }
 
 function buildSystemPrompt(workspacePath: string): string {

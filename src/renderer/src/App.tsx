@@ -138,6 +138,10 @@ export default function App() {
   >([]);
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
+  const [sessionCache, setSessionCache] = useState<Record<string, ChatSession>>(
+    {},
+  );
+  const [runningSessionIds, setRunningSessionIds] = useState<string[]>([]);
   const [diffPanelOpen, setDiffPanelOpen] = useState(false);
   const [frameState, setFrameState] = useState<WindowFrameState>({
     isMaximized: false,
@@ -178,6 +182,7 @@ export default function App() {
   const activeSessionId = activeSession?.id ?? null;
   const summariesRef = useRef<ChatSessionSummary[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
+  const sessionCacheRef = useRef<Record<string, ChatSession>>({});
   const appliedCustomThemeKeysRef = useRef<string[]>([]);
 
   useEffect(() => {
@@ -187,6 +192,10 @@ export default function App() {
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
+
+  useEffect(() => {
+    sessionCacheRef.current = sessionCache;
+  }, [sessionCache]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -282,21 +291,46 @@ export default function App() {
     void refreshGitOverview();
   }, [diffPanelOpen, mainView, refreshGitOverview]);
 
-  const contextSummary = useMemo(
-    () => getContextUsageSummary(activeSession, currentContextWindow),
-    [activeSession, currentContextWindow],
-  );
+  const cacheSession = useCallback((session: ChatSession) => {
+    setSessionCache((current) => {
+      const existing = current[session.id];
+      if (existing === session) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [session.id]: session,
+      };
+    });
+  }, []);
+
+  const removeCachedSession = useCallback((sessionId: string) => {
+    setSessionCache((current) => {
+      if (!(sessionId in current)) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[sessionId];
+      return next;
+    });
+  }, []);
 
   const hydrateSession = useCallback((session: ChatSession) => {
+    cacheSession(session);
     startTransition(() => {
       setActiveSession(session);
     });
     localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, session.id);
-  }, []);
+  }, [cacheSession]);
 
   const persistSession = useCallback(
     (session: ChatSession) => {
-      setActiveSession(session);
+      cacheSession(session);
+      if (activeSessionIdRef.current === session.id) {
+        setActiveSession(session);
+      }
       if (session.archived) {
         setArchivedSummaries((current) => upsertSummary(current, session));
         setSummaries((current) =>
@@ -310,7 +344,21 @@ export default function App() {
       }
       void desktopApi?.sessions.save(session);
     },
-    [desktopApi],
+    [cacheSession, desktopApi],
+  );
+
+  const handleSessionRunStateChange = useCallback(
+    (sessionId: string, isRunning: boolean) => {
+      setRunningSessionIds((current) => {
+        const exists = current.includes(sessionId);
+        if (isRunning) {
+          return exists ? current : [...current, sessionId];
+        }
+
+        return exists ? current.filter((id) => id !== sessionId) : current;
+      });
+    },
+    [],
   );
 
   const refreshSessionLists = useCallback(async () => {
@@ -449,6 +497,12 @@ export default function App() {
         return;
       }
 
+      const cachedSession = sessionCacheRef.current[sessionId];
+      if (cachedSession) {
+        hydrateSession(cachedSession);
+        return;
+      }
+
       const session = await desktopApi.sessions.load(sessionId);
       if (session) {
         hydrateSession(session);
@@ -513,11 +567,15 @@ export default function App() {
 
       const wasActive = activeSessionIdRef.current === sessionId;
       await desktopApi.sessions.delete(sessionId);
+      removeCachedSession(sessionId);
+      setRunningSessionIds((current) => current.filter((id) => id !== sessionId));
       const { sessionSummaries } = await refreshSessionLists();
 
       if (!wasActive) {
         return;
       }
+
+      setActiveSession(null);
 
       if (sessionSummaries[0]) {
         void selectSession(sessionSummaries[0].id);
@@ -540,6 +598,7 @@ export default function App() {
         return;
       }
 
+      const updatedAt = new Date().toISOString();
       await desktopApi.sessions.rename(sessionId, nextTitle);
 
       setSummaries((prev) =>
@@ -548,7 +607,7 @@ export default function App() {
             ? {
                 ...summary,
                 title: nextTitle,
-                updatedAt: new Date().toISOString(),
+                updatedAt,
               }
             : summary,
         ),
@@ -560,18 +619,34 @@ export default function App() {
             ? {
                 ...summary,
                 title: nextTitle,
-                updatedAt: new Date().toISOString(),
+                updatedAt,
               }
             : summary,
         ),
       );
+
+      setSessionCache((current) => {
+        const session = current[sessionId];
+        if (!session) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [sessionId]: {
+            ...session,
+            title: nextTitle,
+            updatedAt,
+          },
+        };
+      });
 
       setActiveSession((current) =>
         current && current.id === sessionId
           ? {
               ...current,
               title: nextTitle,
-              updatedAt: new Date().toISOString(),
+              updatedAt,
             }
           : current,
       );
@@ -620,6 +695,37 @@ export default function App() {
           s.id === sessionId ? { ...s, groupId: groupId ?? undefined } : s,
         ),
       );
+      setSessionCache((current) => {
+        const session = current[sessionId];
+        if (!session) {
+          return current;
+        }
+
+        const nextSession = { ...session };
+        if (groupId === null) {
+          delete nextSession.groupId;
+        } else {
+          nextSession.groupId = groupId;
+        }
+
+        return {
+          ...current,
+          [sessionId]: nextSession,
+        };
+      });
+      setActiveSession((current) => {
+        if (!current || current.id !== sessionId) {
+          return current;
+        }
+
+        const nextSession = { ...current };
+        if (groupId === null) {
+          delete nextSession.groupId;
+        } else {
+          nextSession.groupId = groupId;
+        }
+        return nextSession;
+      });
     },
     [desktopApi],
   );
@@ -810,6 +916,15 @@ export default function App() {
   );
 
   const normalizedDiffPanelSize = clampDiffPanelSize(diffPanelSize);
+  const hasAnyRunningSessions = runningSessionIds.length > 0;
+  const mountedSessionIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (activeSessionId) {
+      ids.add(activeSessionId);
+    }
+    runningSessionIds.forEach((sessionId) => ids.add(sessionId));
+    return [...ids].filter((sessionId) => Boolean(sessionCache[sessionId]));
+  }, [activeSessionId, runningSessionIds, sessionCache]);
 
   if (booting) {
     return (
@@ -850,6 +965,59 @@ export default function App() {
     );
   }
 
+  const threadRuntimeLayer =
+    desktopApi ? (
+      mountedSessionIds.length > 0 ? (
+        <div className="flex h-full min-h-0 flex-col bg-shell-panel">
+          {mountedSessionIds.map((sessionId) => {
+            const session = sessionCache[sessionId];
+            if (!session) {
+              return null;
+            }
+
+            const visible = mainView === "thread" && sessionId === activeSessionId;
+
+            return (
+              <div
+                key={sessionId}
+                className={visible ? "flex h-full min-h-0 flex-1 flex-col" : "hidden"}
+                aria-hidden={!visible}
+              >
+                <AssistantThreadPanel
+                  session={session}
+                  desktopApi={desktopApi}
+                  onPersistSession={persistSession}
+                  currentModelId={currentModelId}
+                  thinkingLevel={thinkingLevel}
+                  terminalOpen={terminalOpen}
+                  isPickingFiles={isPickingFiles}
+                  onAttachFiles={attachFiles}
+                  onPasteFiles={pasteFiles}
+                  onRemoveAttachment={removeAttachment}
+                  onModelChange={handleModelChange}
+                  onThinkingLevelChange={handleThinkingLevelChange}
+                  onBranchChanged={refreshGitOverview}
+                  onRunStateChange={handleSessionRunStateChange}
+                  branchSummary={gitOverview?.branch ?? null}
+                  contextSummary={getContextUsageSummary(session, currentContextWindow)}
+                  visible={visible}
+                  disableGlobalSideEffects={hasAnyRunningSessions}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
+          当前没有可用线程。
+        </div>
+      )
+    ) : (
+      <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
+        当前没有可用线程。
+      </div>
+    );
+
   const threadContent =
     mainView === "settings" ? (
       <SettingsView
@@ -869,34 +1037,15 @@ export default function App() {
           void deleteSessionPermanently(sessionId);
         }}
       />
-    ) : activeSession && desktopApi ? (
-      <AssistantThreadPanel
-        session={activeSession}
-        desktopApi={desktopApi}
-        onPersistSession={persistSession}
-        currentModelId={currentModelId}
-        thinkingLevel={thinkingLevel}
-        terminalOpen={terminalOpen}
-        isPickingFiles={isPickingFiles}
-        onAttachFiles={attachFiles}
-        onPasteFiles={pasteFiles}
-        onRemoveAttachment={removeAttachment}
-        onModelChange={handleModelChange}
-        onThinkingLevelChange={handleThinkingLevelChange}
-        onBranchChanged={refreshGitOverview}
-        branchSummary={gitOverview?.branch ?? null}
-        contextSummary={contextSummary}
-      />
     ) : (
-      <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
-        当前没有可用线程。
-      </div>
+      threadRuntimeLayer
     );
 
   const threadPanels =
     mainView !== "thread" ? (
       <section className="flex h-full min-h-0 flex-col bg-shell-panel">
         {threadContent}
+        <div className="hidden">{threadRuntimeLayer}</div>
       </section>
     ) : diffPanelOpen ? (
       <ResizablePanelGroup
@@ -958,6 +1107,7 @@ export default function App() {
             <Sidebar
               summaries={summaries}
               activeSessionId={activeSessionId}
+              runningSessionIds={runningSessionIds}
               onSelectSession={selectSession}
               onNewSession={createNewSession}
               onOpenSettings={() => openSettingsView("general")}

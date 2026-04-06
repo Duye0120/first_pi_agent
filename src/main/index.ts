@@ -29,11 +29,14 @@ import { IPC_CHANNELS } from "../shared/ipc.js";
 import type { ChatSession, SendMessageInput } from "../shared/contracts.js";
 import { ElectronAdapter } from "./adapter.js";
 import {
+  bindHandleToRun,
+  completeRun,
   initAgent,
   promptAgent,
   cancelAgent,
   destroyAgent,
-  getCurrentHandle,
+  destroyAllAgents,
+  getHandle,
 } from "./agent.js";
 import { getSettings, updateSettings } from "./settings.js";
 import {
@@ -68,7 +71,6 @@ import {
 } from "./terminal.js";
 
 let mainWindow: BrowserWindow | null = null;
-let adapter: ElectronAdapter | null = null;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIN_WINDOW_WIDTH = 920;
 const MIN_WINDOW_HEIGHT = 600;
@@ -76,8 +78,9 @@ const MIN_WINDOW_HEIGHT = 600;
 type PendingChatRequest = {
   id: string;
   sessionId: string;
+  runId: string;
   cancelled: boolean;
-  handle: ReturnType<typeof getCurrentHandle>;
+  handle: ReturnType<typeof getHandle>;
 };
 
 class ChatRequestCancelledError extends Error {
@@ -87,7 +90,7 @@ class ChatRequestCancelledError extends Error {
   }
 }
 
-let pendingChatRequest: PendingChatRequest | null = null;
+const pendingChatRequests = new Map<string, PendingChatRequest>();
 
 function getPreloadPath() {
   return join(__dirname, "../preload/index.mjs");
@@ -190,7 +193,10 @@ function requireMainWindow() {
 }
 
 function ensureRequestActive(request: PendingChatRequest) {
-  if (pendingChatRequest?.id !== request.id || request.cancelled) {
+  if (
+    pendingChatRequests.get(request.sessionId)?.id !== request.id ||
+    request.cancelled
+  ) {
     throw new ChatRequestCancelledError();
   }
 }
@@ -261,22 +267,23 @@ function registerIpcHandlers() {
   ipcMain.handle(
     IPC_CHANNELS.chatSend,
     async (_event, input: SendMessageInput) => {
-      if (!adapter) return;
-      if (pendingChatRequest) {
-        pendingChatRequest.cancelled = true;
-        if (pendingChatRequest.handle) {
-          await destroyAgent(pendingChatRequest.handle);
-          pendingChatRequest.handle = null;
-        }
+      const activeRequest = pendingChatRequests.get(input.sessionId);
+      if (activeRequest && !activeRequest.cancelled) {
+        throw new Error("当前线程仍在生成中，请先停止当前回复。");
       }
 
       const request: PendingChatRequest = {
         id: crypto.randomUUID(),
         sessionId: input.sessionId,
+        runId: input.runId,
         cancelled: false,
         handle: null,
       };
-      pendingChatRequest = request;
+      pendingChatRequests.set(input.sessionId, request);
+      const scopedAdapter = new ElectronAdapter(requireMainWindow(), {
+        sessionId: input.sessionId,
+        runId: input.runId,
+      });
 
       let createdHandle = false;
 
@@ -288,10 +295,9 @@ function registerIpcHandlers() {
 
         ensureRequestActive(request);
 
-        let handle = getCurrentHandle();
+        let handle = getHandle(input.sessionId);
         if (
           !handle ||
-          handle.sessionId !== input.sessionId ||
           handle.modelEntryId !== resolvedModel.entry.id ||
           handle.runtimeSignature !== resolvedModel.runtimeSignature ||
           handle.thinkingLevel !== settings.thinkingLevel
@@ -301,12 +307,13 @@ function registerIpcHandlers() {
 
           handle = await initAgent(
             input.sessionId,
-            adapter,
+            scopedAdapter,
             session?.messages ?? [],
           );
           createdHandle = true;
         }
 
+        bindHandleToRun(handle, scopedAdapter, input.runId);
         request.handle = handle;
         ensureRequestActive(request);
 
@@ -315,7 +322,7 @@ function registerIpcHandlers() {
         if (
           err instanceof ChatRequestCancelledError ||
           request.cancelled ||
-          pendingChatRequest?.id !== request.id
+          pendingChatRequests.get(request.sessionId)?.id !== request.id
         ) {
           if (createdHandle && request.handle) {
             await destroyAgent(request.handle);
@@ -324,31 +331,37 @@ function registerIpcHandlers() {
         }
 
         // Send error event to renderer
-        adapter.send({
+        scopedAdapter.send({
           type: "agent_error",
+          sessionId: input.sessionId,
+          runId: input.runId,
           message: err instanceof Error ? err.message : "Agent 执行失败",
           timestamp: Date.now(),
         });
       } finally {
-        if (pendingChatRequest?.id === request.id) {
-          pendingChatRequest = null;
+        if (request.handle) {
+          completeRun(request.handle, input.runId);
+        }
+        if (pendingChatRequests.get(request.sessionId)?.id === request.id) {
+          pendingChatRequests.delete(request.sessionId);
         }
       }
       // Return void — response comes via agent events
     },
   );
 
-  ipcMain.handle(IPC_CHANNELS.agentCancel, async () => {
-    if (pendingChatRequest) {
-      pendingChatRequest.cancelled = true;
-      if (pendingChatRequest.handle) {
-        cancelAgent(pendingChatRequest.handle);
+  ipcMain.handle(IPC_CHANNELS.agentCancel, async (_event, scope) => {
+    const request = pendingChatRequests.get(scope.sessionId);
+    if (request && request.runId === scope.runId) {
+      request.cancelled = true;
+      if (request.handle) {
+        cancelAgent(request.handle);
       }
       return;
     }
 
-    const handle = getCurrentHandle();
-    if (handle) {
+    const handle = getHandle(scope.sessionId);
+    if (handle && handle.activeRunId === scope.runId) {
       cancelAgent(handle);
     }
   });
@@ -476,7 +489,6 @@ function registerIpcHandlers() {
 app.whenReady().then(() => {
   registerIpcHandlers();
   createMainWindow();
-  adapter = new ElectronAdapter(mainWindow!);
   setTerminalWindow(mainWindow!);
 
   app.on("activate", () => {
@@ -487,6 +499,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  void destroyAllAgents();
   destroyAllTerminals();
   if (process.platform !== "darwin") {
     app.quit();

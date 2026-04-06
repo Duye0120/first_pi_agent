@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentEvent } from "@shared/agent-events";
-import type { AgentResponse, AgentStep, ChatMessage } from "@shared/contracts";
+import type {
+  AgentResponse,
+  AgentRunScope,
+  AgentStep,
+  ChatMessage,
+} from "@shared/contracts";
 
 function createStep(kind: AgentStep["kind"], id?: string): AgentStep {
   return {
@@ -189,9 +194,9 @@ export function useAgentEvents() {
   }, [desktopApi, handleEvent]);
 
   // Cancel handler
-  const cancel = useCallback(() => {
+  const cancel = useCallback((scope: AgentRunScope) => {
     if (!desktopApi?.agent) return;
-    void desktopApi.agent.cancel();
+    void desktopApi.agent.cancel(scope);
     if (responseRef.current) {
       responseRef.current.status = "cancelled";
       responseRef.current.endedAt = Date.now();

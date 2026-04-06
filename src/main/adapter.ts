@@ -1,6 +1,6 @@
 import type { BrowserWindow } from "electron";
 import type { AgentEvent as CoreAgentEvent } from "@mariozechner/pi-agent-core";
-import type { AgentEvent } from "../shared/agent-events.js";
+import type { AgentEvent, AgentEventScope } from "../shared/agent-events.js";
 import { IPC_CHANNELS } from "../shared/ipc.js";
 import { getSettings } from "./settings.js";
 
@@ -37,20 +37,12 @@ function getAssistantFinalThinking(event: Extract<CoreAgentEvent, { type: "messa
  * Translates the core's event shapes into our AgentEvent union.
  */
 export class ElectronAdapter {
-  private window: BrowserWindow;
-  private sessionId: string = "";
+  private readonly window: BrowserWindow;
+  private readonly scope: AgentEventScope;
 
-  constructor(window: BrowserWindow) {
+  constructor(window: BrowserWindow, scope: AgentEventScope) {
     this.window = window;
-  }
-
-  /** Current workspace path from settings */
-  get workspacePath(): string {
-    return getSettings().workspace;
-  }
-
-  setSessionId(id: string): void {
-    this.sessionId = id;
+    this.scope = scope;
   }
 
   /** Send a typed AgentEvent to the renderer */
@@ -66,10 +58,11 @@ export class ElectronAdapter {
    */
   handleCoreEvent(event: CoreAgentEvent): void {
     const now = Date.now();
+    const { sessionId, runId } = this.scope;
 
     switch (event.type) {
       case "agent_start":
-        this.send({ type: "agent_start", sessionId: this.sessionId, timestamp: now });
+        this.send({ type: "agent_start", sessionId, runId, timestamp: now });
         break;
 
       case "agent_end": {
@@ -82,27 +75,39 @@ export class ElectronAdapter {
           )[0];
 
         if (errorMessage) {
-          this.send({ type: "agent_error", message: errorMessage, timestamp: now });
+          this.send({
+            type: "agent_error",
+            sessionId,
+            runId,
+            message: errorMessage,
+            timestamp: now,
+          });
           break;
         }
 
-        this.send({ type: "agent_end", sessionId: this.sessionId, timestamp: now });
+        this.send({ type: "agent_end", sessionId, runId, timestamp: now });
         break;
       }
 
       case "turn_start":
-        this.send({ type: "turn_start", turnIndex: 0, timestamp: now });
+        this.send({ type: "turn_start", sessionId, runId, turnIndex: 0, timestamp: now });
         break;
 
       case "turn_end":
-        this.send({ type: "turn_end", turnIndex: 0, timestamp: now });
+        this.send({ type: "turn_end", sessionId, runId, turnIndex: 0, timestamp: now });
         break;
 
       case "message_start":
         if (event.message.role !== "assistant") {
           break;
         }
-        this.send({ type: "message_start", role: "assistant", timestamp: now });
+        this.send({
+          type: "message_start",
+          sessionId,
+          runId,
+          role: "assistant",
+          timestamp: now,
+        });
         break;
 
       case "message_end": {
@@ -113,6 +118,8 @@ export class ElectronAdapter {
         const usage = msg.role === "assistant" ? msg.usage : undefined;
         this.send({
           type: "message_end",
+          sessionId,
+          runId,
           usage: usage ? { inputTokens: usage.input, outputTokens: usage.output } : undefined,
           finalText: getAssistantFinalText(event),
           finalThinking: getAssistantFinalThinking(event),
@@ -124,9 +131,21 @@ export class ElectronAdapter {
       case "message_update": {
         const sub = event.assistantMessageEvent;
         if (sub.type === "thinking_delta") {
-          this.send({ type: "thinking_delta", delta: sub.delta, timestamp: now });
+          this.send({
+            type: "thinking_delta",
+            sessionId,
+            runId,
+            delta: sub.delta,
+            timestamp: now,
+          });
         } else if (sub.type === "text_delta") {
-          this.send({ type: "text_delta", delta: sub.delta, timestamp: now });
+          this.send({
+            type: "text_delta",
+            sessionId,
+            runId,
+            delta: sub.delta,
+            timestamp: now,
+          });
         }
         // toolcall_start/delta/end are handled via tool_execution_* events
         break;
@@ -135,6 +154,8 @@ export class ElectronAdapter {
       case "tool_execution_start":
         this.send({
           type: "tool_execution_start",
+          sessionId,
+          runId,
           stepId: event.toolCallId,
           toolName: event.toolName,
           args: event.args,
@@ -145,6 +166,8 @@ export class ElectronAdapter {
       case "tool_execution_update":
         this.send({
           type: "tool_execution_update",
+          sessionId,
+          runId,
           stepId: event.toolCallId,
           output: typeof event.partialResult === "string"
             ? event.partialResult
@@ -156,6 +179,8 @@ export class ElectronAdapter {
       case "tool_execution_end":
         this.send({
           type: "tool_execution_end",
+          sessionId,
+          runId,
           stepId: event.toolCallId,
           result: event.result,
           error: event.isError ? String(event.result) : undefined,
@@ -164,5 +189,10 @@ export class ElectronAdapter {
         });
         break;
     }
+  }
+
+  /** Current workspace path from settings */
+  get workspacePath(): string {
+    return getSettings().workspace;
   }
 }

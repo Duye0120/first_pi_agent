@@ -87,6 +87,7 @@ type ThreadProps = {
   attachments?: SelectedFile[];
   isPickingFiles?: boolean;
   terminalOpen?: boolean;
+  visible?: boolean;
   onAttachFiles?: () => void;
   onPasteFiles?: (files: File[]) => void;
   onRemoveAttachment?: (attachmentId: string) => void;
@@ -101,11 +102,13 @@ type ThreadProps = {
   branchSummary?: GitBranchSummary | null;
   contextSummary?: ContextUsageSummary;
   onBranchChanged?: () => void | Promise<void>;
+  disableGlobalSideEffects?: boolean;
 };
 
 type ThreadResolvedProps = {
   attachments: SelectedFile[];
   isPickingFiles: boolean;
+  visible: boolean;
   modelOptions: ModelOption[];
   onAttachFiles: () => void;
   onPasteFiles: (files: File[]) => void;
@@ -122,6 +125,7 @@ type ThreadResolvedProps = {
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
   onBranchChanged: () => void | Promise<void>;
+  disableGlobalSideEffects: boolean;
 };
 
 type ThreadRunStatusContextValue = {
@@ -200,6 +204,7 @@ export const Thread: FC<ThreadProps> = ({
   attachments = [],
   isPickingFiles = false,
   terminalOpen = false,
+  visible = true,
   onAttachFiles = () => undefined,
   onPasteFiles = () => undefined,
   onRemoveAttachment = () => undefined,
@@ -214,6 +219,7 @@ export const Thread: FC<ThreadProps> = ({
   branchSummary = null,
   contextSummary = EMPTY_CONTEXT_USAGE_SUMMARY,
   onBranchChanged = () => undefined,
+  disableGlobalSideEffects = false,
 }) => {
   const [sources, setSources] = useState<ProviderSource[]>([]);
   const [entries, setEntries] = useState<ModelEntry[]>([]);
@@ -297,9 +303,11 @@ export const Thread: FC<ThreadProps> = ({
               runStage={runStage}
               runStatusLabel={runStatusLabel}
               isCancelling={isCancelling}
+              visible={visible}
               branchSummary={branchSummary}
               contextSummary={contextSummary}
               onBranchChanged={onBranchChanged}
+              disableGlobalSideEffects={disableGlobalSideEffects}
             />
           </div>
         </div>
@@ -359,9 +367,11 @@ const Composer: FC<ThreadResolvedProps> = ({
   onCancelRun,
   runStatusLabel,
   isCancelling,
+  visible,
   branchSummary,
   contextSummary,
   onBranchChanged,
+  disableGlobalSideEffects,
 }) => {
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const [inputScrollable, setInputScrollable] = useState(false);
@@ -404,6 +414,12 @@ const Composer: FC<ThreadResolvedProps> = ({
     syncInputOverflow();
   }, [syncInputOverflow]);
 
+  useEffect(() => {
+    if (visible) {
+      composerInputRef.current?.focus();
+    }
+  }, [visible]);
+
   return (
     <ComposerPrimitive.Root className="relative flex w-full flex-col gap-1.5">
       <ComposerAttachmentSync
@@ -421,7 +437,7 @@ const Composer: FC<ThreadResolvedProps> = ({
           }`}
           minRows={1}
           maxRows={5}
-          autoFocus
+          autoFocus={visible}
           onChange={() => {
             requestAnimationFrame(syncInputOverflow);
           }}
@@ -456,6 +472,7 @@ const Composer: FC<ThreadResolvedProps> = ({
         branchSummary={branchSummary}
         contextSummary={contextSummary}
         onBranchChanged={onBranchChanged}
+        disableGlobalSideEffects={disableGlobalSideEffects}
       />
     </ComposerPrimitive.Root>
   );
@@ -652,15 +669,20 @@ const ComposerStatusBar: FC<{
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
   onBranchChanged: () => void | Promise<void>;
+  disableGlobalSideEffects: boolean;
 }> = ({
   branchSummary,
   contextSummary,
   onBranchChanged,
+  disableGlobalSideEffects,
 }) => {
   const isThreadRunning = useAuiState((s) => s.thread.isRunning);
   const { runStage, isCancelling } = useThreadRunStatus();
   const branchInteractionDisabled =
-    isThreadRunning || isCancelling || runStage !== "idle";
+    disableGlobalSideEffects ||
+    isThreadRunning ||
+    isCancelling ||
+    runStage !== "idle";
 
   return (
     <div className="flex items-center justify-between gap-3 px-1">
@@ -709,35 +731,12 @@ const AssistantCancelledNotice: FC<{ compact?: boolean }> = ({
 };
 
 const AssistantMessageTextPart: FC = () => {
-  const { runStatusLabel } = useThreadRunStatus();
   const text = useAuiState((s) =>
     s.part.type === "text" ? s.part.text : "",
-  );
-  const status = useAuiState((s) => s.part.status);
-  const hasVisibleProgressPart = useAuiState((s) =>
-    s.message.parts.some(
-      (part) =>
-        (part.type === "reasoning" &&
-          typeof part.text === "string" &&
-          part.text.trim().length > 0) ||
-        part.type === "tool-call",
-    ),
   );
 
   if (text.trim()) {
     return <MarkdownText />;
-  }
-
-  if (!hasVisibleProgressPart && status?.type === "running" && runStatusLabel) {
-    return <AssistantRunningNotice label={runStatusLabel} />;
-  }
-
-  if (
-    !hasVisibleProgressPart &&
-    status?.type === "incomplete" &&
-    status.reason === "cancelled"
-  ) {
-    return <AssistantCancelledNotice />;
   }
 
   return null;

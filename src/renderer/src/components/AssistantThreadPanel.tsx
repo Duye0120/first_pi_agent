@@ -11,6 +11,7 @@ import {
 import type { AgentEvent } from "@shared/agent-events";
 import type {
   AgentResponse,
+  AgentRunScope,
   AgentStep,
   ChatMessage,
   ChatSession,
@@ -46,8 +47,11 @@ type AssistantThreadPanelProps = {
   onModelChange: (modelEntryId: string) => void;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
   onBranchChanged: () => void | Promise<void>;
+  onRunStateChange: (sessionId: string, isRunning: boolean) => void;
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
+  visible: boolean;
+  disableGlobalSideEffects: boolean;
 };
 
 const CONNECTING_STAGE_DELAY_MS = 220;
@@ -354,13 +358,18 @@ function SessionRuntime({
   onModelChange,
   onThinkingLevelChange,
   onBranchChanged,
+  onRunStateChange,
   branchSummary,
   contextSummary,
+  visible,
+  disableGlobalSideEffects,
 }: AssistantThreadPanelProps) {
   const latestSessionRef = useRef(session);
   const latestPersistSessionRef = useRef(onPersistSession);
+  const latestRunStateChangeRef = useRef(onRunStateChange);
   const cancelRunRef = useRef<(() => void) | null>(null);
   const activeRunTokenRef = useRef<string | null>(null);
+  const activeRunScopeRef = useRef<AgentRunScope | null>(null);
   const stageTransitionTimerRef = useRef<number | null>(null);
   const slowConnectionTimerRef = useRef<number | null>(null);
   const resetRunStateTimerRef = useRef<number | null>(null);
@@ -379,6 +388,10 @@ function SessionRuntime({
   useEffect(() => {
     latestPersistSessionRef.current = onPersistSession;
   }, [onPersistSession]);
+
+  useEffect(() => {
+    latestRunStateChangeRef.current = onRunStateChange;
+  }, [onRunStateChange]);
 
   const clearConnectionTimers = useCallback(() => {
     if (stageTransitionTimerRef.current !== null) {
@@ -491,6 +504,10 @@ function SessionRuntime({
   useEffect(() => () => {
     clearRunFeedbackTimers();
     activeRunTokenRef.current = null;
+    if (activeRunScopeRef.current) {
+      latestRunStateChangeRef.current(activeRunScopeRef.current.sessionId, false);
+      activeRunScopeRef.current = null;
+    }
   }, [clearRunFeedbackTimers]);
 
   const runStatusLabel = useMemo(
@@ -505,6 +522,11 @@ function SessionRuntime({
   const chatModel = useMemo<ChatModelAdapter>(() => ({
     run: async function* ({ messages, abortSignal }) {
       const currentSession = latestSessionRef.current;
+      const runId = crypto.randomUUID();
+      const runScope: AgentRunScope = {
+        sessionId: currentSession.id,
+        runId,
+      };
       const text = extractUserText(messages);
       const pendingAttachments = currentSession.attachments;
       const title =
@@ -523,9 +545,11 @@ function SessionRuntime({
       };
 
       latestPersistSessionRef.current(sessionAfterUserMessage);
+      activeRunScopeRef.current = runScope;
+      latestRunStateChangeRef.current(currentSession.id, true);
 
       const runToken = beginRunFeedback();
-      const response = createResponse(crypto.randomUUID());
+      const response = createResponse(runId);
       const queue = createRunQueue();
 
       let settled = false;
@@ -561,6 +585,10 @@ function SessionRuntime({
         response.endedAt = Date.now();
         cleanup();
         finishRunFeedback(runToken, nextStatus);
+        if (activeRunScopeRef.current?.runId === runId) {
+          activeRunScopeRef.current = null;
+        }
+        latestRunStateChangeRef.current(currentSession.id, false);
 
         for (const step of response.steps) {
           if (step.status === "executing") {
@@ -587,7 +615,13 @@ function SessionRuntime({
       };
 
       const handleEvent = (event: AgentEvent) => {
-        if (settled) return;
+        if (
+          settled ||
+          event.sessionId !== currentSession.id ||
+          event.runId !== runId
+        ) {
+          return;
+        }
 
         switch (event.type) {
           case "agent_start":
@@ -699,7 +733,7 @@ function SessionRuntime({
         if (settled) return;
 
         advanceRunFeedback(runToken, "cancelling");
-        void desktopApi.agent.cancel().catch(() => undefined);
+        void desktopApi.agent.cancel(runScope).catch(() => undefined);
         finalize("cancelled");
       };
       const abortHandler = abort;
@@ -711,6 +745,7 @@ function SessionRuntime({
       void desktopApi.chat
         .send({
           sessionId: currentSession.id,
+          runId,
           text,
           attachments: pendingAttachments,
         })
@@ -752,9 +787,11 @@ function SessionRuntime({
         runStage={runStage}
         runStatusLabel={runStatusLabel}
         isCancelling={isCancelling}
+        visible={visible}
         branchSummary={branchSummary}
         contextSummary={contextSummary}
         onBranchChanged={onBranchChanged}
+        disableGlobalSideEffects={disableGlobalSideEffects}
       />
     </AssistantRuntimeProvider>
   );

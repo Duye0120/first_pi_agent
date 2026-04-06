@@ -17,41 +17,44 @@ export type AgentEvent =
   | AgentErrorEvent
   | ConfirmationRequestEvent;
 
+export interface AgentEventScope {
+  sessionId: string;
+  runId: string;
+}
+
 // ── Lifecycle ──────────────────────────────────────────────────
 
-export interface AgentStartEvent {
+export interface AgentStartEvent extends AgentEventScope {
   type: "agent_start";
-  sessionId: string;
   timestamp: number;
 }
 
-export interface AgentEndEvent {
+export interface AgentEndEvent extends AgentEventScope {
   type: "agent_end";
-  sessionId: string;
   timestamp: number;
   totalTokens?: number;
   cost?: number;
 }
 
-export interface TurnStartEvent {
+export interface TurnStartEvent extends AgentEventScope {
   type: "turn_start";
   turnIndex: number;
   timestamp: number;
 }
 
-export interface TurnEndEvent {
+export interface TurnEndEvent extends AgentEventScope {
   type: "turn_end";
   turnIndex: number;
   timestamp: number;
 }
 
-export interface MessageStartEvent {
+export interface MessageStartEvent extends AgentEventScope {
   type: "message_start";
   role: "assistant";
   timestamp: number;
 }
 
-export interface MessageEndEvent {
+export interface MessageEndEvent extends AgentEventScope {
   type: "message_end";
   usage?: { inputTokens: number; outputTokens: number };
   cost?: number;
@@ -62,13 +65,13 @@ export interface MessageEndEvent {
 
 // ── Streaming Content ──────────────────────────────────────────
 
-export interface ThinkingDeltaEvent {
+export interface ThinkingDeltaEvent extends AgentEventScope {
   type: "thinking_delta";
   delta: string;
   timestamp: number;
 }
 
-export interface TextDeltaEvent {
+export interface TextDeltaEvent extends AgentEventScope {
   type: "text_delta";
   delta: string;
   timestamp: number;
@@ -76,7 +79,7 @@ export interface TextDeltaEvent {
 
 // ── Tool Execution ─────────────────────────────────────────────
 
-export interface ToolExecutionStartEvent {
+export interface ToolExecutionStartEvent extends AgentEventScope {
   type: "tool_execution_start";
   stepId: string;
   toolName: string;
@@ -84,7 +87,7 @@ export interface ToolExecutionStartEvent {
   timestamp: number;
 }
 
-export interface ToolExecutionUpdateEvent {
+export interface ToolExecutionUpdateEvent extends AgentEventScope {
   type: "tool_execution_update";
   stepId: string;
   output: string;
@@ -92,7 +95,7 @@ export interface ToolExecutionUpdateEvent {
   timestamp: number;
 }
 
-export interface ToolExecutionEndEvent {
+export interface ToolExecutionEndEvent extends AgentEventScope {
   type: "tool_execution_end";
   stepId: string;
   result?: unknown;
@@ -103,7 +106,7 @@ export interface ToolExecutionEndEvent {
 
 // ── Error ──────────────────────────────────────────────────────
 
-export interface AgentErrorEvent {
+export interface AgentErrorEvent extends AgentEventScope {
   type: "agent_error";
   message: string;
   code?: string;
@@ -112,7 +115,7 @@ export interface AgentErrorEvent {
 
 // ── Confirmation (Main → Renderer → Main) ──────────────────────
 
-export interface ConfirmationRequestEvent {
+export interface ConfirmationRequestEvent extends AgentEventScope {
   type: "confirmation_request";
   requestId: string;
   title: string;

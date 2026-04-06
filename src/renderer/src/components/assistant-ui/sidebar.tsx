@@ -22,6 +22,7 @@ import type { SettingsSection } from "@renderer/components/assistant-ui/settings
 type SidebarProps = {
   summaries: ChatSessionSummary[];
   activeSessionId: string | null;
+  runningSessionIds: string[];
   onSelectSession: (sessionId: string) => void;
   onNewSession: () => void;
   onOpenSettings: () => void;
@@ -44,6 +45,7 @@ type SidebarProps = {
 export function Sidebar({
   summaries,
   activeSessionId,
+  runningSessionIds,
   onSelectSession,
   onNewSession,
   onOpenSettings,
@@ -211,6 +213,7 @@ export function Sidebar({
 
   const renderThreadItem = (summary: ChatSessionSummary, indented = false) => {
     const active = summary.id === activeSessionId;
+    const isRunning = runningSessionIds.includes(summary.id);
     const isMoving = movingSessionId === summary.id;
     const isThreadMenuOpen = threadMenuOpenFor === summary.id;
     const isRenaming = renamingSessionId === summary.id;
@@ -267,9 +270,16 @@ export function Sidebar({
                   {summary.title}
                 </span>
               )}
-              <span className="shrink-0 text-[10px] text-[color:var(--color-text-muted)]">
-                {formatRelativeTime(summary.updatedAt)}
-              </span>
+              <div className="flex shrink-0 items-center gap-1.5 text-[10px] text-[color:var(--color-text-muted)]">
+                {isRunning ? (
+                  <span
+                    className="inline-flex size-1.5 rounded-full bg-[color:var(--color-text-muted)] animate-pulse"
+                    aria-label="线程运行中"
+                    title="线程运行中"
+                  />
+                ) : null}
+                <span>{formatRelativeTime(summary.updatedAt)}</span>
+              </div>
             </div>
           </div>
           <div className="relative ml-1 flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
