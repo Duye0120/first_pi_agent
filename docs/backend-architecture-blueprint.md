@@ -1,6 +1,6 @@
 # 后端架构蓝图
 
-> 更新时间：2026-04-07 16:03:43
+> 更新时间：2026-04-07 17:09:21
 > 目的：把“当前已经实现的后端结构”和“接下来要定的后端结构”一次讲清，避免继续边写边漂。
 
 ## 1. 一句话
@@ -32,12 +32,14 @@
 - 当前确认入口先用 Electron 原生弹窗，后面再替换成 Renderer 内嵌确认 UI
 - 当前活动 run 持久化到 `userData/data/harness-runs.json`
 - 应用重启后先做“残留 run 对账”，暂不做真正自动续跑
+- context 必须是用户可控能力，后续支持手动 `compact`
 
 ### 2.3 待定
 
 - approval 单独怎么存
 - `awaiting_confirmation` 如何恢复到 UI
 - `transformContext` 最终接口长什么样
+- 手动 `compact` 的触发协议、落盘范围和回放语义
 - `memory_search / RAG / embedding` 怎么接进 Agent Core
 - run 级别数据是继续只放 session，还是单独拆 `runs/`
 
@@ -173,6 +175,8 @@ flowchart LR
 现在只有基本 system prompt 和历史消息恢复，没有真正的：
 
 - `transformContext`
+- 用户可控的 context 策略
+- 手动 `compact`
 - 长历史压缩
 - 记忆注入
 - token 预算治理
@@ -230,6 +234,7 @@ spec 里有 T0 / T1 / T2，但当前只有 Soul 文件这一层在工作。
    - 让回放和恢复语义稳定
 4. 再做 Agent Core 上下文治理
    - `transformContext`
+   - 手动 `compact`
    - memory_search
 5. 最后补 UI 体验层
    - Renderer 内确认
@@ -258,6 +263,12 @@ spec 里有 T0 / T1 / T2，但当前只有 Soul 文件这一层在工作。
 
 这四件事拆干净。
 
+补一条针对 context 的原则：
+
+- UI 可以展示 context 使用量、提供 `compact` 按钮
+- 但真正的 compact 逻辑必须落在 Agent Core / context 管理链路
+- Harness 只负责把这次 compact 视为一个可追踪 run 内动作，不负责决定压缩算法本身
+
 ## 10. 当前结论
 
 现在可以明确下来的判断是：
@@ -269,4 +280,3 @@ spec 里有 T0 / T1 / T2，但当前只有 Soul 文件这一层在工作。
 一句话：
 
 `先把后端收成一个能解释清、能追踪、能恢复的系统，再继续往上长功能。`
-
