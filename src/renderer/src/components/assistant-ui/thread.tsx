@@ -101,6 +101,7 @@ type ThreadProps = {
   isCancelling?: boolean;
   branchSummary?: GitBranchSummary | null;
   contextSummary?: ContextUsageSummary;
+  onCompactContext?: () => void | Promise<void>;
   onBranchChanged?: () => void | Promise<void>;
   disableGlobalSideEffects?: boolean;
 };
@@ -124,6 +125,7 @@ type ThreadResolvedProps = {
   isCancelling: boolean;
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
+  onCompactContext: () => void | Promise<void>;
   onBranchChanged: () => void | Promise<void>;
   disableGlobalSideEffects: boolean;
 };
@@ -218,6 +220,7 @@ export const Thread: FC<ThreadProps> = ({
   isCancelling = false,
   branchSummary = null,
   contextSummary = EMPTY_CONTEXT_USAGE_SUMMARY,
+  onCompactContext = () => undefined,
   onBranchChanged = () => undefined,
   disableGlobalSideEffects = false,
 }) => {
@@ -312,6 +315,7 @@ export const Thread: FC<ThreadProps> = ({
               visible={visible}
               branchSummary={branchSummary}
               contextSummary={contextSummary}
+              onCompactContext={onCompactContext}
               onBranchChanged={onBranchChanged}
               disableGlobalSideEffects={disableGlobalSideEffects}
             />
@@ -376,6 +380,7 @@ const Composer: FC<ThreadResolvedProps> = ({
   visible,
   branchSummary,
   contextSummary,
+  onCompactContext,
   onBranchChanged,
   disableGlobalSideEffects,
 }) => {
@@ -477,6 +482,7 @@ const Composer: FC<ThreadResolvedProps> = ({
       <ComposerStatusBar
         branchSummary={branchSummary}
         contextSummary={contextSummary}
+        onCompactContext={onCompactContext}
         onBranchChanged={onBranchChanged}
         disableGlobalSideEffects={disableGlobalSideEffects}
       />
@@ -674,11 +680,13 @@ const ComposerAction: FC<
 const ComposerStatusBar: FC<{
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
+  onCompactContext: () => void | Promise<void>;
   onBranchChanged: () => void | Promise<void>;
   disableGlobalSideEffects: boolean;
 }> = ({
   branchSummary,
   contextSummary,
+  onCompactContext,
   onBranchChanged,
   disableGlobalSideEffects,
 }) => {
@@ -698,7 +706,7 @@ const ComposerStatusBar: FC<{
         onBranchChanged={onBranchChanged}
       />
 
-      <ContextSummaryTrigger summary={contextSummary} />
+      <ContextSummaryTrigger summary={contextSummary} onCompact={onCompactContext} />
     </div>
   );
 };

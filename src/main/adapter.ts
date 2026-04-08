@@ -1,10 +1,53 @@
+import { randomUUID } from "node:crypto";
 import { dialog, type BrowserWindow } from "electron";
 import type { AgentEvent as CoreAgentEvent } from "@mariozechner/pi-agent-core";
 import type { AgentEvent, AgentEventScope } from "../shared/agent-events.js";
+import type { AgentStep, ChatMessage } from "../shared/contracts.js";
 import { IPC_CHANNELS } from "../shared/ipc.js";
 import { getSettings } from "./settings.js";
+import {
+  appendConfirmationRequestedEvent,
+  appendConfirmationResolvedEvent,
+  appendRunStateChangedEvent,
+  appendToolFinishedEvent,
+  appendToolStartedEvent,
+} from "./session/service.js";
 
-function getAssistantFinalText(event: Extract<CoreAgentEvent, { type: "message_end" }>) {
+type TerminalEventFallback =
+  | { type: "agent_end" }
+  | { type: "agent_error"; message: string };
+
+type RunBuffer = {
+  startedAt: number;
+  finalText: string;
+  usage?: { inputTokens: number; outputTokens: number };
+  steps: AgentStep[];
+};
+
+function stringifyPartialResult(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value) ?? "";
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+function createStep(kind: AgentStep["kind"], id?: string): AgentStep {
+  return {
+    id: id ?? randomUUID(),
+    kind,
+    status: "executing",
+    startedAt: Date.now(),
+  };
+}
+
+function getAssistantFinalText(
+  event: Extract<CoreAgentEvent, { type: "message_end" }>,
+) {
   if (event.message.role !== "assistant") {
     return undefined;
   }
@@ -18,38 +61,75 @@ function getAssistantFinalText(event: Extract<CoreAgentEvent, { type: "message_e
   return text || undefined;
 }
 
-function getAssistantFinalThinking(event: Extract<CoreAgentEvent, { type: "message_end" }>) {
+function getAssistantFinalThinking(
+  event: Extract<CoreAgentEvent, { type: "message_end" }>,
+) {
   if (event.message.role !== "assistant") {
     return undefined;
   }
 
   const thinking = event.message.content
     .flatMap((part) =>
-      part.type === "thinking" && part.thinking.trim().length > 0 ? [part.thinking] : [],
+      part.type === "thinking" && part.thinking.trim().length > 0
+        ? [part.thinking]
+        : [],
     )
     .join("\n\n");
 
   return thinking || undefined;
 }
 
-/**
- * ElectronAdapter: bridges pi-agent-core events to the renderer via IPC.
- * Translates the core's event shapes into our AgentEvent union.
- */
+function getLatestThinkingStep(steps: AgentStep[]) {
+  return [...steps].reverse().find((step) => step.kind === "thinking");
+}
+
 export class ElectronAdapter {
   private readonly window: BrowserWindow;
   private readonly scope: AgentEventScope;
+  private readonly buffer: RunBuffer;
+  private pendingTerminalEvent: AgentEvent | null = null;
+  private terminalEventFlushed = false;
 
   constructor(window: BrowserWindow, scope: AgentEventScope) {
     this.window = window;
     this.scope = scope;
+    this.buffer = {
+      startedAt: Date.now(),
+      finalText: "",
+      steps: [],
+    };
   }
 
-  /** Send a typed AgentEvent to the renderer */
   send(event: AgentEvent): void {
     if (!this.window.isDestroyed()) {
       this.window.webContents.send(IPC_CHANNELS.agentEvent, event);
     }
+  }
+
+  sendRunStateChanged(input: {
+    sessionId: string;
+    runId: string;
+    state: string;
+    reason?: string;
+    currentStepId?: string;
+  }): void {
+    appendRunStateChangedEvent({
+      sessionId: input.sessionId,
+      runId: input.runId,
+      state: input.state,
+      reason: input.reason,
+      currentStepId: input.currentStepId,
+    });
+
+    this.send({
+      type: "run_state_changed",
+      sessionId: input.sessionId,
+      runId: input.runId,
+      state: input.state,
+      reason: input.reason,
+      currentStepId: input.currentStepId,
+      timestamp: Date.now(),
+    });
   }
 
   async requestConfirmation(input: {
@@ -57,7 +137,23 @@ export class ElectronAdapter {
     description: string;
     detail?: string;
   }): Promise<boolean> {
+    const requestId = randomUUID();
+    appendConfirmationRequestedEvent({
+      sessionId: this.scope.sessionId,
+      runId: this.scope.runId,
+      requestId,
+      title: input.title,
+      description: input.description,
+      detail: input.detail,
+    });
+
     if (this.window.isDestroyed()) {
+      appendConfirmationResolvedEvent({
+        sessionId: this.scope.sessionId,
+        runId: this.scope.runId,
+        requestId,
+        allowed: false,
+      });
       return false;
     }
 
@@ -72,13 +168,16 @@ export class ElectronAdapter {
       detail: input.detail,
     });
 
-    return result.response === 1;
+    const allowed = result.response === 1;
+    appendConfirmationResolvedEvent({
+      sessionId: this.scope.sessionId,
+      runId: this.scope.runId,
+      requestId,
+      allowed,
+    });
+    return allowed;
   }
 
-  /**
-   * Map a pi-agent-core event to our AgentEvent(s) and send to renderer.
-   * Some core events map to multiple of our events.
-   */
   handleCoreEvent(event: CoreAgentEvent): void {
     const now = Date.now();
     const { sessionId, runId } = this.scope;
@@ -98,26 +197,32 @@ export class ElectronAdapter {
           )[0];
 
         if (errorMessage) {
-          this.send({
-            type: "agent_error",
-            sessionId,
-            runId,
-            message: errorMessage,
-            timestamp: now,
-          });
+          this.queueTerminalError(errorMessage);
           break;
         }
 
-        this.send({ type: "agent_end", sessionId, runId, timestamp: now });
+        this.queueTerminalEnd();
         break;
       }
 
       case "turn_start":
-        this.send({ type: "turn_start", sessionId, runId, turnIndex: 0, timestamp: now });
+        this.send({
+          type: "turn_start",
+          sessionId,
+          runId,
+          turnIndex: 0,
+          timestamp: now,
+        });
         break;
 
       case "turn_end":
-        this.send({ type: "turn_end", sessionId, runId, turnIndex: 0, timestamp: now });
+        this.send({
+          type: "turn_end",
+          sessionId,
+          runId,
+          turnIndex: 0,
+          timestamp: now,
+        });
         break;
 
       case "message_start":
@@ -134,18 +239,44 @@ export class ElectronAdapter {
         break;
 
       case "message_end": {
-        const msg = event.message;
-        if (msg.role !== "assistant") {
+        const message = event.message;
+        if (message.role !== "assistant") {
           break;
         }
-        const usage = msg.role === "assistant" ? msg.usage : undefined;
+
+        const usage = message.usage
+          ? { inputTokens: message.usage.input, outputTokens: message.usage.output }
+          : undefined;
+        this.buffer.usage = usage;
+
+        const finalThinking = getAssistantFinalThinking(event);
+        if (finalThinking?.trim()) {
+          const thinkingStep = getLatestThinkingStep(this.buffer.steps);
+          if (thinkingStep) {
+            if (!thinkingStep.thinkingText?.trim()) {
+              thinkingStep.thinkingText = finalThinking;
+            }
+          } else {
+            const nextThinking = createStep("thinking");
+            nextThinking.thinkingText = finalThinking;
+            nextThinking.status = "success";
+            nextThinking.endedAt = now;
+            this.buffer.steps.push(nextThinking);
+          }
+        }
+
+        const finalText = getAssistantFinalText(event);
+        if (typeof finalText === "string") {
+          this.buffer.finalText = finalText;
+        }
+
         this.send({
           type: "message_end",
           sessionId,
           runId,
-          usage: usage ? { inputTokens: usage.input, outputTokens: usage.output } : undefined,
-          finalText: getAssistantFinalText(event),
-          finalThinking: getAssistantFinalThinking(event),
+          usage,
+          finalText,
+          finalThinking,
           timestamp: now,
         });
         break;
@@ -154,6 +285,16 @@ export class ElectronAdapter {
       case "message_update": {
         const sub = event.assistantMessageEvent;
         if (sub.type === "thinking_delta") {
+          let step = this.buffer.steps.find(
+            (item) => item.kind === "thinking" && item.status === "executing",
+          );
+
+          if (!step) {
+            step = createStep("thinking");
+            this.buffer.steps.push(step);
+          }
+
+          step.thinkingText = (step.thinkingText ?? "") + sub.delta;
           this.send({
             type: "thinking_delta",
             sessionId,
@@ -162,6 +303,7 @@ export class ElectronAdapter {
             timestamp: now,
           });
         } else if (sub.type === "text_delta") {
+          this.buffer.finalText += sub.delta;
           this.send({
             type: "text_delta",
             sessionId,
@@ -170,11 +312,30 @@ export class ElectronAdapter {
             timestamp: now,
           });
         }
-        // toolcall_start/delta/end are handled via tool_execution_* events
         break;
       }
 
-      case "tool_execution_start":
+      case "tool_execution_start": {
+        const thinking = this.buffer.steps.find(
+          (item) => item.kind === "thinking" && item.status === "executing",
+        );
+        if (thinking) {
+          thinking.status = "success";
+          thinking.endedAt = now;
+        }
+
+        const step = createStep("tool_call", event.toolCallId);
+        step.toolName = event.toolName;
+        step.toolArgs = event.args;
+        this.buffer.steps.push(step);
+
+        appendToolStartedEvent({
+          sessionId,
+          runId,
+          stepId: event.toolCallId,
+          toolName: event.toolName,
+          args: event.args as Record<string, unknown>,
+        });
         this.send({
           type: "tool_execution_start",
           sessionId,
@@ -185,21 +346,43 @@ export class ElectronAdapter {
           timestamp: now,
         });
         break;
+      }
 
-      case "tool_execution_update":
+      case "tool_execution_update": {
+        const step = this.buffer.steps.find((item) => item.id === event.toolCallId);
+        if (step) {
+          const chunk = stringifyPartialResult(event.partialResult);
+          step.streamOutput = (step.streamOutput ?? "") + chunk;
+        }
+
         this.send({
           type: "tool_execution_update",
           sessionId,
           runId,
           stepId: event.toolCallId,
-          output: typeof event.partialResult === "string"
-            ? event.partialResult
-            : JSON.stringify(event.partialResult),
+          output: stringifyPartialResult(event.partialResult),
           timestamp: now,
         });
         break;
+      }
 
-      case "tool_execution_end":
+      case "tool_execution_end": {
+        const step = this.buffer.steps.find((item) => item.id === event.toolCallId);
+        if (step) {
+          step.status = event.isError ? "error" : "success";
+          step.toolResult = event.result;
+          step.toolError = event.isError ? String(event.result) : undefined;
+          step.endedAt = now;
+        }
+
+        appendToolFinishedEvent({
+          sessionId,
+          runId,
+          stepId: event.toolCallId,
+          toolName: event.toolName,
+          result: event.isError ? undefined : event.result,
+          error: event.isError ? String(event.result) : undefined,
+        });
         this.send({
           type: "tool_execution_end",
           sessionId,
@@ -207,14 +390,92 @@ export class ElectronAdapter {
           stepId: event.toolCallId,
           result: event.result,
           error: event.isError ? String(event.result) : undefined,
-          durationMs: 0, // pi-agent-core doesn't track this; we'll calculate in renderer
+          durationMs: 0,
           timestamp: now,
         });
         break;
+      }
     }
   }
 
-  /** Current workspace path from settings */
+  queueTerminalEnd(): void {
+    if (this.terminalEventFlushed) {
+      return;
+    }
+
+    this.pendingTerminalEvent = {
+      type: "agent_end",
+      sessionId: this.scope.sessionId,
+      runId: this.scope.runId,
+      timestamp: Date.now(),
+    };
+  }
+
+  queueTerminalError(message: string): void {
+    if (this.terminalEventFlushed) {
+      return;
+    }
+
+    this.pendingTerminalEvent = {
+      type: "agent_error",
+      sessionId: this.scope.sessionId,
+      runId: this.scope.runId,
+      message,
+      timestamp: Date.now(),
+    };
+  }
+
+  flushTerminalEvent(fallback?: TerminalEventFallback): void {
+    if (this.terminalEventFlushed) {
+      return;
+    }
+
+    if (!this.pendingTerminalEvent) {
+      if (fallback?.type === "agent_error") {
+        this.queueTerminalError(fallback.message);
+      } else {
+        this.queueTerminalEnd();
+      }
+    }
+
+    if (this.pendingTerminalEvent) {
+      this.send(this.pendingTerminalEvent);
+      this.pendingTerminalEvent = null;
+      this.terminalEventFlushed = true;
+    }
+  }
+
+  buildAssistantMessage(
+    status: "completed" | "error" | "cancelled",
+    fallbackText?: string,
+  ): ChatMessage | null {
+    const finalText =
+      this.buffer.finalText.trim() || (fallbackText ? fallbackText.trim() : "");
+    const steps = this.buffer.steps.map((step) => ({ ...step }));
+    const endedAt = Date.now();
+
+    for (const step of steps) {
+      if (step.status === "executing") {
+        step.status = status === "cancelled" ? "cancelled" : "success";
+        step.endedAt = step.endedAt ?? endedAt;
+      }
+    }
+
+    if (!finalText && steps.length === 0 && !this.buffer.usage) {
+      return null;
+    }
+
+    return {
+      id: `assistant-${this.scope.runId}`,
+      role: "assistant",
+      content: finalText,
+      timestamp: new Date(endedAt).toISOString(),
+      status: status === "completed" ? "done" : "error",
+      usage: this.buffer.usage,
+      steps,
+    };
+  }
+
   get workspacePath(): string {
     return getSettings().workspace;
   }

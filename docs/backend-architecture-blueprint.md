@@ -1,6 +1,6 @@
 # 后端架构蓝图
 
-> 更新时间：2026-04-07 17:09:21
+> 更新时间：2026-04-08 11:34:08
 > 目的：把“当前已经实现的后端结构”和“接下来要定的后端结构”一次讲清，避免继续边写边漂。
 
 ## 1. 一句话
@@ -17,6 +17,14 @@
 - `Capability Ports` 负责真正执行工具和 MCP
 - `Data/Security` 负责存储、规则、日志、系统资源访问
 
+补一条这轮已经落地的收口：
+
+- `Harness Runtime` 只负责 run 生命周期、policy、approval、audit、active-run 持久化
+- `Agent Core` 保留 `src/main/agent.ts` façade，但 continuity 已拆给 `Context Engine + Session Service`
+- `Context Engine` 现在独立负责 `transformContext`、token budget、manual/auto compact、snapshot 注入
+- `Transcript Persistence` 现在独立负责 `session.json + transcript.jsonl + context-snapshot.json`
+- `Renderer` 不再是聊天正文事实源，只保留实时投影和交互
+
 ## 2. 当前状态总览
 
 ### 2.1 已定
@@ -26,6 +34,8 @@
 - 模型只能提议 `tool_call`，不能直接落副作用
 - 内置工具和 MCP 工具都要先过 Harness
 - Renderer 只做事件投影，不做副作用准入
+- 新开 session 的续接基线按 `transcript persistence + session memory snapshot + T0/T1` 走
+- `harness-runs.json` 只保存活动 run 现场，不承担长期记忆或跨 session 续聊语义
 
 ### 2.2 暂定
 
@@ -40,6 +50,8 @@
 - `awaiting_confirmation` 如何恢复到 UI
 - `transformContext` 最终接口长什么样
 - 手动 `compact` 的触发协议、落盘范围和回放语义
+- `session memory snapshot` 的字段结构和刷新时机
+- transcript 是否继续内嵌在 session.json，还是单独拆出可回放文件
 - `memory_search / RAG / embedding` 怎么接进 Agent Core
 - run 级别数据是继续只放 session，还是单独拆 `runs/`
 
@@ -55,7 +67,7 @@
 
 ## 4. 核心对象
 
-这 5 个对象后面不能再混写：
+这 6 个对象后面不能再混写：
 
 ### 4.1 Session
 
@@ -115,6 +127,23 @@ run 内的执行单元。
 - 决策可追踪
 - 故障可定位
 - run 与 session 关联
+
+### 4.6 SessionMemorySnapshot
+
+给“下次新开 session 继续做”准备的紧凑续接快照。
+
+负责：
+
+- 记录当前任务在做什么
+- 记录关键决策、关键文件、关键附件
+- 记录未完成事项、下一步建议、当前风险
+- 作为手动 `compact` 后的稳定落点之一
+
+不负责：
+
+- 保存活动 `run` 的 pending approval
+- 替代完整 transcript
+- 替代 T1 长期语义记忆
 
 ## 5. 后端正确数据流
 
@@ -177,6 +206,7 @@ flowchart LR
 - `transformContext`
 - 用户可控的 context 策略
 - 手动 `compact`
+- `session memory snapshot`
 - 长历史压缩
 - 记忆注入
 - token 预算治理
@@ -201,6 +231,7 @@ spec 里有 T0 / T1 / T2，但当前只有 Soul 文件这一层在工作。
 - session 与 run 的稳定关联字段
 - approval 在 session 内如何回放
 - run 失败后 UI 怎么恢复到可理解状态
+- 新开 session 时如何优先恢复 continuity snapshot，再按需回看 transcript
 
 ### 7.5 Renderer 还不是完整的 Harness 前端
 
@@ -220,6 +251,17 @@ spec 里有 T0 / T1 / T2，但当前只有 Soul 文件这一层在工作。
 - 查询/过滤能力
 - UI 展示或调试入口
 
+### 7.7 session continuity 还没成为独立能力
+
+当前只有 `session.json` 和 `harness-runs.json`，还没有真正为“下次新开 session 继续做”定义独立协议。
+
+缺的：
+
+- transcript persistence 的稳定边界
+- `session memory snapshot` 的生成时机
+- reopen 时的恢复顺序
+- `compact` 后保留哪些上下文字段
+
 ## 8. 推荐的收敛顺序
 
 不要乱跳，建议按这个顺序：
@@ -232,11 +274,15 @@ spec 里有 T0 / T1 / T2，但当前只有 Soul 文件这一层在工作。
    - 恢复
 3. 再补 session/run 关联
    - 让回放和恢复语义稳定
-4. 再做 Agent Core 上下文治理
+4. 再补 session continuity 主链
+   - transcript persistence
+   - `session memory snapshot`
+   - reopen / restore 语义
+5. 再做 Agent Core 上下文治理
    - `transformContext`
    - 手动 `compact`
    - memory_search
-5. 最后补 UI 体验层
+6. 最后补 UI 体验层
    - Renderer 内确认
    - run 恢复提示
    - 审计可视化
@@ -268,6 +314,12 @@ spec 里有 T0 / T1 / T2，但当前只有 Soul 文件这一层在工作。
 - UI 可以展示 context 使用量、提供 `compact` 按钮
 - 但真正的 compact 逻辑必须落在 Agent Core / context 管理链路
 - Harness 只负责把这次 compact 视为一个可追踪 run 内动作，不负责决定压缩算法本身
+
+补一条针对续会话的原则：
+
+- 新开 session 想接上次，不应强依赖完整历史重放
+- 应优先注入 `session memory snapshot`，再按需回看 transcript / T1
+- Harness 只提供活动 run 现场，不单独承担续聊记忆
 
 ## 10. 当前结论
 

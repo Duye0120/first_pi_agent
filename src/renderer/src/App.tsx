@@ -13,6 +13,7 @@ import {
 import type {
   ChatSession,
   ChatSessionSummary,
+  ContextSummary,
   GitDiffOverview,
   SelectedFile,
   Settings,
@@ -36,8 +37,7 @@ import {
   ResizablePanelGroup,
 } from "@renderer/components/ui/resizable";
 import {
-  getContextUsageSummary,
-  resolveContextWindow,
+  EMPTY_CONTEXT_USAGE_SUMMARY,
 } from "@renderer/lib/context-usage";
 import { mergeAttachments, upsertSummary } from "@renderer/lib/session";
 
@@ -142,6 +142,9 @@ export default function App() {
     {},
   );
   const [runningSessionIds, setRunningSessionIds] = useState<string[]>([]);
+  const [contextSummaryBySessionId, setContextSummaryBySessionId] = useState<
+    Record<string, ContextSummary>
+  >({});
   const [diffPanelOpen, setDiffPanelOpen] = useState(false);
   const [frameState, setFrameState] = useState<WindowFrameState>({
     isMaximized: false,
@@ -175,7 +178,6 @@ export default function App() {
     "builtin:anthropic:claude-sonnet-4-20250514",
   );
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("off");
-  const [currentContextWindow, setCurrentContextWindow] = useState<number | null>(null);
   const [gitOverview, setGitOverview] = useState<GitDiffOverview | null>(null);
   const [gitOverviewLoading, setGitOverviewLoading] = useState(false);
 
@@ -236,32 +238,6 @@ export default function App() {
     );
   }, [settings]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!desktopApi?.models || !currentModelId) {
-      setCurrentContextWindow(null);
-      return;
-    }
-
-    void desktopApi.models
-      .getEntry(currentModelId)
-      .then((entry) => {
-        if (!cancelled) {
-          setCurrentContextWindow(resolveContextWindow(entry));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCurrentContextWindow(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeSessionId, currentModelId, desktopApi, mainView]);
-
   const refreshGitOverview = useCallback(async () => {
     if (!desktopApi?.git) {
       setGitOverview(null);
@@ -308,8 +284,41 @@ export default function App() {
     });
   }, []);
 
+  const refreshContextSummary = useCallback(
+    async (sessionId: string) => {
+      if (!desktopApi?.context) {
+        return EMPTY_CONTEXT_USAGE_SUMMARY;
+      }
+
+      try {
+        const nextSummary = await desktopApi.context.getSummary(sessionId);
+        setContextSummaryBySessionId((current) => ({
+          ...current,
+          [sessionId]: nextSummary,
+        }));
+        return nextSummary;
+      } catch {
+        setContextSummaryBySessionId((current) => ({
+          ...current,
+          [sessionId]: EMPTY_CONTEXT_USAGE_SUMMARY,
+        }));
+        return EMPTY_CONTEXT_USAGE_SUMMARY;
+      }
+    },
+    [desktopApi],
+  );
+
   const removeCachedSession = useCallback((sessionId: string) => {
     setSessionCache((current) => {
+      if (!(sessionId in current)) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[sessionId];
+      return next;
+    });
+    setContextSummaryBySessionId((current) => {
       if (!(sessionId in current)) {
         return current;
       }
@@ -327,6 +336,37 @@ export default function App() {
     });
     localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, session.id);
   }, [cacheSession]);
+
+  const reloadSession = useCallback(
+    async (sessionId: string) => {
+      if (!desktopApi) {
+        return;
+      }
+
+      const session = await desktopApi.sessions.load(sessionId);
+      if (!session) {
+        return;
+      }
+
+      cacheSession(session);
+      if (activeSessionIdRef.current === sessionId) {
+        setActiveSession(session);
+      }
+      if (session.archived) {
+        setArchivedSummaries((current) => upsertSummary(current, session));
+        setSummaries((current) =>
+          current.filter((summary) => summary.id !== sessionId),
+        );
+      } else {
+        setSummaries((current) => upsertSummary(current, session));
+        setArchivedSummaries((current) =>
+          current.filter((summary) => summary.id !== sessionId),
+        );
+      }
+      await refreshContextSummary(sessionId);
+    },
+    [cacheSession, desktopApi, refreshContextSummary],
+  );
 
   const persistSession = useCallback(
     (session: ChatSession) => {
@@ -432,6 +472,7 @@ export default function App() {
       }
 
       hydrateSession(nextSession);
+      void refreshContextSummary(nextSession.id);
     } catch (error) {
       setBootError(
         error instanceof Error ? error.message : "桌面壳初始化失败。",
@@ -439,7 +480,7 @@ export default function App() {
     } finally {
       setBooting(false);
     }
-  }, [desktopApi, hydrateSession]);
+  }, [desktopApi, hydrateSession, refreshContextSummary]);
 
   useEffect(() => {
     void bootApp();
@@ -492,7 +533,8 @@ export default function App() {
     const nextSession = await desktopApi.sessions.create();
     setSummaries((current) => upsertSummary(current, nextSession));
     hydrateSession(nextSession);
-  }, [desktopApi, hydrateSession]);
+    void refreshContextSummary(nextSession.id);
+  }, [desktopApi, hydrateSession, refreshContextSummary]);
 
   const selectSession = useCallback(
     async (sessionId: string) => {
@@ -503,15 +545,17 @@ export default function App() {
       const cachedSession = sessionCacheRef.current[sessionId];
       if (cachedSession) {
         hydrateSession(cachedSession);
+        void refreshContextSummary(sessionId);
         return;
       }
 
       const session = await desktopApi.sessions.load(sessionId);
       if (session) {
         hydrateSession(session);
+        void refreshContextSummary(sessionId);
       }
     },
-    [desktopApi, hydrateSession],
+    [desktopApi, hydrateSession, refreshContextSummary],
   );
 
   const archiveSession = useCallback(
@@ -557,9 +601,10 @@ export default function App() {
       const session = await desktopApi.sessions.load(sessionId);
       if (session) {
         hydrateSession(session);
+        void refreshContextSummary(sessionId);
       }
     },
-    [desktopApi, hydrateSession, refreshSessionLists],
+    [desktopApi, hydrateSession, refreshContextSummary, refreshSessionLists],
   );
 
   const deleteSessionPermanently = useCallback(
@@ -990,6 +1035,7 @@ export default function App() {
                   session={session}
                   desktopApi={desktopApi}
                   onPersistSession={persistSession}
+                  onReloadSession={reloadSession}
                   currentModelId={currentModelId}
                   thinkingLevel={thinkingLevel}
                   terminalOpen={terminalOpen}
@@ -1002,7 +1048,10 @@ export default function App() {
                   onBranchChanged={refreshGitOverview}
                   onRunStateChange={handleSessionRunStateChange}
                   branchSummary={gitOverview?.branch ?? null}
-                  contextSummary={getContextUsageSummary(session, currentContextWindow)}
+                  contextSummary={
+                    contextSummaryBySessionId[session.id] ??
+                    EMPTY_CONTEXT_USAGE_SUMMARY
+                  }
                   visible={visible}
                   disableGlobalSideEffects={hasAnyRunningSessions}
                 />

@@ -14,6 +14,7 @@ import { cn } from "@renderer/lib/utils";
 
 type ContextSummaryTriggerProps = {
   summary: ContextUsageSummary;
+  onCompact?: () => void | Promise<void>;
 };
 
 function formatCompactTokenCount(value: number | null | undefined) {
@@ -58,6 +59,8 @@ function getDetailRows(summary: ContextUsageSummary) {
     { label: "最近输出", value: formatTokenCount(summary.latestOutputTokens) },
     { label: "估算已用", value: formatTokenCount(summary.estimatedUsedTokens) },
     { label: "估算剩余", value: formatTokenCount(summary.estimatedRemainingTokens) },
+    { label: "Snapshot", value: summary.snapshotRevision > 0 ? `r${summary.snapshotRevision}` : "未生成" },
+    { label: "已压到", value: summary.compactedUntilSeq ?? "—" },
   ];
 }
 
@@ -77,7 +80,10 @@ function ContextHoverSummary({ summary }: ContextSummaryTriggerProps) {
   );
 }
 
-function ContextExpandedSummary({ summary }: ContextSummaryTriggerProps) {
+function ContextExpandedSummary({
+  summary,
+  onCompact,
+}: ContextSummaryTriggerProps) {
   const usedPercent = formatUsedPercent(summary);
   const remainingPercent = formatRemainingPercent(summary);
 
@@ -134,12 +140,37 @@ function ContextExpandedSummary({ summary }: ContextSummaryTriggerProps) {
           </div>
         ))}
       </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[12px] text-[color:var(--color-text-muted)]">
+          {summary.isCompacting
+            ? "正在刷新 session snapshot…"
+            : summary.canCompact
+              ? "可手动 compact 历史上下文。"
+              : "当前不用再 compact。"}
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            if (!summary.isCompacting && summary.canCompact) {
+              void onCompact?.();
+            }
+          }}
+          disabled={!summary.canCompact || summary.isCompacting}
+          className="h-8 rounded-full border-none bg-shell-toolbar-hover px-3 text-[12px] shadow-none hover:bg-shell-panel-contrast disabled:cursor-not-allowed disabled:opacity-55"
+        >
+          {summary.isCompacting ? "Compacting…" : "Compact"}
+        </Button>
+      </div>
     </div>
   );
 }
 
 export function ContextSummaryTrigger({
   summary,
+  onCompact,
 }: ContextSummaryTriggerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [hoverOpen, setHoverOpen] = useState(false);
@@ -268,7 +299,7 @@ export function ContextSummaryTrigger({
               className={expanded ? "px-4 py-3" : "px-4 py-3.5"}
             >
               {expanded ? (
-                <ContextExpandedSummary summary={summary} />
+                <ContextExpandedSummary summary={summary} onCompact={onCompact} />
               ) : (
                 <ContextHoverSummary summary={summary} />
               )}

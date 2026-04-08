@@ -38,6 +38,12 @@ const desktopApi: DesktopApi = {
   chat: {
     send: (input: SendMessageInput) => ipcRenderer.invoke(IPC_CHANNELS.chatSend, input),
   },
+  context: {
+    getSummary: (sessionId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.contextGetSummary, sessionId),
+    compact: (sessionId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.contextCompact, sessionId),
+  },
 
   // ── Agent (wired in Phase 1) ──────────────────────────────
   agent: {

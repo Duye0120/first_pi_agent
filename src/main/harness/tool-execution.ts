@@ -98,6 +98,15 @@ async function executeWithHarness(
 ) {
   const runScope = ensureRunScope(context.runtime, context.sessionId);
   context.runtime.assertRunActive(runScope);
+  const emitRunStateChanged = (state: string, reason?: string) => {
+    context.adapter.sendRunStateChanged({
+      sessionId: runScope.sessionId,
+      runId: runScope.runId,
+      state,
+      reason,
+      currentStepId: toolCallId,
+    });
+  };
 
   const evaluation = evaluateToolPolicy({
     workspacePath: context.workspacePath,
@@ -110,7 +119,7 @@ async function executeWithHarness(
   });
 
   if (evaluation.decision.type === "deny") {
-    context.runtime.transitionState(runScope, "running", {
+    const nextRun = context.runtime.transitionState(runScope, "running", {
       currentStepId: toolCallId,
       reason: evaluation.decision.reason,
       metadata: {
@@ -118,10 +127,13 @@ async function executeWithHarness(
         decision: evaluation.decision.type,
       },
     });
+    if (nextRun) {
+      emitRunStateChanged(nextRun.state, evaluation.decision.reason);
+    }
     return {
       content: [
         {
-          type: "text",
+          type: "text" as const,
           text: buildDecisionText(tool.name, evaluation, "deny"),
         },
       ],
@@ -137,7 +149,7 @@ async function executeWithHarness(
 
   if (evaluation.decision.type === "confirm") {
     const normalizedArgs = evaluation.normalizedArgs ?? args;
-    context.runtime.transitionState(runScope, "awaiting_confirmation", {
+    const pendingRun = context.runtime.transitionState(runScope, "awaiting_confirmation", {
       currentStepId: toolCallId,
       pendingApproval: {
         kind: inferApprovalKind(tool.name),
@@ -151,6 +163,9 @@ async function executeWithHarness(
         decision: evaluation.decision.type,
       },
     });
+    if (pendingRun) {
+      emitRunStateChanged(pendingRun.state, evaluation.decision.reason);
+    }
 
     const confirmCopy = buildConfirmDescription(tool.name, normalizedArgs);
     const allowed = await context.adapter.requestConfirmation({
@@ -160,7 +175,7 @@ async function executeWithHarness(
     });
 
     if (!allowed) {
-      context.runtime.transitionState(runScope, "running", {
+      const resumedRun = context.runtime.transitionState(runScope, "running", {
         currentStepId: toolCallId,
         pendingApproval: null,
         reason: "用户拒绝了当前操作。",
@@ -169,10 +184,13 @@ async function executeWithHarness(
           decision: "reject-confirm",
         },
       });
+      if (resumedRun) {
+        emitRunStateChanged(resumedRun.state, "用户拒绝了当前操作。");
+      }
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: buildDecisionText(tool.name, evaluation, "reject-confirm"),
           },
         ],
@@ -192,7 +210,7 @@ async function executeWithHarness(
     throw new HarnessRunCancelledError();
   }
 
-  context.runtime.transitionState(runScope, "executing_tool", {
+  const executingRun = context.runtime.transitionState(runScope, "executing_tool", {
     currentStepId: toolCallId,
     pendingApproval: null,
     reason: "Harness 已批准工具执行。",
@@ -201,6 +219,9 @@ async function executeWithHarness(
       decision: evaluation.decision.type,
     },
   });
+  if (executingRun) {
+    emitRunStateChanged(executingRun.state, "Harness 已批准工具执行。");
+  }
 
   try {
     const result = await tool.execute(
@@ -210,7 +231,7 @@ async function executeWithHarness(
       onUpdate,
     );
 
-    context.runtime.transitionState(runScope, "running", {
+    const resumedRun = context.runtime.transitionState(runScope, "running", {
       currentStepId: toolCallId,
       pendingApproval: null,
       reason: "工具执行完成，继续回到 agent loop。",
@@ -218,10 +239,13 @@ async function executeWithHarness(
         toolName: tool.name,
       },
     });
+    if (resumedRun) {
+      emitRunStateChanged(resumedRun.state, "工具执行完成，继续回到 agent loop。");
+    }
 
     return result;
   } catch (error) {
-    context.runtime.transitionState(runScope, "running", {
+    const resumedRun = context.runtime.transitionState(runScope, "running", {
       currentStepId: toolCallId,
       pendingApproval: null,
       reason: error instanceof Error ? error.message : "工具执行失败",
@@ -230,6 +254,12 @@ async function executeWithHarness(
         error: error instanceof Error ? error.message : String(error),
       },
     });
+    if (resumedRun) {
+      emitRunStateChanged(
+        resumedRun.state,
+        error instanceof Error ? error.message : "工具执行失败",
+      );
+    }
     throw error;
   }
 }
@@ -259,4 +289,3 @@ export function wrapToolsWithHarness(
 ): AgentTool<any, any>[] {
   return tools.map((tool) => wrapToolWithHarness(tool, context));
 }
-

@@ -1,4 +1,5 @@
 import type { AgentHandle } from "../agent.js";
+import type { RunKind } from "../../shared/contracts.js";
 import { appendHarnessAuditEvent } from "./audit.js";
 import { loadPersistedHarnessRuns, savePersistedHarnessRuns } from "./store.js";
 import type {
@@ -15,6 +16,7 @@ type ActiveHarnessRun = HarnessRunSnapshot & {
 
 type CreateRunInput = HarnessRunScope & {
   modelEntryId: string;
+  runKind: RunKind;
 };
 
 type FinishRunOptions = {
@@ -89,6 +91,7 @@ export class HarnessRuntime {
       runId: input.runId,
       sessionId: input.sessionId,
       modelEntryId: input.modelEntryId,
+      runKind: input.runKind,
       state: "running",
       startedAt: Date.now(),
       cancelled: false,
@@ -107,6 +110,7 @@ export class HarnessRuntime {
       metadata: {
         modelEntryId: run.modelEntryId,
         requestId: run.requestId,
+        runKind: run.runKind,
       },
     });
 
@@ -291,6 +295,7 @@ export class HarnessRuntime {
       runId: run.runId,
       sessionId: run.sessionId,
       modelEntryId: run.modelEntryId,
+      runKind: run.runKind,
       state: run.state,
       startedAt: run.startedAt,
       endedAt: run.endedAt,

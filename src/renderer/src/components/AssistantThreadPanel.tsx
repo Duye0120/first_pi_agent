@@ -17,7 +17,6 @@ import type {
   ChatSession,
   DesktopApi,
   GitBranchSummary,
-  SelectedFile,
   ThinkingLevel,
 } from "@shared/contracts";
 import { deriveSessionTitle } from "@renderer/lib/session";
@@ -29,7 +28,6 @@ import {
 } from "@renderer/lib/chat-run-status";
 import {
   selectedFileToCompleteAttachment,
-  toPersistedMessageAttachment,
   type PersistedMessageAttachment,
 } from "@renderer/lib/assistant-ui-attachments";
 
@@ -37,6 +35,7 @@ type AssistantThreadPanelProps = {
   session: ChatSession;
   desktopApi: DesktopApi;
   onPersistSession: (session: ChatSession) => void;
+  onReloadSession: (sessionId: string) => void | Promise<void>;
   currentModelId: string;
   thinkingLevel: ThinkingLevel;
   terminalOpen?: boolean;
@@ -79,34 +78,6 @@ function createResponse(id: string): AgentResponse {
 
 function getLatestThinkingStep(steps: AgentStep[]) {
   return [...steps].reverse().find((step) => step.kind === "thinking");
-}
-
-function buildUserMessage(text: string, attachments: SelectedFile[]): ChatMessage {
-  const trimmed = text.trim();
-
-  return {
-    id: crypto.randomUUID(),
-    role: "user",
-    content: trimmed,
-    timestamp: new Date().toISOString(),
-    status: "done",
-    meta: {
-      attachmentIds: attachments.map((attachment) => attachment.id),
-      attachments: attachments.map(toPersistedMessageAttachment),
-    },
-  };
-}
-
-function buildAssistantMessage(response: AgentResponse): ChatMessage {
-  return {
-    id: response.id,
-    role: "assistant",
-    content: response.finalText,
-    timestamp: new Date(response.endedAt ?? response.startedAt).toISOString(),
-    status: response.status === "completed" ? "done" : "error",
-    usage: response.usage,
-    steps: response.steps,
-  };
 }
 
 function safeArgsText(value: unknown) {
@@ -348,6 +319,7 @@ function SessionRuntime({
   session,
   desktopApi,
   onPersistSession,
+  onReloadSession,
   currentModelId,
   thinkingLevel,
   terminalOpen = false,
@@ -366,6 +338,7 @@ function SessionRuntime({
 }: AssistantThreadPanelProps) {
   const latestSessionRef = useRef(session);
   const latestPersistSessionRef = useRef(onPersistSession);
+  const latestReloadSessionRef = useRef(onReloadSession);
   const latestRunStateChangeRef = useRef(onRunStateChange);
   const cancelRunRef = useRef<(() => void) | null>(null);
   const activeRunTokenRef = useRef<string | null>(null);
@@ -388,6 +361,10 @@ function SessionRuntime({
   useEffect(() => {
     latestPersistSessionRef.current = onPersistSession;
   }, [onPersistSession]);
+
+  useEffect(() => {
+    latestReloadSessionRef.current = onReloadSession;
+  }, [onReloadSession]);
 
   useEffect(() => {
     latestRunStateChangeRef.current = onRunStateChange;
@@ -533,15 +510,12 @@ function SessionRuntime({
         currentSession.messages.length === 0
           ? deriveSessionTitle(text, pendingAttachments)
           : currentSession.title;
-
-      const userMessage = buildUserMessage(text, pendingAttachments);
       const sessionAfterUserMessage: ChatSession = {
         ...currentSession,
         title,
-        messages: [...currentSession.messages, userMessage],
         draft: "",
         attachments: [],
-        updatedAt: userMessage.timestamp,
+        updatedAt: new Date().toISOString(),
       };
 
       latestPersistSessionRef.current(sessionAfterUserMessage);
@@ -602,24 +576,18 @@ function SessionRuntime({
           status: buildRuntimeStatus(response),
         };
 
-        if (nextStatus === "completed" || nextStatus === "error") {
-          const assistantMessage = buildAssistantMessage(response);
-          latestPersistSessionRef.current({
-            ...sessionAfterUserMessage,
-            messages: [...sessionAfterUserMessage.messages, assistantMessage],
-            updatedAt: assistantMessage.timestamp,
-          });
-        }
-
         queue.finish(update);
       };
 
       const handleEvent = (event: AgentEvent) => {
-        if (
-          settled ||
-          event.sessionId !== currentSession.id ||
-          event.runId !== runId
-        ) {
+        if (event.sessionId !== currentSession.id || event.runId !== runId) {
+          return;
+        }
+
+        if (settled) {
+          if (event.type === "agent_end" || event.type === "agent_error") {
+            void latestReloadSessionRef.current(currentSession.id);
+          }
           return;
         }
 
@@ -719,10 +687,12 @@ function SessionRuntime({
               ? `\n\n**错误：** ${event.message}`
               : `**错误：** ${event.message}`;
             finalize("error");
+            void latestReloadSessionRef.current(currentSession.id);
             break;
 
           case "agent_end":
             finalize("completed");
+            void latestReloadSessionRef.current(currentSession.id);
             break;
         }
       };
@@ -755,6 +725,7 @@ function SessionRuntime({
           response.finalText =
             error instanceof Error ? error.message : "发送失败，请稍后重试。";
           finalize("error");
+          void latestReloadSessionRef.current(currentSession.id);
         });
 
       yield* queue.drain();
@@ -772,7 +743,7 @@ function SessionRuntime({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <Thread
+        <Thread
         attachments={session.attachments}
         isPickingFiles={isPickingFiles}
         terminalOpen={terminalOpen}
@@ -790,6 +761,14 @@ function SessionRuntime({
         visible={visible}
         branchSummary={branchSummary}
         contextSummary={contextSummary}
+        onCompactContext={async () => {
+          try {
+            await desktopApi.context.compact(session.id);
+            await latestReloadSessionRef.current(session.id);
+          } catch {
+            // Compact 失败时保留当前线程 UI，不额外打断聊天流。
+          }
+        }}
         onBranchChanged={onBranchChanged}
         disableGlobalSideEffects={disableGlobalSideEffects}
       />

@@ -1,3 +1,5 @@
+import type { RunKind } from "../../shared/contracts.js";
+
 export type HarnessRunState =
   | "running"
   | "awaiting_confirmation"
@@ -25,6 +27,7 @@ export type HarnessPendingApproval = {
 export type HarnessRunSnapshot = HarnessRunScope & {
   requestId: string;
   modelEntryId: string;
+  runKind: RunKind;
   state: HarnessRunState;
   startedAt: number;
   endedAt?: number;
@@ -64,4 +67,3 @@ export type HarnessAuditEvent = HarnessRunScope & {
   reason?: string;
   metadata?: Record<string, unknown>;
 };
-

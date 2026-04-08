@@ -39,15 +39,30 @@
 ├─────────────────────────────────────────────────┤
 │  T2: 会话记忆                                    │
 │                                                 │
-│  内容：当前对话的 messages 列表                   │
-│  生命周期：会话期间（会话结束后提取关键信息到 T1）  │
-│  加载方式：全量（由 pi-agent-core 管理）           │
-│  大小：动态增长，由 transformContext 控制上限      │
+│  内容：当前对话 messages + session continuity 快照 │
+│  生命周期：会话期间持续更新，必要时为续会话保留摘要  │
+│  加载方式：活跃会话可全量，重开时先注入快照再补历史 │
+│  大小：messages 动态增长，快照保持紧凑               │
 │                                                 │
 │  类比：当前对话的短期记忆                         │
 │  你正在和朋友聊天，聊的内容你当然全记得。          │
 └─────────────────────────────────────────────────┘
 ```
+
+补一条边界：
+
+- `T2` 不只是“当前 messages 列表”，还包括“为同一任务后续 session 续接准备的 session memory snapshot”
+- `T2` 仍然是 session 级短中期记忆，不等于 `T1` 长期记忆
+- `T2` 也不等于 Harness 的活动 `run snapshot`；后者负责执行现场，不负责语义续接
+
+### 当前实现收口
+
+这轮先只落 `T0 + T2`：
+
+- `T0` 继续来自 `SOUL / USER / AGENTS`
+- `T2` 已固定成 `recent transcript tail + session memory snapshot`
+- `T1` 现在只保留架构位置，不做 embedding / RAG / memory_search
+- `compact` 已改成 Main 侧 context 能力，不在 Renderer 本地做压缩
 
 ## 7.3 数据流全景
 
@@ -59,30 +74,34 @@
 1. 加载 T0（Soul 层）
    读取 SOUL.md + USER.md + AGENTS.md → 拼入 system prompt
 
-2. 用户发送第一条消息："帮我看看上次那个项目的进度"
+2. 如果是重开已有任务
+   先加载 transcript + session memory snapshot
+   让模型先知道“上次做到哪、还有什么没做”
 
-3. transformContext 触发隐式记忆检索
+3. 用户发送第一条消息："帮我看看上次那个项目的进度"
+
+4. transformContext 触发隐式记忆检索
    "上次那个项目" → embedding → 向量检索 T1
    → 找到记忆："用户在做一个 Electron agent 项目，使用 pi-agent-core"
    → 注入到 context 中
 
-4. Agent 带着完整上下文开始工作
+5. Agent 带着完整上下文开始工作
    system prompt（T0）+ 检索到的记忆（T1）+ 用户消息（T2）
 
 ═══ 会话进行中 ═══
 
-5. 多轮对话，T2 持续增长
+6. 多轮对话，T2 持续增长
    用户消息、agent 回复、工具调用结果不断追加
 
-6. transformContext 持续管理
+7. transformContext 持续管理
    如果 T2 太大 → 压缩早期对话为摘要
 
-7. Agent 可以主动调用 memory_search 工具
+8. Agent 可以主动调用 memory_search 工具
    "让我查一下用户之前的偏好..." → 检索 T1
 
 ═══ 会话结束 ═══
 
-8. 记忆提取（T2 → T1）
+9. 记忆提取（T2 → T1）
    用 LLM 分析本次对话 → 提取关键信息 → 写入 T1 长期记忆
 
    对话内容："用户说下周二要面试字节，岗位是全栈工程师"

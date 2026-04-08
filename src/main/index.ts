@@ -25,6 +25,7 @@ import {
   setSessionGroup,
   unarchiveSession,
 } from "./store.js";
+import { compactSession, getContextSummary } from "./context/service.js";
 import { IPC_CHANNELS } from "../shared/ipc.js";
 import type { ChatSession, SendMessageInput } from "../shared/contracts.js";
 import { ElectronAdapter } from "./adapter.js";
@@ -39,6 +40,13 @@ import {
   getHandle,
 } from "./agent.js";
 import { getSettings, updateSettings } from "./settings.js";
+import {
+  appendAssistantMessageEvent,
+  appendRunFinishedEvent,
+  appendRunStartedEvent,
+  appendUserMessageEvent,
+  recoverInterruptedRuns,
+} from "./session/service.js";
 import {
   deleteEntry,
   deleteSource,
@@ -226,6 +234,14 @@ function registerIpcHandlers() {
     async (_event, sessionId: string, title: string) =>
       renameSession(sessionId, title),
   );
+  ipcMain.handle(
+    IPC_CHANNELS.contextGetSummary,
+    async (_event, sessionId: string) => getContextSummary(sessionId),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.contextCompact,
+    async (_event, sessionId: string) => compactSession(sessionId),
+  );
 
   ipcMain.handle(IPC_CHANNELS.groupsList, async () => listGroups());
   ipcMain.handle(IPC_CHANNELS.groupsCreate, async (_event, name: string) =>
@@ -243,14 +259,16 @@ function registerIpcHandlers() {
     IPC_CHANNELS.chatSend,
     async (_event, input: SendMessageInput) => {
       const settings = getSettings();
+      const existingSession = loadSession(input.sessionId);
+      if (!existingSession) {
+        throw new Error("会话不存在，无法继续发送。");
+      }
+
+      const resolvedModel = resolveModelEntry(settings.defaultModelId);
       const runScope = {
         sessionId: input.sessionId,
         runId: input.runId,
       };
-      harnessRuntime.createRun({
-        ...runScope,
-        modelEntryId: settings.defaultModelId,
-      });
       const scopedAdapter = new ElectronAdapter(requireMainWindow(), {
         sessionId: input.sessionId,
         runId: input.runId,
@@ -258,10 +276,31 @@ function registerIpcHandlers() {
 
       let createdHandle = false;
       let handle: ReturnType<typeof getHandle> = null;
+      let runCreated = false;
+      let transcriptStarted = false;
 
       try {
-        harnessRuntime.assertRunActive(runScope);
-        const resolvedModel = resolveModelEntry(settings.defaultModelId);
+        harnessRuntime.createRun({
+          ...runScope,
+          modelEntryId: resolvedModel.entry.id,
+          runKind: "chat",
+        });
+        runCreated = true;
+        appendUserMessageEvent({
+          sessionId: input.sessionId,
+          text: input.text,
+          attachments: input.attachments,
+          modelEntryId: resolvedModel.entry.id,
+          thinkingLevel: settings.thinkingLevel,
+        });
+        appendRunStartedEvent({
+          sessionId: input.sessionId,
+          runId: input.runId,
+          runKind: "chat",
+          modelEntryId: resolvedModel.entry.id,
+          thinkingLevel: settings.thinkingLevel,
+        });
+        transcriptStarted = true;
         harnessRuntime.assertRunActive(runScope);
 
         handle = getHandle(input.sessionId);
@@ -271,13 +310,12 @@ function registerIpcHandlers() {
           handle.runtimeSignature !== resolvedModel.runtimeSignature ||
           handle.thinkingLevel !== settings.thinkingLevel
         ) {
-          const session = await loadSession(input.sessionId);
           harnessRuntime.assertRunActive(runScope);
 
           handle = await initAgent(
             input.sessionId,
             scopedAdapter,
-            session?.messages ?? [],
+            existingSession.messages,
           );
           createdHandle = true;
         }
@@ -287,32 +325,84 @@ function registerIpcHandlers() {
         harnessRuntime.assertRunActive(runScope);
 
         await promptAgent(handle, input.text, input.attachments);
+        const assistantMessage = scopedAdapter.buildAssistantMessage("completed");
+        if (assistantMessage) {
+          appendAssistantMessageEvent({
+            sessionId: input.sessionId,
+            runId: input.runId,
+            message: assistantMessage,
+          });
+        }
+        appendRunFinishedEvent({
+          sessionId: input.sessionId,
+          runId: input.runId,
+          finalState: "completed",
+        });
         harnessRuntime.finishRun(runScope, "completed");
+        scopedAdapter.flushTerminalEvent({ type: "agent_end" });
       } catch (err) {
         if (
           err instanceof HarnessRunCancelledError ||
           harnessRuntime.isCancelRequested(runScope)
         ) {
+          const cancelledMessage = scopedAdapter.buildAssistantMessage("cancelled");
+          if (cancelledMessage && transcriptStarted) {
+            appendAssistantMessageEvent({
+              sessionId: input.sessionId,
+              runId: input.runId,
+              message: cancelledMessage,
+            });
+          }
+          if (transcriptStarted) {
+            appendRunFinishedEvent({
+              sessionId: input.sessionId,
+              runId: input.runId,
+              finalState: "aborted",
+              reason: "用户取消了当前 run。",
+            });
+          }
           if (createdHandle && handle) {
             await destroyAgent(handle);
           }
-          harnessRuntime.finishRun(runScope, "aborted", {
-            reason: "用户取消了当前 run。",
-          });
+          if (runCreated) {
+            harnessRuntime.finishRun(runScope, "aborted", {
+              reason: "用户取消了当前 run。",
+            });
+          }
+          scopedAdapter.flushTerminalEvent({ type: "agent_end" });
           return;
         }
 
-        harnessRuntime.finishRun(runScope, "failed", {
-          reason: err instanceof Error ? err.message : "Agent 执行失败",
-        });
-
-        // Send error event to renderer
-        scopedAdapter.send({
+        const errorMessage =
+          err instanceof Error ? err.message : "Agent 执行失败";
+        const failedMessage = scopedAdapter.buildAssistantMessage(
+          "error",
+          errorMessage,
+        );
+        if (failedMessage && transcriptStarted) {
+          appendAssistantMessageEvent({
+            sessionId: input.sessionId,
+            runId: input.runId,
+            message: failedMessage,
+          });
+        }
+        if (transcriptStarted) {
+          appendRunFinishedEvent({
+            sessionId: input.sessionId,
+            runId: input.runId,
+            finalState: "failed",
+            reason: errorMessage,
+          });
+        }
+        if (runCreated) {
+          harnessRuntime.finishRun(runScope, "failed", {
+            reason: errorMessage,
+          });
+        }
+        scopedAdapter.queueTerminalError(errorMessage);
+        scopedAdapter.flushTerminalEvent({
           type: "agent_error",
-          sessionId: input.sessionId,
-          runId: input.runId,
-          message: err instanceof Error ? err.message : "Agent 执行失败",
-          timestamp: Date.now(),
+          message: errorMessage,
         });
       } finally {
         if (handle) {
@@ -460,7 +550,8 @@ function registerIpcHandlers() {
 }
 
 app.whenReady().then(() => {
-  harnessRuntime.hydrateFromDisk();
+  const recoveredRuns = harnessRuntime.hydrateFromDisk();
+  recoverInterruptedRuns(recoveredRuns);
   registerIpcHandlers();
   createMainWindow();
   setTerminalWindow(mainWindow!);

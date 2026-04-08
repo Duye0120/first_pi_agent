@@ -1,13 +1,13 @@
 import { Agent } from "@mariozechner/pi-agent-core";
 import type { AgentEvent as CoreAgentEvent } from "@mariozechner/pi-agent-core";
 import type { ElectronAdapter } from "./adapter.js";
+import { createTransformContext, getSessionMemoryPromptSection } from "./context/service.js";
 import { getSettings } from "./settings.js";
 import { resolveModelEntry } from "./providers.js";
-import { getBuiltinTools } from "./tools/index.js";
+import { buildToolPool } from "./tools/index.js";
 import { buildSoulPromptSection } from "./soul.js";
 import { loadMcpConfig, getActiveServers } from "../mcp/config.js";
 import { McpConnectionManager } from "../mcp/client.js";
-import { getAllMcpTools } from "../mcp/adapter.js";
 import { wrapToolsWithHarness } from "./harness/tool-execution.js";
 import { harnessRuntime } from "./harness/singleton.js";
 import {
@@ -24,6 +24,7 @@ export interface AgentHandle {
   runtimeSignature: string;
   thinkingLevel: string;
   mcpManager: McpConnectionManager;
+  workspacePath: string;
   activeRunId: string | null;
 }
 
@@ -70,9 +71,7 @@ export async function initAgent(
   );
 
   // Load MCP tools
-  const builtinTools = getBuiltinTools(adapter.workspacePath);
   const mcpManager = new McpConnectionManager();
-  let mcpTools: any[] = [];
   try {
     const mcpConfig = loadMcpConfig(adapter.workspacePath);
     const servers = getActiveServers(mcpConfig);
@@ -83,12 +82,15 @@ export async function initAgent(
         /* skip failing servers */
       }
     }
-    mcpTools = await getAllMcpTools(mcpManager.getConnections());
   } catch {
     /* MCP init failure is non-fatal */
   }
 
-  const tools = wrapToolsWithHarness([...builtinTools, ...mcpTools], {
+  const tools = wrapToolsWithHarness(await buildToolPool({
+    workspacePath: adapter.workspacePath,
+    sessionId,
+    mcpManager,
+  }), {
     sessionId,
     workspacePath: adapter.workspacePath,
     adapter,
@@ -97,13 +99,17 @@ export async function initAgent(
 
   const agent = new Agent({
     initialState: {
-      systemPrompt: buildSystemPrompt(adapter.workspacePath),
+      systemPrompt: await buildSystemPrompt(adapter.workspacePath, sessionId),
       model: resolved.model,
       thinkingLevel: settings.thinkingLevel,
       tools,
       messages: normalizedMessages,
     },
     getApiKey: () => resolved.apiKey,
+    transformContext: createTransformContext(
+      sessionId,
+      resolved.model.contextWindow ?? null,
+    ),
     sessionId,
   });
 
@@ -117,6 +123,7 @@ export async function initAgent(
     runtimeSignature: resolved.runtimeSignature,
     thinkingLevel: settings.thinkingLevel,
     mcpManager,
+    workspacePath: adapter.workspacePath,
     activeRunId: null,
   };
 
@@ -149,6 +156,9 @@ export async function promptAgent(
   text: string,
   attachments: SelectedFile[],
 ): Promise<void> {
+  handle.agent.setSystemPrompt(
+    await buildSystemPrompt(handle.workspacePath, handle.sessionId),
+  );
   await handle.agent.prompt(
     await buildUserPromptMessage(
       text,
@@ -200,7 +210,7 @@ export function getHandle(sessionId: string): AgentHandle | null {
   return handlesBySession.get(sessionId) ?? null;
 }
 
-function buildSystemPrompt(workspacePath: string): string {
+function buildBaseSystemPrompt(workspacePath: string): string {
   const base = [
     "你是 Pi，一个运行在用户桌面上的 AI 助手。",
     "你可以帮助用户完成各种软件开发和日常任务。",
@@ -209,9 +219,17 @@ function buildSystemPrompt(workspacePath: string): string {
     "你拥有以下工具能力：",
     "- get_time: 获取当前时间",
     "- file_read: 读取本地文件内容（指定行范围）",
+    "- file_edit: 对已有文件做精确替换，适合小范围改代码",
     "- file_write: 创建或写入本地文件（覆盖/追加）",
+    "- glob_search: 按 glob 模式查找文件",
+    "- grep_search: 按文本或正则搜索代码/文本内容",
     "- shell_exec: 执行 shell 命令（有安全限制）",
     "- web_fetch: 获取网页内容并转换为纯文本",
+    "- web_search: 搜索网页结果，适合先搜再读",
+    "- todo_read / todo_write: 读取或更新当前线程的待办清单",
+    "- list_mcp_resources / read_mcp_resource / list_mcp_resource_templates: 读取已连接 MCP 服务暴露的资源",
+    "- 兼容外部常见别名：edit_file / WebSearch / TodoWrite / ListMcpResources / ReadMcpResource",
+    "- mcp_*: 已连接 MCP 服务动态注入的工具，默认需要更谨慎地使用",
     "",
     "使用工具时，路径相对于用户的 workspace 目录。",
     "shell_exec 会使用当前配置的 shell；Windows 下通常是 PowerShell。请按对应 shell 的语法写命令，不要默认使用 bash 专属语法。",
@@ -220,4 +238,13 @@ function buildSystemPrompt(workspacePath: string): string {
 
   const soul = buildSoulPromptSection(workspacePath);
   return soul ? base + soul : base;
+}
+
+async function buildSystemPrompt(
+  workspacePath: string,
+  sessionId: string,
+): Promise<string> {
+  const base = buildBaseSystemPrompt(workspacePath);
+  const snapshot = await getSessionMemoryPromptSection(sessionId);
+  return snapshot ? `${base}\n\n${snapshot}` : base;
 }

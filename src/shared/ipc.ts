@@ -25,6 +25,8 @@ export const IPC_CHANNELS = {
 
   // Chat
   chatSend: "chat:send",
+  contextGetSummary: "context:get-summary",
+  contextCompact: "context:compact",
 
   // Agent events (main → renderer push)
   agentEvent: "agent:event",

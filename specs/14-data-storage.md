@@ -31,23 +31,26 @@
 │
 ├── settings.json                # 用户设置（模型、外观、终端配置）
 ├── credentials.json             # API Keys（0600 权限）
-├── desktop-shell-state.json     # UI 状态（窗口尺寸、面板开关等）
 │
-├── sessions/                    # 会话数据
-│   ├── index.json               # 会话索引（id, title, updatedAt）
-│   ├── {sessionId}.json         # 单个会话的完整数据
-│   └── …
+├── data/
+│   ├── ui-state.json            # UI 状态（窗口尺寸、面板开关等）
+│   ├── groups.json              # 线程分组
+│   ├── harness-runs.json        # 活动 run 注册表
+│   ├── sessions/
+│   │   ├── index.json
+│   │   ├── {sessionId}/
+│   │   │   ├── session.json
+│   │   │   ├── transcript.jsonl
+│   │   │   └── context-snapshot.json
+│   │   └── …
+│   └── logs/
+│       └── audit.log            # Harness 审计日志（JSON Lines）
 │
 ├── memory/                      # T1 长期记忆（向量数据库）
 │   ├── vectors.db               # SQLite + vec 扩展（向量存储）
 │   └── raw/                     # 原始记忆文本（备份/调试用）
 │       ├── {memoryId}.md
 │       └── …
-│
-└── logs/                        # 应用日志
-    ├── main.log                 # 当天日志
-    ├── main.{date}.log          # 历史日志（保留 7 天）
-    └── audit.log                # Harness 审计日志（JSON Lines）
 ```
 
 ### Workspace 目录结构
@@ -68,6 +71,15 @@
 
 ## 14.3 会话存储
 
+### 当前已定格式
+
+当前实现已经从单个 `sessions/{id}.json` 收口到目录模式：
+
+- `session.json` 只存线程元数据、draft、附件、lastRunState、seq 等轻量字段
+- `transcript.jsonl` 是线程内唯一聊天事实流
+- `context-snapshot.json` 只存 `T2 session memory snapshot`
+- `ChatSession` 只是 Renderer projection，不再是持久化原始格式
+
 ### 为什么从单文件改为多文件
 
 当前实现把所有会话存在一个 `desktop-shell-state.json` 里。随着会话增多和消息增长，这个文件会变得很大（一个有 100 条消息的会话约 200KB，10 个会话就 2MB），每次保存都要全量写入。
@@ -82,67 +94,59 @@
 ```typescript
 // sessions/index.json
 {
-  "activeSessionId": "abc-123",
-  "sessions": [
+  "summaries": [
     {
       "id": "abc-123",
       "title": "重构 Auth 模块",
       "updatedAt": "2025-06-15T10:30:00Z",
-      "messageCount": 24
-    },
-    // ...
+      "messageCount": 24,
+      "archived": false,
+      "groupId": null,
+      "lastRunState": "completed"
+    }
   ]
 }
 ```
 
-### 单会话文件
+### 单线程目录
 
 ```typescript
-// sessions/{sessionId}.json
+// sessions/{sessionId}/session.json
 {
   "id": "abc-123",
   "title": "重构 Auth 模块",
   "createdAt": "2025-06-15T09:00:00Z",
   "updatedAt": "2025-06-15T10:30:00Z",
-  "model": {
-    "provider": "anthropic",
-    "model": "claude-sonnet-4-20250514"
-  },
-  "messages": [
-    {
-      "id": "msg-001",
-      "role": "user",
-      "content": "帮我把 auth middleware 重构一下",
-      "timestamp": "2025-06-15T09:00:05Z",
-      "attachments": []
-    },
-    {
-      "id": "msg-002",
-      "role": "assistant",
-      "content": "好的，让我先看看现有的代码结构…",
-      "timestamp": "2025-06-15T09:00:08Z",
-      "status": "done",
-      "steps": [
-        {
-          "id": "step-001",
-          "kind": "tool_call",
-          "toolName": "file_read",
-          "toolArgs": { "path": "src/middleware/auth.ts" },
-          "status": "success",
-          "startedAt": 1718441408000,
-          "endedAt": 1718441408500
-        }
-        // ...
-      ]
-    }
-    // ...
-  ],
   "draft": "",
-  "attachments": []
+  "attachments": [],
+  "lastModelEntryId": "builtin:anthropic:claude-sonnet-4-20250514",
+  "lastRunId": "run-123",
+  "lastRunState": "completed",
+  "transcriptSeq": 42,
+  "snapshotRevision": 3
 }
 ```
 
-步骤数据（`steps`）随消息一起持久化，这样重新打开会话时可以完整回放 Agent 的执行过程（折叠的步骤卡片）。
+```typescript
+// sessions/{sessionId}/transcript.jsonl
+{"seq":1,"sessionId":"abc-123","timestamp":"2025-06-15T09:00:05Z","type":"user_message","message":{...}}
+{"seq":2,"sessionId":"abc-123","runId":"run-123","timestamp":"2025-06-15T09:00:05Z","type":"run_started","runKind":"chat","modelEntryId":"builtin:anthropic:claude-sonnet-4-20250514","thinkingLevel":"off"}
+{"seq":3,"sessionId":"abc-123","runId":"run-123","timestamp":"2025-06-15T09:00:08Z","type":"assistant_message","message":{...}}
+{"seq":4,"sessionId":"abc-123","runId":"run-123","timestamp":"2025-06-15T09:00:08Z","type":"run_finished","finalState":"completed"}
+```
+
+```typescript
+// sessions/{sessionId}/context-snapshot.json
+{
+  "version": 1,
+  "sessionId": "abc-123",
+  "revision": 3,
+  "compactedUntilSeq": 24,
+  "summary": "…"
+}
+```
+
+步骤数据仍随 `assistant_message.message.steps` 落在 transcript 里，Renderer 重新 load 时再 materialize 成现有 `ChatSession`。
 
 ### Harness 持久化约束
 

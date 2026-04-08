@@ -5,6 +5,7 @@
 export type AgentEvent =
   | AgentStartEvent
   | AgentEndEvent
+  | RunStateChangedEvent
   | TurnStartEvent
   | TurnEndEvent
   | MessageStartEvent
@@ -26,6 +27,14 @@ export interface AgentEventScope {
 
 export interface AgentStartEvent extends AgentEventScope {
   type: "agent_start";
+  timestamp: number;
+}
+
+export interface RunStateChangedEvent extends AgentEventScope {
+  type: "run_state_changed";
+  state: string;
+  reason?: string;
+  currentStepId?: string;
   timestamp: number;
 }
 

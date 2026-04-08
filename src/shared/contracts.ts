@@ -196,6 +196,8 @@ export type MessageUsage = {
   outputTokens: number;
 };
 
+export type RunKind = "chat" | "compact" | "system";
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
@@ -233,7 +235,134 @@ export type ChatSessionSummary = {
   messageCount: number;
   archived?: boolean;
   groupId?: string;
+  lastRunState?: AgentResponseStatus | "awaiting_confirmation" | "running";
 };
+
+export type SessionMemorySnapshot = {
+  version: 1;
+  sessionId: string;
+  revision: number;
+  updatedAt: string;
+  compactedUntilSeq: number;
+  summary: string;
+  currentTask: string | null;
+  currentState: string | null;
+  decisions: string[];
+  importantFiles: string[];
+  importantAttachments: {
+    id: string;
+    name: string;
+    path: string;
+    kind: string;
+  }[];
+  openLoops: string[];
+  nextActions: string[];
+  risks: string[];
+  workspace: {
+    branchName: string | null;
+    modelEntryId: string | null;
+    thinkingLevel: string | null;
+  };
+  sourceRunIds: string[];
+  sourceMessageIds: string[];
+};
+
+export type SessionTranscriptEvent =
+  | {
+      seq: number;
+      sessionId: string;
+      timestamp: string;
+      type: "user_message";
+      message: ChatMessage;
+    }
+  | {
+      seq: number;
+      sessionId: string;
+      runId: string;
+      timestamp: string;
+      type: "run_started";
+      runKind: RunKind;
+      modelEntryId: string;
+      thinkingLevel: string;
+    }
+  | {
+      seq: number;
+      sessionId: string;
+      runId: string;
+      timestamp: string;
+      type: "run_state_changed";
+      state: string;
+      reason?: string;
+      currentStepId?: string;
+    }
+  | {
+      seq: number;
+      sessionId: string;
+      runId: string;
+      timestamp: string;
+      type: "tool_started";
+      stepId: string;
+      toolName: string;
+      args: Record<string, unknown>;
+    }
+  | {
+      seq: number;
+      sessionId: string;
+      runId: string;
+      timestamp: string;
+      type: "tool_finished";
+      stepId: string;
+      toolName: string;
+      result?: unknown;
+      error?: string;
+    }
+  | {
+      seq: number;
+      sessionId: string;
+      runId: string;
+      timestamp: string;
+      type: "confirmation_requested";
+      requestId: string;
+      title: string;
+      description: string;
+      detail?: string;
+    }
+  | {
+      seq: number;
+      sessionId: string;
+      runId: string;
+      timestamp: string;
+      type: "confirmation_resolved";
+      requestId: string;
+      allowed: boolean;
+    }
+  | {
+      seq: number;
+      sessionId: string;
+      runId: string;
+      timestamp: string;
+      type: "assistant_message";
+      message: ChatMessage;
+    }
+  | {
+      seq: number;
+      sessionId: string;
+      runId: string;
+      timestamp: string;
+      type: "compact_applied";
+      snapshotRevision: number;
+      compactedUntilSeq: number;
+      reason: "manual" | "auto";
+    }
+  | {
+      seq: number;
+      sessionId: string;
+      runId: string;
+      timestamp: string;
+      type: "run_finished";
+      finalState: "completed" | "aborted" | "failed";
+      reason?: string;
+    };
 
 export type AgentRunScope = {
   sessionId: string;
@@ -247,6 +376,22 @@ export type SendMessageInput = AgentRunScope & {
 
 export type WindowUiState = {
   diffPanelOpen: boolean;
+};
+
+export type ContextSummary = {
+  state: "ready" | "window-only" | "usage-only" | "unknown";
+  contextWindow: number | null;
+  latestInputTokens: number | null;
+  latestOutputTokens: number | null;
+  estimatedUsedTokens: number | null;
+  estimatedRemainingTokens: number | null;
+  usedRatio: number | null;
+  remainingRatio: number | null;
+  snapshotRevision: number;
+  snapshotUpdatedAt: string | null;
+  compactedUntilSeq: number | null;
+  canCompact: boolean;
+  isCompacting: boolean;
 };
 
 export type GitBranchSummary = {
@@ -327,6 +472,10 @@ export type DesktopApi = {
   chat: {
     /** Phase 0: returns mock reply. Phase 1+: returns void, response comes via agent.onEvent */
     send: (input: SendMessageInput) => Promise<AssistantMessage | void>;
+  };
+  context: {
+    getSummary: (sessionId: string) => Promise<ContextSummary>;
+    compact: (sessionId: string) => Promise<ContextSummary>;
   };
   agent: {
     onEvent: (callback: (event: AgentEvent) => void) => () => void;

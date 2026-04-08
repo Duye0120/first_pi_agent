@@ -33,7 +33,12 @@ export function loadPersistedHarnessRuns(): HarnessRunSnapshot[] {
   try {
     const raw = readFileSync(filePath, "utf-8");
     const parsed = JSON.parse(raw) as Partial<PersistedHarnessRuns>;
-    return Array.isArray(parsed.runs) ? parsed.runs : [];
+    return Array.isArray(parsed.runs)
+      ? parsed.runs.map((run) => ({
+          ...run,
+          runKind: run.runKind ?? "chat",
+        }))
+      : [];
   } catch {
     return [];
   }
@@ -46,4 +51,3 @@ export function savePersistedHarnessRuns(runs: HarnessRunSnapshot[]): void {
     JSON.stringify({ runs } satisfies PersistedHarnessRuns, null, 2),
   );
 }
-

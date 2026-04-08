@@ -16,7 +16,23 @@ type ToolPolicyContext = {
 };
 
 function getRiskLevel(toolName: string): HarnessRiskLevel {
-  if (toolName === "web_fetch" || toolName === "get_time") {
+  if (
+    toolName === "web_fetch" ||
+    toolName === "WebFetch" ||
+    toolName === "web_search" ||
+    toolName === "WebSearch" ||
+    toolName === "get_time" ||
+    toolName === "glob_search" ||
+    toolName === "grep_search" ||
+    toolName === "todo_read" ||
+    toolName === "todo_write" ||
+    toolName === "TodoWrite" ||
+    toolName === "list_mcp_resources" ||
+    toolName === "ListMcpResources" ||
+    toolName === "list_mcp_resource_templates" ||
+    toolName === "read_mcp_resource" ||
+    toolName === "ReadMcpResource"
+  ) {
     return "safe";
   }
 
@@ -26,6 +42,8 @@ function getRiskLevel(toolName: string): HarnessRiskLevel {
 
   if (
     toolName === "file_read" ||
+    toolName === "file_edit" ||
+    toolName === "edit_file" ||
     toolName === "file_write" ||
     toolName === "shell_exec"
   ) {
@@ -134,6 +152,53 @@ export function evaluateToolPolicy({
     };
   }
 
+  if (toolName === "file_edit" || toolName === "edit_file") {
+    const targetPath = typeof args.path === "string" ? args.path : "";
+    if (!targetPath.trim()) {
+      return {
+        toolName,
+        riskLevel,
+        decision: { type: "deny", reason: "缺少有效文件路径。" },
+      };
+    }
+
+    const resolvedPath = resolveWorkspacePath(workspacePath, targetPath);
+    if (!isPathAllowed(resolvedPath, workspacePath)) {
+      return {
+        toolName,
+        riskLevel,
+        decision: { type: "deny", reason: "路径超出 workspace 范围。" },
+        metadata: { resolvedPath },
+      };
+    }
+
+    if (isWritePathForbidden(resolvedPath)) {
+      return {
+        toolName,
+        riskLevel,
+        decision: { type: "deny", reason: "该目录受写保护。" },
+        metadata: { resolvedPath },
+      };
+    }
+
+    if (!fs.existsSync(resolvedPath)) {
+      return {
+        toolName,
+        riskLevel,
+        decision: { type: "deny", reason: "目标文件不存在。" },
+        metadata: { resolvedPath },
+      };
+    }
+
+    return {
+      toolName,
+      riskLevel,
+      decision: { type: "allow" },
+      normalizedArgs: { ...args, path: targetPath },
+      metadata: { resolvedPath },
+    };
+  }
+
   if (toolName === "file_read") {
     const targetPath = typeof args.path === "string" ? args.path : "";
     if (!targetPath.trim()) {
@@ -172,7 +237,7 @@ export function evaluateToolPolicy({
     };
   }
 
-  if (toolName === "web_fetch") {
+  if (toolName === "web_fetch" || toolName === "WebFetch") {
     const url = typeof args.url === "string" ? args.url : "";
     if (!url.trim()) {
       return {
@@ -200,6 +265,51 @@ export function evaluateToolPolicy({
     };
   }
 
+  if (toolName === "web_search" || toolName === "WebSearch") {
+    const query = typeof args.query === "string" ? args.query : "";
+    if (!query.trim()) {
+      return {
+        toolName,
+        riskLevel,
+        decision: { type: "deny", reason: "缺少有效搜索关键词。" },
+      };
+    }
+
+    return {
+      toolName,
+      riskLevel,
+      decision: { type: "allow" },
+      normalizedArgs: { ...args, query },
+    };
+  }
+
+  if (toolName === "glob_search" || toolName === "grep_search") {
+    return {
+      toolName,
+      riskLevel,
+      decision: { type: "allow" },
+      normalizedArgs: args,
+    };
+  }
+
+  if (
+    toolName === "todo_read" ||
+    toolName === "todo_write" ||
+    toolName === "TodoWrite" ||
+    toolName === "list_mcp_resources" ||
+    toolName === "ListMcpResources" ||
+    toolName === "list_mcp_resource_templates" ||
+    toolName === "read_mcp_resource" ||
+    toolName === "ReadMcpResource"
+  ) {
+    return {
+      toolName,
+      riskLevel,
+      decision: { type: "allow" },
+      normalizedArgs: args,
+    };
+  }
+
   if (toolName.startsWith("mcp_")) {
     return {
       toolName,
@@ -216,4 +326,3 @@ export function evaluateToolPolicy({
     normalizedArgs: args,
   };
 }
-

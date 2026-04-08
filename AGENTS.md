@@ -12,6 +12,16 @@
 - 用户后续手动补的规则、我补的规则、spec 里反复确认过的规则，都要视为长期约束；发现缺少沉淀时要主动补文档。
 - 新增规则时，优先写成稳定约束，不要写成一次性聊天记录。
 
+架构梳理默认术语。`新增：2026-04-08 10:17:37`
+- 讨论 harness 架构时，强制区分 `run memory`、`session memory`、`semantic memory`；不要把活动 run 持久化误写成完整记忆系统。
+- 默认按 `Harness Runtime / Context Engine / Memory System / Transcript Persistence` 拆层；先收边界，再加高级能力。
+- 新开 session 想接上上次任务，默认依赖 `session transcript + session memory snapshot + T0/T1`，不是只靠 `harness-runs.json`。
+
+工具链默认性能优先。`新增：2026-04-08 14:39:31`
+- 检索、扫描、批量读写这类重活，优先原生可执行或成熟现成包，不为语言统一硬扛纯 `TS`。
+- 只要 UI 保持可用，底层实现可直接选更快的方案；默认先保速度，再谈形式统一。
+- 搜索类能力交付前必须做真实烟测，不能只看类型过没过。
+
 UI 设计默认谨慎使用 border。
 - 当前项目更偏好直接用不同背景色、明度和留白来表达层级。
 - 默认先考虑颜色分层，不要先想到 border。
