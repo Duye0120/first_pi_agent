@@ -2,6 +2,7 @@ import { Agent } from "@mariozechner/pi-agent-core";
 import type { AgentEvent as CoreAgentEvent } from "@mariozechner/pi-agent-core";
 import type { ElectronAdapter } from "./adapter.js";
 import { createTransformContext, getSessionMemoryPromptSection } from "./context/service.js";
+import { getSemanticMemoryPromptSection } from "./memory/service.js";
 import { getSettings } from "./settings.js";
 import { resolveModelEntry } from "./providers.js";
 import { buildToolPool } from "./tools/index.js";
@@ -157,7 +158,7 @@ export async function promptAgent(
   attachments: SelectedFile[],
 ): Promise<void> {
   handle.agent.setSystemPrompt(
-    await buildSystemPrompt(handle.workspacePath, handle.sessionId),
+    await buildSystemPrompt(handle.workspacePath, handle.sessionId, text),
   );
   await handle.agent.prompt(
     await buildUserPromptMessage(
@@ -243,8 +244,14 @@ function buildBaseSystemPrompt(workspacePath: string): string {
 async function buildSystemPrompt(
   workspacePath: string,
   sessionId: string,
+  latestUserText?: string,
 ): Promise<string> {
   const base = buildBaseSystemPrompt(workspacePath);
   const snapshot = await getSessionMemoryPromptSection(sessionId);
-  return snapshot ? `${base}\n\n${snapshot}` : base;
+  const semanticMemory = await getSemanticMemoryPromptSection({
+    sessionId,
+    query: latestUserText ?? null,
+  });
+
+  return [base, snapshot, semanticMemory].filter(Boolean).join("\n\n");
 }

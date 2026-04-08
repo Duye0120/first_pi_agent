@@ -52,6 +52,40 @@ function getUsageLine(summary: ContextUsageSummary) {
   return "等待 usage 与窗口信息";
 }
 
+function getContinuityHeadline(summary: ContextUsageSummary) {
+  if (summary.currentTask) {
+    return summary.currentTask;
+  }
+
+  if (summary.openLoops[0]) {
+    return summary.openLoops[0];
+  }
+
+  if (summary.nextActions[0]) {
+    return summary.nextActions[0];
+  }
+
+  if (summary.snapshotSummary) {
+    return summary.snapshotSummary.split(/\r?\n/)[0] ?? summary.snapshotSummary;
+  }
+
+  return "还没有可续接的 session snapshot";
+}
+
+function getContinuityRows(summary: ContextUsageSummary) {
+  return [
+    summary.currentTask
+      ? { label: "当前任务", value: summary.currentTask }
+      : null,
+    summary.currentState
+      ? { label: "当前状态", value: summary.currentState }
+      : null,
+    summary.branchName
+      ? { label: "工作分支", value: summary.branchName }
+      : null,
+  ].filter((row): row is { label: string; value: string } => !!row);
+}
+
 function getDetailRows(summary: ContextUsageSummary) {
   return [
     { label: "窗口上限", value: formatTokenCount(summary.contextWindow) },
@@ -75,6 +109,9 @@ function ContextHoverSummary({ summary }: ContextSummaryTriggerProps) {
       </p>
       <p className="mt-2 text-[13px] font-medium leading-5 text-[color:var(--color-text-secondary)] [font-variant-numeric:tabular-nums]">
         {getUsageLine(summary)}
+      </p>
+      <p className="mt-2 line-clamp-3 text-[12px] leading-5 text-[color:var(--color-text-muted)]">
+        {getContinuityHeadline(summary)}
       </p>
     </div>
   );
@@ -140,6 +177,92 @@ function ContextExpandedSummary({
           </div>
         ))}
       </div>
+
+      <div className="rounded-[14px] bg-shell-toolbar-hover px-3 py-2.5">
+        <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
+          续接摘要
+        </p>
+        <p className="mt-1.5 whitespace-pre-line text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
+          {summary.snapshotSummary ?? getContinuityHeadline(summary)}
+        </p>
+      </div>
+
+      {getContinuityRows(summary).length > 0 ? (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
+          {getContinuityRows(summary).map((row) => (
+            <div key={row.label} className="contents">
+              <span className="text-[color:var(--color-text-muted)]">{row.label}</span>
+              <span className="text-right text-[color:var(--color-text-secondary)]">
+                {row.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {summary.openLoops.length > 0 ? (
+        <div className="rounded-[14px] bg-shell-toolbar-hover px-3 py-2.5">
+          <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
+            未闭环
+          </p>
+          <div className="mt-1.5 flex flex-col gap-1.5">
+            {summary.openLoops.map((item) => (
+              <p key={item} className="text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
+                {item}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {summary.nextActions.length > 0 ? (
+        <div className="rounded-[14px] bg-white/68 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
+          <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
+            下一步
+          </p>
+          <div className="mt-1.5 flex flex-col gap-1.5">
+            {summary.nextActions.map((item) => (
+              <p key={item} className="text-[12px] leading-5 text-foreground">
+                {item}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {summary.risks.length > 0 || summary.importantFiles.length > 0 ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {summary.risks.length > 0 ? (
+            <div className="rounded-[14px] bg-shell-toolbar-hover px-3 py-2.5">
+              <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
+                风险
+              </p>
+              <div className="mt-1.5 flex flex-col gap-1.5">
+                {summary.risks.map((item) => (
+                  <p key={item} className="text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
+                    {item}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {summary.importantFiles.length > 0 ? (
+            <div className="rounded-[14px] bg-shell-toolbar-hover px-3 py-2.5">
+              <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
+                关键文件
+              </p>
+              <div className="mt-1.5 flex flex-col gap-1.5">
+                {summary.importantFiles.map((item) => (
+                  <p key={item} className="truncate text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
+                    {item}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between gap-3">
         <p className="text-[12px] text-[color:var(--color-text-muted)]">

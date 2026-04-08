@@ -430,6 +430,7 @@ function buildContextSummaryFromUsage(sessionId: string): ContextSummary {
       : null;
   const snapshot = getPersistedSnapshot(sessionId);
   const requiredCompactedUntilSeq = getRequiredCompactedUntilSeq(sessionId);
+  const hasSnapshot = snapshot.revision > 0;
 
   return {
     state:
@@ -448,8 +449,16 @@ function buildContextSummaryFromUsage(sessionId: string): ContextSummary {
     usedRatio,
     remainingRatio,
     snapshotRevision: snapshot.revision,
-    snapshotUpdatedAt: snapshot.revision > 0 ? snapshot.updatedAt : null,
+    snapshotUpdatedAt: hasSnapshot ? snapshot.updatedAt : null,
     compactedUntilSeq: snapshot.compactedUntilSeq > 0 ? snapshot.compactedUntilSeq : null,
+    snapshotSummary: hasSnapshot && snapshot.summary.trim() ? snapshot.summary : null,
+    currentTask: hasSnapshot ? snapshot.currentTask : null,
+    currentState: hasSnapshot ? snapshot.currentState : null,
+    branchName: hasSnapshot ? snapshot.workspace.branchName : null,
+    importantFiles: hasSnapshot ? snapshot.importantFiles.slice(0, 4) : [],
+    openLoops: hasSnapshot ? snapshot.openLoops.slice(0, 3) : [],
+    nextActions: hasSnapshot ? snapshot.nextActions.slice(0, 3) : [],
+    risks: hasSnapshot ? snapshot.risks.slice(0, 3) : [],
     canCompact: requiredCompactedUntilSeq > snapshot.compactedUntilSeq,
     isCompacting: compactingSessionIds.has(sessionId),
   };

@@ -390,6 +390,14 @@ export type ContextSummary = {
   snapshotRevision: number;
   snapshotUpdatedAt: string | null;
   compactedUntilSeq: number | null;
+  snapshotSummary: string | null;
+  currentTask: string | null;
+  currentState: string | null;
+  branchName: string | null;
+  importantFiles: string[];
+  openLoops: string[];
+  nextActions: string[];
+  risks: string[];
   canCompact: boolean;
   isCompacting: boolean;
 };
