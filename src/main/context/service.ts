@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import { completeSimple, type TextContent } from "@mariozechner/pi-ai";
 import type {
   ChatMessage,
   ContextSummary,
@@ -9,7 +10,7 @@ import type {
 } from "../../shared/contracts.js";
 import { getGitDiffSnapshot } from "../git.js";
 import { harnessRuntime } from "../harness/singleton.js";
-import { getEntry } from "../providers.js";
+import { getEntry, resolveModelEntry } from "../providers.js";
 import {
   appendCompactAppliedEvent,
   appendRunFinishedEvent,
@@ -17,6 +18,7 @@ import {
   getPersistedSnapshot,
   getSessionMeta,
   loadTranscriptEvents,
+  updateSessionMeta,
   writePersistedSnapshot,
 } from "../session/service.js";
 import { getSettings } from "../settings.js";
@@ -26,6 +28,7 @@ const PROTECTED_USER_TURNS = 6;
 const PROTECTED_MESSAGE_COUNT = PROTECTED_USER_TURNS * 2;
 const SUMMARY_LINE_LIMIT = 6;
 const MAX_IMPORTANT_ITEMS = 8;
+const MAX_AUTO_COMPACT_FAILURES = 3;
 const compactingSessionIds = new Set<string>();
 
 type MessageTranscriptEvent = Extract<
@@ -36,6 +39,11 @@ type MessageTranscriptEvent = Extract<
 type PersistedAttachment = Pick<
   SelectedFile,
   "id" | "name" | "path" | "kind"
+>;
+
+type SnapshotDraft = Pick<
+  SessionMemorySnapshot,
+  "summary" | "currentTask" | "currentState" | "decisions" | "openLoops" | "nextActions" | "risks"
 >;
 
 function getMessageEvents(events: SessionTranscriptEvent[]): MessageTranscriptEvent[] {
@@ -74,6 +82,14 @@ function dedupeTake(items: string[], limit: number): string[] {
   }
 
   return result;
+}
+
+function mergePriorityArray(
+  primary: string[],
+  fallback: string[],
+  limit: number,
+): string[] {
+  return dedupeTake([...primary, ...fallback], limit);
 }
 
 function isPersistedAttachment(value: unknown): value is PersistedAttachment {
@@ -176,32 +192,114 @@ function collectImportantAttachments(events: MessageTranscriptEvent[]): Persiste
   return [...unique.values()].slice(0, MAX_IMPORTANT_ITEMS);
 }
 
-function collectHighlights(
-  messages: ChatMessage[],
-  keywords: RegExp,
-  limit: number,
-): string[] {
-  const matches = messages.flatMap((message) => {
-    const snippets = message.content
-      .split(/\r?\n+/)
-      .map((line) => truncateText(line, 100))
-      .filter(Boolean);
+function getMessageSnippets(message: ChatMessage, maxLength = 100): string[] {
+  return message.content
+    .split(/\r?\n+|(?<=[。！？；])/u)
+    .map((line) => truncateText(line, maxLength))
+    .filter(Boolean);
+}
 
-    return snippets.filter((line) => keywords.test(line));
-  });
+function getLatestPendingConfirmation(events: SessionTranscriptEvent[]) {
+  const latestRequested = [...events].reverse().find(
+    (
+      event,
+    ): event is Extract<SessionTranscriptEvent, { type: "confirmation_requested" }> =>
+      event.type === "confirmation_requested",
+  );
+  if (!latestRequested) {
+    return null;
+  }
 
-  if (matches.length > 0) {
-    return dedupeTake(matches.reverse(), limit);
+  const resolved = [...events].reverse().find(
+    (
+      event,
+    ): event is Extract<SessionTranscriptEvent, { type: "confirmation_resolved" }> =>
+      event.type === "confirmation_resolved" &&
+      event.requestId === latestRequested.requestId,
+  );
+
+  return resolved ? null : latestRequested;
+}
+
+function getLatestUserEvent(events: SessionTranscriptEvent[]) {
+  return [...events].reverse().find(
+    (
+      event,
+    ): event is Extract<SessionTranscriptEvent, { type: "user_message" }> =>
+      event.type === "user_message",
+  );
+}
+
+function getLatestAssistantEvent(events: SessionTranscriptEvent[]) {
+  return [...events].reverse().find(
+    (
+      event,
+    ): event is Extract<SessionTranscriptEvent, { type: "assistant_message" }> =>
+      event.type === "assistant_message",
+  );
+}
+
+function getLatestToolFailure(events: SessionTranscriptEvent[]) {
+  return [...events].reverse().find(
+    (
+      event,
+    ): event is Extract<SessionTranscriptEvent, { type: "tool_finished" }> =>
+      event.type === "tool_finished" && typeof event.error === "string" && !!event.error.trim(),
+  );
+}
+
+function getLatestUnansweredUserEvent(events: SessionTranscriptEvent[]) {
+  const latestUser = getLatestUserEvent(events);
+  const latestAssistant = getLatestAssistantEvent(events);
+
+  if (
+    latestUser &&
+    (!latestAssistant ||
+      Date.parse(latestUser.timestamp) > Date.parse(latestAssistant.timestamp))
+  ) {
+    return latestUser;
+  }
+
+  return null;
+}
+
+function collectDecisionHighlights(messages: ChatMessage[]): string[] {
+  const decisionKeywords = /(决定|改成|采用|切到|保留|不做|默认|约束|方案|先|暂时|优先)/i;
+  const lines = messages.flatMap((message) => getMessageSnippets(message, 92));
+  const decisionLines = lines.filter((line) => decisionKeywords.test(line));
+
+  if (decisionLines.length > 0) {
+    return dedupeTake(decisionLines.reverse(), 4);
   }
 
   return dedupeTake(
     messages
-      .slice(-limit)
-      .map((message) => truncateText(message.content, 100))
-      .filter(Boolean)
+      .slice(-2)
+      .flatMap((message) => getMessageSnippets(message, 92))
       .reverse(),
-    limit,
+    3,
   );
+}
+
+function collectProgressHighlights(events: MessageTranscriptEvent[]): string[] {
+  const assistantMessages = events
+    .filter((event) => event.type === "assistant_message")
+    .map((event) => event.message);
+  const assistantLines = assistantMessages.flatMap((message) =>
+    getMessageSnippets(message, 96),
+  );
+
+  return dedupeTake(assistantLines.reverse(), 3);
+}
+
+function resolveCurrentTask(events: SessionTranscriptEvent[]): string | null {
+  const unansweredUser = getLatestUnansweredUserEvent(events);
+  if (unansweredUser) {
+    return truncateText(unansweredUser.message.content, 120);
+  }
+
+  const latestUser = getLatestUserEvent(events);
+  return latestUser ? truncateText(latestUser.message.content, 120) : null;
 }
 
 function getLatestRunFinished(events: SessionTranscriptEvent[]) {
@@ -223,17 +321,41 @@ function getLatestRunStarted(events: SessionTranscriptEvent[]) {
 }
 
 function resolveCurrentState(events: SessionTranscriptEvent[]): string | null {
-  const meta = getSessionMeta(events[0]?.sessionId ?? "");
-  if (meta?.lastRunState) {
-    return meta.lastRunState;
+  const pendingConfirmation = getLatestPendingConfirmation(events);
+  if (pendingConfirmation) {
+    return "等待用户确认";
+  }
+
+  const latestToolFailure = getLatestToolFailure(events);
+  if (latestToolFailure) {
+    return `卡在 ${latestToolFailure.toolName} 错误`;
+  }
+
+  const unansweredUser = getLatestUnansweredUserEvent(events);
+  if (unansweredUser) {
+    return "等待继续处理最新用户请求";
   }
 
   const latestFinished = getLatestRunFinished(events);
-  return latestFinished?.finalState ?? null;
+  if (latestFinished?.finalState === "failed") {
+    return "上次运行失败，等待恢复";
+  }
+
+  if (latestFinished?.finalState === "aborted") {
+    return "上次运行已取消，等待下一步";
+  }
+
+  if (latestFinished?.finalState === "completed") {
+    return "已有阶段性结果，可继续推进";
+  }
+
+  const meta = getSessionMeta(events[0]?.sessionId ?? "");
+  return meta?.lastRunState ?? null;
 }
 
 function collectOpenLoops(events: SessionTranscriptEvent[]): string[] {
   const loops: string[] = [];
+  const latestToolFailure = getLatestToolFailure(events);
   const latestFinished = getLatestRunFinished(events);
   if (latestFinished?.finalState === "failed") {
     loops.push(
@@ -243,63 +365,39 @@ function collectOpenLoops(events: SessionTranscriptEvent[]): string[] {
     );
   }
 
-  const latestRequested = [...events].reverse().find(
-    (
-      event,
-    ): event is Extract<SessionTranscriptEvent, { type: "confirmation_requested" }> =>
-      event.type === "confirmation_requested",
-  );
-  if (latestRequested) {
-    const resolved = [...events].reverse().find(
-      (
-        event,
-      ): event is Extract<SessionTranscriptEvent, { type: "confirmation_resolved" }> =>
-        event.type === "confirmation_resolved" &&
-        event.requestId === latestRequested.requestId,
+  if (latestToolFailure?.error) {
+    loops.push(
+      `${latestToolFailure.toolName} 执行失败：${truncateText(latestToolFailure.error, 80)}`,
     );
-
-    if (!resolved) {
-      loops.push(`仍有待确认操作：${truncateText(latestRequested.description, 80)}`);
-    }
   }
 
-  const latestUser = [...events].reverse().find(
-    (
-      event,
-    ): event is Extract<SessionTranscriptEvent, { type: "user_message" }> =>
-      event.type === "user_message",
-  );
-  const latestAssistant = [...events].reverse().find(
-    (
-      event,
-    ): event is Extract<SessionTranscriptEvent, { type: "assistant_message" }> =>
-      event.type === "assistant_message",
-  );
-  if (
-    latestUser &&
-    (!latestAssistant ||
-      Date.parse(latestUser.timestamp) > Date.parse(latestAssistant.timestamp))
-  ) {
-    loops.push(`最近一条用户请求仍待收口：${truncateText(latestUser.message.content, 80)}`);
+  const pendingConfirmation = getLatestPendingConfirmation(events);
+  if (pendingConfirmation) {
+    loops.push(`仍有待确认操作：${truncateText(pendingConfirmation.description, 80)}`);
+  }
+
+  const unansweredUser = getLatestUnansweredUserEvent(events);
+  if (unansweredUser) {
+    loops.push(`最近一条用户请求仍待收口：${truncateText(unansweredUser.message.content, 80)}`);
   }
 
   return dedupeTake(loops, 4);
 }
 
 function collectNextActions(events: SessionTranscriptEvent[]): string[] {
-  const latestUser = [...events].reverse().find(
-    (
-      event,
-    ): event is Extract<SessionTranscriptEvent, { type: "user_message" }> =>
-      event.type === "user_message",
-  );
-  const latestAssistant = [...events].reverse().find(
-    (
-      event,
-    ): event is Extract<SessionTranscriptEvent, { type: "assistant_message" }> =>
-      event.type === "assistant_message",
-  );
   const actions: string[] = [];
+  const pendingConfirmation = getLatestPendingConfirmation(events);
+  const latestToolFailure = getLatestToolFailure(events);
+  const latestUser = getLatestUserEvent(events);
+  const latestAssistant = getLatestAssistantEvent(events);
+
+  if (pendingConfirmation) {
+    actions.push(`先处理确认：${truncateText(pendingConfirmation.title, 72)}`);
+  }
+
+  if (latestToolFailure) {
+    actions.push(`先排查 ${latestToolFailure.toolName} 的失败原因并决定是否重试。`);
+  }
 
   if (latestAssistant?.message.steps?.length) {
     const lastTool = [...latestAssistant.message.steps]
@@ -338,33 +436,19 @@ function collectRisks(events: SessionTranscriptEvent[]): string[] {
 }
 
 function buildSummaryText(input: {
-  olderMessages: ChatMessage[];
+  backgroundGoals: string[];
+  progress: string[];
+  currentState: string | null;
   decisions: string[];
   importantFiles: string[];
   openLoops: string[];
   nextActions: string[];
   risks: string[];
 }): string {
-  const userHighlights = dedupeTake(
-    input.olderMessages
-      .filter((message) => message.role === "user")
-      .slice(-3)
-      .map((message) => truncateText(message.content, 88))
-      .reverse(),
-    3,
-  );
-  const assistantHighlights = dedupeTake(
-    input.olderMessages
-      .filter((message) => message.role === "assistant")
-      .slice(-3)
-      .map((message) => truncateText(message.content, 88))
-      .reverse(),
-    3,
-  );
-
   const lines = [
-    userHighlights.length > 0 ? `历史诉求：${userHighlights.join("；")}` : "",
-    assistantHighlights.length > 0 ? `已完成进展：${assistantHighlights.join("；")}` : "",
+    input.backgroundGoals.length > 0 ? `背景目标：${input.backgroundGoals.join("；")}` : "",
+    input.progress.length > 0 ? `已做进展：${input.progress.join("；")}` : "",
+    input.currentState ? `当前停点：${input.currentState}` : "",
     input.decisions.length > 0 ? `关键决策：${input.decisions.join("；")}` : "",
     input.importantFiles.length > 0
       ? `关键文件：${input.importantFiles.map((file) => truncateText(file, 72)).join("，")}`
@@ -375,6 +459,191 @@ function buildSummaryText(input: {
   ].filter(Boolean);
 
   return lines.slice(0, SUMMARY_LINE_LIMIT).join("\n");
+}
+
+function buildCompactTranscriptExcerpt(events: MessageTranscriptEvent[]): string {
+  const head = events.slice(0, 4);
+  const tail = events.slice(-16);
+  const merged = [...head, ...tail].filter(
+    (event, index, list) =>
+      list.findIndex((candidate) => candidate.message.id === event.message.id) === index,
+  );
+
+  return merged
+    .map((event) => {
+      const roleLabel =
+        event.type === "user_message"
+          ? "user"
+          : event.message.role === "assistant"
+            ? "assistant"
+            : event.message.role;
+      return `- [${roleLabel}] ${truncateText(event.message.content, 220)}`;
+    })
+    .join("\n");
+}
+
+function extractTextBlocks(contents: Array<{ type: string }>): string {
+  return contents
+    .flatMap((content) => {
+      if (content.type !== "text") {
+        return [];
+      }
+
+      return [(content as TextContent).text];
+    })
+    .join("\n")
+    .trim();
+}
+
+function tryParseJsonObject(text: string): Record<string, unknown> | null {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+
+  const candidates = [normalized];
+  const firstBrace = normalized.indexOf("{");
+  const lastBrace = normalized.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(normalized.slice(firstBrace, lastBrace + 1));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Try next candidate.
+    }
+  }
+
+  return null;
+}
+
+function normalizeDraftString(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return truncateText(normalized, maxLength);
+}
+
+function normalizeDraftStringArray(value: unknown, limit: number, maxLength: number): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return dedupeTake(
+    value
+      .map((item) => normalizeDraftString(item, maxLength))
+      .filter((item): item is string => !!item),
+    limit,
+  );
+}
+
+function normalizeSnapshotDraft(value: Record<string, unknown>): SnapshotDraft | null {
+  const summary = normalizeDraftString(value.summary, 1200);
+  if (!summary) {
+    return null;
+  }
+
+  return {
+    summary,
+    currentTask: normalizeDraftString(value.currentTask, 120),
+    currentState: normalizeDraftString(value.currentState, 120),
+    decisions: normalizeDraftStringArray(value.decisions, 4, 120),
+    openLoops: normalizeDraftStringArray(value.openLoops, 4, 120),
+    nextActions: normalizeDraftStringArray(value.nextActions, 3, 120),
+    risks: normalizeDraftStringArray(value.risks, 3, 120),
+  };
+}
+
+async function buildSnapshotDraftWithModel(input: {
+  sessionId: string;
+  compactedEvents: MessageTranscriptEvent[];
+  importantFiles: string[];
+  openLoops: string[];
+  nextActions: string[];
+  risks: string[];
+  decisions: string[];
+  currentState: string | null;
+  currentTask: string | null;
+}): Promise<SnapshotDraft | null> {
+  const meta = getSessionMeta(input.sessionId);
+  const preferredModelId = meta?.lastModelEntryId ?? getSettings().defaultModelId;
+
+  try {
+    const resolved = resolveModelEntry(preferredModelId);
+    const response = await completeSimple(
+      resolved.model,
+      {
+        systemPrompt: [
+          "你是 session continuity compact summarizer。",
+          "你的任务是把一段历史线程压缩成可续会话摘要。",
+          "只输出 JSON，不要解释，不要 Markdown。",
+          "禁止编造没有出现在输入里的文件、风险、决策或任务。",
+          "summary 要像工作现场记录，覆盖：背景目标、已做进展、当前停点、关键决策、下一步、风险。",
+        ].join("\n"),
+        messages: [
+          {
+            role: "user",
+            content: [
+              "请基于下面材料生成 JSON，字段固定为：",
+              "{",
+              '  "summary": string,',
+              '  "currentTask": string | null,',
+              '  "currentState": string | null,',
+              '  "decisions": string[],',
+              '  "openLoops": string[],',
+              '  "nextActions": string[],',
+              '  "risks": string[]',
+              "}",
+              "",
+              "要求：",
+              "- summary 用中文，控制在 6 行以内，适合下次打开线程直接接上。",
+              "- 数组项简短具体，不超过 4 项。",
+              "- 如果某字段不确定，就给 null 或空数组。",
+              "",
+              `当前任务候选：${input.currentTask ?? "null"}`,
+              `当前状态候选：${input.currentState ?? "null"}`,
+              `关键决策候选：${input.decisions.join("；") || "无"}`,
+              `未闭环候选：${input.openLoops.join("；") || "无"}`,
+              `下一步候选：${input.nextActions.join("；") || "无"}`,
+              `风险候选：${input.risks.join("；") || "无"}`,
+              `关键文件候选：${input.importantFiles.join("，") || "无"}`,
+              "",
+              "可被 compact 的历史摘录：",
+              buildCompactTranscriptExcerpt(input.compactedEvents),
+            ].join("\n"),
+            timestamp: Date.now(),
+          },
+        ],
+      },
+      {
+        apiKey: resolved.apiKey,
+        maxTokens: 900,
+      },
+    );
+
+    const text = extractTextBlocks(response.content);
+    const parsed = tryParseJsonObject(text);
+    return parsed ? normalizeSnapshotDraft(parsed) : null;
+  } catch {
+    return null;
+  }
 }
 
 function getLatestUsage(events: SessionTranscriptEvent[]) {
@@ -404,6 +673,7 @@ function resolveContextWindow(sessionId: string): number | null {
 function buildContextSummaryFromUsage(sessionId: string): ContextSummary {
   const usage = getLatestUsage(loadTranscriptEvents(sessionId));
   const contextWindow = resolveContextWindow(sessionId);
+  const meta = getSessionMeta(sessionId);
   const latestInputTokens = usage?.inputTokens ?? null;
   const latestOutputTokens = usage?.outputTokens ?? null;
   const estimatedUsedTokens =
@@ -459,6 +729,9 @@ function buildContextSummaryFromUsage(sessionId: string): ContextSummary {
     openLoops: hasSnapshot ? snapshot.openLoops.slice(0, 3) : [],
     nextActions: hasSnapshot ? snapshot.nextActions.slice(0, 3) : [],
     risks: hasSnapshot ? snapshot.risks.slice(0, 3) : [],
+    autoCompactFailureCount: meta?.autoCompactFailureCount ?? 0,
+    autoCompactBlocked: !!meta?.autoCompactBlockedAt,
+    autoCompactBlockedAt: meta?.autoCompactBlockedAt ?? null,
     canCompact: requiredCompactedUntilSeq > snapshot.compactedUntilSeq,
     isCompacting: compactingSessionIds.has(sessionId),
   };
@@ -499,12 +772,17 @@ async function buildSnapshot(sessionId: string): Promise<SessionMemorySnapshot |
   }
 
   const olderMessages = olderEvents.map((event) => event.message);
-  const decisionKeywords = /(决定|改成|采用|切到|保留|不做|默认|约束|方案|compact|snapshot)/i;
-  const decisions = collectHighlights(
-    olderMessages.filter((message) => message.role !== "system"),
-    decisionKeywords,
-    4,
+  const nonSystemOlderMessages = olderMessages.filter((message) => message.role !== "system");
+  const backgroundGoals = dedupeTake(
+    olderMessages
+      .filter((message) => message.role === "user")
+      .slice(-3)
+      .map((message) => truncateText(message.content, 88))
+      .reverse(),
+    3,
   );
+  const decisions = collectDecisionHighlights(nonSystemOlderMessages);
+  const progress = collectProgressHighlights(olderEvents);
   const importantFiles = collectImportantFiles(events, compactedUntilSeq);
   const importantAttachments = collectImportantAttachments(olderEvents).map((attachment) => ({
     id: attachment.id,
@@ -512,19 +790,56 @@ async function buildSnapshot(sessionId: string): Promise<SessionMemorySnapshot |
     path: attachment.path,
     kind: attachment.kind,
   }));
-  const openLoops = collectOpenLoops(events);
-  const nextActions = collectNextActions(events);
-  const risks = collectRisks(events);
+  const heuristicOpenLoops = collectOpenLoops(events);
+  const heuristicNextActions = collectNextActions(events);
+  const heuristicRisks = collectRisks(events);
   const latestRunStarted = getLatestRunStarted(events);
-  const latestUser = [...messageEvents].reverse().find((event) => event.type === "user_message");
-  const summary = buildSummaryText({
-    olderMessages,
+  const heuristicCurrentTask = resolveCurrentTask(events);
+  const heuristicCurrentState = resolveCurrentState(events);
+  const heuristicSummary = buildSummaryText({
+    backgroundGoals,
+    progress,
+    currentState: heuristicCurrentState,
     decisions,
     importantFiles,
-    openLoops,
-    nextActions,
-    risks,
+    openLoops: heuristicOpenLoops,
+    nextActions: heuristicNextActions,
+    risks: heuristicRisks,
   });
+  const modelDraft = await buildSnapshotDraftWithModel({
+    sessionId,
+    compactedEvents: olderEvents,
+    importantFiles,
+    openLoops: heuristicOpenLoops,
+    nextActions: heuristicNextActions,
+    risks: heuristicRisks,
+    decisions,
+    currentState: heuristicCurrentState,
+    currentTask: heuristicCurrentTask,
+  });
+  const summary = modelDraft?.summary ?? heuristicSummary;
+  const currentTask = modelDraft?.currentTask ?? heuristicCurrentTask;
+  const currentState = modelDraft?.currentState ?? heuristicCurrentState;
+  const openLoops = mergePriorityArray(
+    modelDraft?.openLoops ?? [],
+    heuristicOpenLoops,
+    4,
+  );
+  const nextActions = mergePriorityArray(
+    modelDraft?.nextActions ?? [],
+    heuristicNextActions,
+    3,
+  );
+  const risks = mergePriorityArray(
+    modelDraft?.risks ?? [],
+    heuristicRisks,
+    3,
+  );
+  const mergedDecisions = mergePriorityArray(
+    modelDraft?.decisions ?? [],
+    decisions,
+    4,
+  );
 
   return {
     version: 1,
@@ -533,9 +848,9 @@ async function buildSnapshot(sessionId: string): Promise<SessionMemorySnapshot |
     updatedAt: new Date().toISOString(),
     compactedUntilSeq,
     summary,
-    currentTask: latestUser ? truncateText(latestUser.message.content, 120) : null,
-    currentState: resolveCurrentState(events),
-    decisions,
+    currentTask,
+    currentState,
+    decisions: mergedDecisions,
     importantFiles,
     importantAttachments,
     openLoops,
@@ -590,6 +905,10 @@ async function applySnapshot(
 
   try {
     writePersistedSnapshot(snapshot);
+    updateSessionMeta(sessionId, (meta) => {
+      meta.autoCompactFailureCount = 0;
+      delete meta.autoCompactBlockedAt;
+    });
     appendCompactAppliedEvent({
       sessionId,
       runId,
@@ -613,6 +932,16 @@ async function applySnapshot(
   }
 
   return buildContextSummaryFromUsage(sessionId);
+}
+
+function recordAutoCompactFailure(sessionId: string): void {
+  updateSessionMeta(sessionId, (meta) => {
+    const nextCount = (meta.autoCompactFailureCount ?? 0) + 1;
+    meta.autoCompactFailureCount = nextCount;
+    if (nextCount >= MAX_AUTO_COMPACT_FAILURES && !meta.autoCompactBlockedAt) {
+      meta.autoCompactBlockedAt = new Date().toISOString();
+    }
+  });
 }
 
 function getAgentMessageRole(message: AgentMessage): string | null {
@@ -734,6 +1063,34 @@ export async function getSessionMemoryPromptSection(
   return buildSnapshotPrompt(getPersistedSnapshot(sessionId));
 }
 
+export async function ensureContextSnapshotCoverage(
+  sessionId: string,
+): Promise<ContextSummary> {
+  const requiredCompactedUntilSeq = getRequiredCompactedUntilSeq(sessionId);
+  const snapshot = getPersistedSnapshot(sessionId);
+  const meta = getSessionMeta(sessionId);
+
+  if (requiredCompactedUntilSeq <= snapshot.compactedUntilSeq) {
+    return buildContextSummaryFromUsage(sessionId);
+  }
+
+  if (meta?.autoCompactBlockedAt) {
+    return buildContextSummaryFromUsage(sessionId);
+  }
+
+  compactingSessionIds.add(sessionId);
+  try {
+    try {
+      return await applySnapshot(sessionId, "auto");
+    } catch {
+      recordAutoCompactFailure(sessionId);
+      return buildContextSummaryFromUsage(sessionId);
+    }
+  } finally {
+    compactingSessionIds.delete(sessionId);
+  }
+}
+
 export function createTransformContext(
   sessionId: string,
   contextWindow: number | null,
@@ -764,12 +1121,7 @@ export function createTransformContext(
     const requiredCompactedUntilSeq = getRequiredCompactedUntilSeq(sessionId);
     const snapshot = getPersistedSnapshot(sessionId);
     if (requiredCompactedUntilSeq > snapshot.compactedUntilSeq) {
-      compactingSessionIds.add(sessionId);
-      try {
-        await applySnapshot(sessionId, "auto");
-      } finally {
-        compactingSessionIds.delete(sessionId);
-      }
+      await ensureContextSnapshotCoverage(sessionId);
     }
 
     return messages.slice(protectedTailIndex);

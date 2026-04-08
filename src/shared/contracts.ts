@@ -398,6 +398,9 @@ export type ContextSummary = {
   openLoops: string[];
   nextActions: string[];
   risks: string[];
+  autoCompactFailureCount: number;
+  autoCompactBlocked: boolean;
+  autoCompactBlockedAt: string | null;
   canCompact: boolean;
   isCompacting: boolean;
 };

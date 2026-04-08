@@ -52,6 +52,22 @@ function getUsageLine(summary: ContextUsageSummary) {
   return "等待 usage 与窗口信息";
 }
 
+function getCompactStatusCopy(summary: ContextUsageSummary) {
+  if (summary.isCompacting) {
+    return "正在刷新 session snapshot…";
+  }
+
+  if (summary.autoCompactBlocked) {
+    return `自动 compact 已暂停（连续失败 ${summary.autoCompactFailureCount} 次），可手动 compact。`;
+  }
+
+  if (summary.canCompact) {
+    return "可手动 compact 历史上下文。";
+  }
+
+  return "当前不用再 compact。";
+}
+
 function getContinuityHeadline(summary: ContextUsageSummary) {
   if (summary.currentTask) {
     return summary.currentTask;
@@ -113,6 +129,11 @@ function ContextHoverSummary({ summary }: ContextSummaryTriggerProps) {
       <p className="mt-2 line-clamp-3 text-[12px] leading-5 text-[color:var(--color-text-muted)]">
         {getContinuityHeadline(summary)}
       </p>
+      {summary.autoCompactBlocked ? (
+        <p className="mt-2 text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
+          自动 compact 已暂停，等你手动收口。
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -264,13 +285,20 @@ function ContextExpandedSummary({
         </div>
       ) : null}
 
+      {summary.autoCompactBlocked ? (
+        <div className="rounded-[14px] bg-shell-toolbar-hover px-3 py-2.5">
+          <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
+            自动 Compact
+          </p>
+          <p className="mt-1.5 text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
+            已因连续失败暂停自动 compact。手动执行一次成功 compact 后会自动恢复。
+          </p>
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-between gap-3">
         <p className="text-[12px] text-[color:var(--color-text-muted)]">
-          {summary.isCompacting
-            ? "正在刷新 session snapshot…"
-            : summary.canCompact
-              ? "可手动 compact 历史上下文。"
-              : "当前不用再 compact。"}
+          {getCompactStatusCopy(summary)}
         </p>
         <Button
           type="button"

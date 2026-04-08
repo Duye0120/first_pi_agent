@@ -22,6 +22,9 @@ export const EMPTY_CONTEXT_USAGE_SUMMARY: ContextUsageSummary = {
   openLoops: [],
   nextActions: [],
   risks: [],
+  autoCompactFailureCount: 0,
+  autoCompactBlocked: false,
+  autoCompactBlockedAt: null,
   canCompact: false,
   isCompacting: false,
 };

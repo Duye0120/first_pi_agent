@@ -1,7 +1,11 @@
 import { Agent } from "@mariozechner/pi-agent-core";
 import type { AgentEvent as CoreAgentEvent } from "@mariozechner/pi-agent-core";
 import type { ElectronAdapter } from "./adapter.js";
-import { createTransformContext, getSessionMemoryPromptSection } from "./context/service.js";
+import {
+  createTransformContext,
+  ensureContextSnapshotCoverage,
+  getSessionMemoryPromptSection,
+} from "./context/service.js";
 import { getSemanticMemoryPromptSection } from "./memory/service.js";
 import { getSettings } from "./settings.js";
 import { resolveModelEntry } from "./providers.js";
@@ -246,6 +250,7 @@ async function buildSystemPrompt(
   sessionId: string,
   latestUserText?: string,
 ): Promise<string> {
+  await ensureContextSnapshotCoverage(sessionId);
   const base = buildBaseSystemPrompt(workspacePath);
   const snapshot = await getSessionMemoryPromptSection(sessionId);
   const semanticMemory = await getSemanticMemoryPromptSection({

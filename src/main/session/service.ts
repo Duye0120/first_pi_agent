@@ -58,6 +58,8 @@ export type PersistedSessionMeta = {
   lastRunState?: AgentResponseStatus | "awaiting_confirmation" | "running";
   transcriptSeq: number;
   snapshotRevision: number;
+  autoCompactFailureCount: number;
+  autoCompactBlockedAt?: string;
   todos?: SessionTodoItem[];
 };
 
@@ -190,7 +192,20 @@ function createMetaFromSession(session: ChatSession): PersistedSessionMeta {
     lastRunId: null,
     transcriptSeq: 0,
     snapshotRevision: 0,
+    autoCompactFailureCount: 0,
     todos: [],
+  };
+}
+
+function normalizePersistedSessionMeta(meta: PersistedSessionMeta): PersistedSessionMeta {
+  return {
+    ...meta,
+    transcriptSeq: Number.isFinite(meta.transcriptSeq) ? Math.max(0, meta.transcriptSeq) : 0,
+    snapshotRevision: Number.isFinite(meta.snapshotRevision) ? Math.max(0, meta.snapshotRevision) : 0,
+    autoCompactFailureCount: Number.isFinite(meta.autoCompactFailureCount)
+      ? Math.max(0, meta.autoCompactFailureCount)
+      : 0,
+    todos: Array.isArray(meta.todos) ? meta.todos.map(normalizeTodoItem) : [],
   };
 }
 
@@ -224,7 +239,10 @@ function normalizeTodoItem(item: Partial<SessionTodoItem>): SessionTodoItem {
 }
 
 function writeMeta(meta: PersistedSessionMeta): void {
-  atomicWrite(getSessionMetaPath(meta.id), JSON.stringify(meta, null, 2));
+  atomicWrite(
+    getSessionMetaPath(meta.id),
+    JSON.stringify(normalizePersistedSessionMeta(meta), null, 2),
+  );
 }
 
 function readMeta(sessionId: string): PersistedSessionMeta | null {
@@ -234,7 +252,9 @@ function readMeta(sessionId: string): PersistedSessionMeta | null {
   }
 
   try {
-    return JSON.parse(readFileSync(filePath, "utf-8")) as PersistedSessionMeta;
+    return normalizePersistedSessionMeta(
+      JSON.parse(readFileSync(filePath, "utf-8")) as PersistedSessionMeta,
+    );
   } catch {
     return null;
   }
