@@ -79,6 +79,8 @@ import {
 } from "./terminal.js";
 import { HarnessRunCancelledError } from "./harness/runtime.js";
 import { harnessRuntime } from "./harness/singleton.js";
+import { bus } from "./event-bus.js";
+import { registerQuickInvoke, unregisterQuickInvoke } from "./quick-invoke.js";
 import {
   appLogger,
   attachWindowLogging,
@@ -369,6 +371,10 @@ function registerIpcHandlers() {
           modelEntryId: resolvedModel.entry.id,
           thinkingLevel: settings.thinkingLevel,
         });
+        bus.emit("message:user", {
+          sessionId: input.sessionId,
+          text: input.text,
+        });
         appendRunStartedEvent({
           sessionId: input.sessionId,
           runId: input.runId,
@@ -457,6 +463,10 @@ function registerIpcHandlers() {
             sessionId: input.sessionId,
             runId: input.runId,
             message: assistantMessage,
+          });
+          bus.emit("message:assistant", {
+            sessionId: input.sessionId,
+            runId: input.runId,
           });
         }
         appendRunFinishedEvent({
@@ -722,6 +732,7 @@ app.whenReady()
     registerIpcHandlers();
     createMainWindow();
     setTerminalWindow(mainWindow!);
+    registerQuickInvoke(() => mainWindow);
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -745,6 +756,7 @@ app.on("window-all-closed", () => {
   });
   void destroyAllAgents();
   destroyAllTerminals();
+  unregisterQuickInvoke();
   if (process.platform !== "darwin") {
     app.quit();
   }

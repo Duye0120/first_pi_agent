@@ -130,6 +130,13 @@ const desktopApi: DesktopApi = {
       return () => { ipcRenderer.removeListener(IPC_CHANNELS.windowStateChanged, wrappedListener); };
     },
   },
+  quickInvoke: {
+    onFocusComposer: (listener: () => void) => {
+      const handler = () => listener();
+      ipcRenderer.on("quick-invoke:focus-composer", handler);
+      return () => { ipcRenderer.removeListener("quick-invoke:focus-composer", handler); };
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld("desktopApi", desktopApi);

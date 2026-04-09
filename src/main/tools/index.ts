@@ -12,6 +12,7 @@ import { createShellExecTool } from "./shell-exec.js";
 import { createTodoReadTool, createTodoWriteTool } from "./todo.js";
 import { createWebFetchTool } from "./web-fetch.js";
 import { createWebSearchTool } from "./web-search.js";
+import { notifyUserTool } from "./notify.js";
 
 type ToolAssemblyOptions = {
   workspacePath: string;
@@ -77,6 +78,7 @@ export function getBuiltinTools(options: BuiltinToolOptions): AgentTool<any, any
     aliasTool(todoWrite, "TodoWrite", "写入待办"),
     createMemorySaveTool(options.sessionId),
     createMemoryListTool(),
+    notifyUserTool,
   ];
 }
 

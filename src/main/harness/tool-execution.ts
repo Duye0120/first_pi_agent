@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ElectronAdapter } from "../adapter.js";
+import { bus } from "../event-bus.js";
 import { evaluateToolPolicy } from "./policy.js";
 import { HarnessRunCancelledError, type HarnessRuntime } from "./runtime.js";
 import type {
@@ -171,6 +172,12 @@ async function executeWithHarness(
       runScope,
       pendingApproval,
     );
+    bus.emit("approval:requested", {
+      sessionId: runScope.sessionId,
+      runId: runScope.runId,
+      requestId: pendingApproval.requestId,
+      toolName: tool.name,
+    });
     const pendingRun = context.runtime.transitionState(runScope, "awaiting_confirmation", {
       currentStepId: toolCallId,
       pendingApproval,
@@ -208,6 +215,12 @@ async function executeWithHarness(
     const approvalResolution = await pendingResponse;
     context.adapter.recordConfirmationResolution(approvalResolution);
     const allowed = approvalResolution.allowed;
+    bus.emit("approval:resolved", {
+      sessionId: runScope.sessionId,
+      runId: runScope.runId,
+      requestId: pendingApproval.requestId,
+      allowed,
+    });
 
     if (!allowed) {
       const denyReason =
@@ -264,6 +277,12 @@ async function executeWithHarness(
   if (executingRun) {
     emitRunStateChanged(executingRun.state, "Harness 已批准工具执行。");
   }
+  bus.emit("tool:executing", {
+    sessionId: runScope.sessionId,
+    runId: runScope.runId,
+    toolName: tool.name,
+    toolCallId,
+  });
 
   try {
     const result = await tool.execute(
@@ -285,6 +304,13 @@ async function executeWithHarness(
       emitRunStateChanged(resumedRun.state, "工具执行完成，继续回到 agent loop。");
     }
 
+    bus.emit("tool:completed", {
+      sessionId: runScope.sessionId,
+      runId: runScope.runId,
+      toolName: tool.name,
+      toolCallId,
+    });
+
     return result;
   } catch (error) {
     const resumedRun = context.runtime.transitionState(runScope, "running", {
@@ -302,6 +328,13 @@ async function executeWithHarness(
         error instanceof Error ? error.message : "工具执行失败",
       );
     }
+    bus.emit("tool:failed", {
+      sessionId: runScope.sessionId,
+      runId: runScope.runId,
+      toolName: tool.name,
+      toolCallId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 }

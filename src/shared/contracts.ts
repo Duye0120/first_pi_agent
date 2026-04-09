@@ -544,6 +544,9 @@ export type DesktopApi = {
     close: () => void;
     onStateChange: (listener: (state: WindowFrameState) => void) => () => void;
   };
+  quickInvoke: {
+    onFocusComposer: (listener: () => void) => () => void;
+  };
 };
 
 export function createEmptySession(): ChatSession {

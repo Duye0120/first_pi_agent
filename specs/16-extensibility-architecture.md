@@ -816,6 +816,121 @@ type PersonalityTrait = {
 
 ---
 
+## 补充：来自 AI Code Review 的六项增强
+
+> 2026-04-09 10:21 — Alma review spec 后补充，全部采纳。
+
+### S1. 并行工具调用（Phase 2）
+
+现有 ReAct 循环串行执行工具。当 Agent 一次请求多个无依赖工具调用时，可以并发执行。
+
+```typescript
+// tool-execution.ts 增强
+// 如果 pi-agent-core 一次性返回 N 个 tool_use blocks：
+//   → 检测是否有写-写冲突（同一文件路径）
+//   → 无冲突 → Promise.all 并发执行
+//   → 有冲突 → 保持串行
+```
+
+**注意**：取决于 pi-agent-core 是否支持 parallel tool_use。如果 core 只逐个发 tool_use event，则需要在 adapter 层做 batch window（短时间内收到的多个 tool_use 合并执行）。
+
+### S2. 性能指标采集（Phase 2）
+
+```typescript
+// src/main/metrics.ts
+type RunMetrics = {
+  runId: string;
+  sessionId: string;
+  startedAt: number;
+  endedAt: number;
+  modelLatencyMs: number;      // 模型首 token 延迟
+  toolExecutionMs: number;     // 工具执行总耗时
+  totalTokensIn: number;
+  totalTokensOut: number;
+  toolCallCount: number;
+  compactTriggered: boolean;
+};
+
+// 数据来源：adapter.ts RunBuffer 已有 usage 统计 + harness audit
+// 存储：userData/data/metrics.jsonl（追加写）
+// UI 展示：设置页 → "今天用了 X 万 token / ¥Y 费用"
+```
+
+### S3. 离线/降级模式（Phase 2）
+
+```typescript
+// src/main/failover.ts
+// 职责：provider 级别的故障转移
+
+type FailoverStrategy = {
+  primaryModelEntryId: string;
+  fallbackChain: string[];       // 按优先级排序的备选 model entry
+  maxRetries: number;
+  retryDelayMs: number;
+};
+
+// 触发条件：
+// - API 返回 5xx / timeout / rate limit
+// - 网络不可达（net.isOnline() 或 DNS 探测）
+
+// 降级行为：
+// - provider 挂 → 自动切换到 fallbackChain 下一个
+// - 全部挂 → 通知用户 "所有模型暂时不可用"
+// - 断网 → 只读模式（可浏览历史、文件、memory，但不能发消息）
+```
+
+### S4. 上下文预算智能分配（Phase 2 增强）
+
+```
+当前 context/service.ts 只做"总量超了就 compact"。
+增强为按类型分层的预算分配：
+
+总 context budget 100%
+├── 系统 prompt（固定，~10-15%）
+├── 工具结果（优先保留最近 3 次，~20%）
+├── 用户/助手消息（PROTECTED_USER_TURNS，~50%）
+├── 记忆/snapshot（~10%）
+└── 缓冲区（~5%）
+
+接近上限时的淘汰优先级：
+  1. 先丢旧的寒暄（短消息 + 无工具调用）
+  2. 再压缩旧的工具结果（只保留摘要）
+  3. 最后压缩历史消息（保留 snapshot）
+```
+
+### S5. 对话分支/假设探索（Phase 4）
+
+让 session 支持树状结构，类似 Git 分支：
+- `branch:create` — 从当前位置创建分支
+- `branch:switch` — 切换到另一条分支
+- `branch:merge` — 把分支的 learnings 合并回主线
+
+**存储**：transcript.jsonl 增加 `branchId` 字段，默认 `main`。
+**UI**：分支切换器（类似 Git 分支选择器）。
+
+### S6. 工具使用教学（合并到 Active Learning，Phase 3）
+
+在 Active Learning Engine 的 `detectLearningSignals()` 增加信号类型：
+
+```typescript
+type LearningSignal = {
+  type: "tool_repeated_failure"
+       | "user_correction"
+       | "retry_after_reject"
+       | "pattern_inefficiency"
+       | "user_explicit_feedback"
+       | "tool_discovery_opportunity"   // ← 新增：用户手动做了某件事，但其实有工具可以帮忙
+       | "tool_misuse_pattern";         // ← 新增：用户经常用错某工具的参数
+};
+
+// 检测逻辑：
+// - 用户反复手动格式化 JSON → 推荐 "试试 shell_exec + jq"
+// - 用户总是 grep 后手动打开文件 → 推荐 "file_read 可以直接读"
+// - 用户给工具传了错误参数 3 次 → 主动教正确用法
+```
+
+---
+
 ## 更新后的完整路线图
 
 ```
@@ -831,10 +946,14 @@ Phase 2 — 主动能力 + 自我感知（中）
 ├── Self-Diagnosis 自我诊断（健康检查 + 自修复）
 ├── Event Bus 审计日志
 ├── 环境感知（基础版：时间 + Git 状态）
-└── 跨会话记忆延续增强
+├── 跨会话记忆延续增强
+├── 性能指标采集（S2: metrics.ts）
+├── 离线/降级模式（S3: failover.ts）
+├── 上下文预算智能分配（S4: BudgetAllocator）
+└── 并行工具调用（S1: parallel tool_use）
 
 Phase 3 — 自我进化 + 交互升级（中-大）
-├── Active Learning 主动学习引擎
+├── Active Learning 主动学习引擎（含 S6 工具教学）
 ├── Emotional State Machine 情感状态机
 ├── Reflection + Personality Evolution 反思与性格演化
 ├── 语音输入（Whisper）
@@ -846,6 +965,7 @@ Phase 4 — 生态（大）
 ├── Plugin Loader + manifest schema
 ├── Plugin 沙箱（权限隔离）
 ├── Plugin auto-update 自动更新
+├── 对话分支/假设探索（S5: branch）
 ├── OAuth 框架（Google/Microsoft）
 └── 官方插件：Calendar、Email、GitHub
 
@@ -866,9 +986,11 @@ Phase 5 — 高级（很大）
        + Prompt 控制面 + Context 引擎  ← ✅ 已有
        + 事件驱动 + 定时 + 通知        ← Phase 1-2
        + 自我诊断 + 健康检查           ← Phase 2
+       + 指标采集 + 降级 + 预算分配    ← Phase 2
        + 主动学习 + 情感感知           ← Phase 3
        + 反思日记 + 性格演化           ← Phase 3
        + 语音 + 环境感知 + 快速召唤    ← Phase 2-3
        + 插件 + OAuth + 外部 API      ← Phase 4
+       + 对话分支 + 假设探索           ← Phase 4
        + 工作流 + 多 Agent + 市场      ← Phase 5
 ```

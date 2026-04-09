@@ -31,7 +31,8 @@ function getRiskLevel(toolName: string): HarnessRiskLevel {
     toolName === "ListMcpResources" ||
     toolName === "list_mcp_resource_templates" ||
     toolName === "read_mcp_resource" ||
-    toolName === "ReadMcpResource"
+    toolName === "ReadMcpResource" ||
+    toolName === "notify_user"
   ) {
     return "safe";
   }

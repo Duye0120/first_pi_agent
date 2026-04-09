@@ -3,6 +3,7 @@ import type { ConfirmationResponse } from "../../shared/agent-events.js";
 import type { RunKind } from "../../shared/contracts.js";
 import { appendHarnessAuditEvent } from "./audit.js";
 import { loadPersistedHarnessRuns, savePersistedHarnessRuns } from "./store.js";
+import { bus } from "../event-bus.js";
 import type {
   HarnessApprovalResolution,
   HarnessApprovalSource,
@@ -166,6 +167,12 @@ export class HarnessRuntime {
         requestId: run.requestId,
         runKind: run.runKind,
       },
+    });
+
+    bus.emit("run:started", {
+      sessionId: run.sessionId,
+      runId: run.runId,
+      modelEntryId: run.modelEntryId,
     });
 
     return this.toSnapshot(run);
@@ -352,6 +359,13 @@ export class HarnessRuntime {
       this.activeRunsBySession.delete(run.sessionId);
     }
     this.persistActiveRuns();
+
+    bus.emit("run:completed", {
+      sessionId: run.sessionId,
+      runId: run.runId,
+      finalState,
+      reason: options?.reason,
+    });
 
     return this.toSnapshot(run);
   }
