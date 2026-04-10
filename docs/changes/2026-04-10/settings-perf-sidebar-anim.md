@@ -1,8 +1,15 @@
 # 设置页性能优化 + Sidebar 切换动画
 
-**时间**：2026-04-10 12:16 → 12:24 补充修复 → 13:05 第三轮修复
+**时间**：2026-04-10 12:16 → 12:24 补充修复 → 13:05 第三轮修复 → 14:12 根因修复
 
 ## 改了什么
+
+### ⚠️ 根因修复（14:12）— bootApp 被反复执行
+- **原因**：全局键盘快捷键 effect（Ctrl+B/N/,/J/Escape）依赖了 `mainView` 和 `terminalOpen`，而同一个 effect 内第一行是 `void bootApp()`。每次 `mainView` 变化（线程↔设置切换），effect 重新执行 → **bootApp 重新跑**（4+ 个 IPC：settings.get / sessions.list / sessions.listArchived / sessions.listGroups / loadProviderDirectory）→ 多次 setState → 连锁重渲染。
+- **改法**：
+  - 把 `bootApp()` 拆到独立 effect（只依赖 `[bootApp]`），只执行一次。
+  - 键盘快捷键 effect 通过 `kbStateRef`（每次渲染同步更新）读取 `mainView`/`terminalOpen` 等值，不再把它们放进 deps。
+  - 键盘 effect 只依赖 `[desktopApi]`，生命周期内只注册一次 listener。
 
 ### 1. 设置页进入卡顿修复
 - **原因**：SettingsView 用 `hasVisitedSettingsRoute` 做懒挂载，首次进入时才 mount 组件 + 触发 `loadProviderDirectory` IPC 加载模型目录，导致明显延迟。

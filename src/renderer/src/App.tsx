@@ -582,9 +582,22 @@ export default function App() {
     }
   }, [desktopApi, hydrateSession, refreshContextSummary]);
 
+  // 用 ref 持有键盘快捷键需要的动态值，避免 effect 因这些值变化而重新执行 bootApp
+  const kbStateRef = useRef({
+    mainView, terminalOpen,
+    createNewSession: (() => {}) as () => unknown,
+    closeSettingsView: (() => {}) as () => void,
+    openSettingsView: (() => {}) as (section?: SettingsSection) => void,
+    toggleSidebarCollapsed: (() => {}) as () => void,
+  });
+
+  // Boot 只执行一次
   useEffect(() => {
     void bootApp();
+  }, [bootApp]);
 
+  // 窗口状态 + 键盘快捷键（不依赖 mainView / terminalOpen）
+  useEffect(() => {
     if (!desktopApi) {
       return;
     }
@@ -596,27 +609,28 @@ export default function App() {
     // Global keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
+      const kb = kbStateRef.current;
       if (mod && e.key === "j") {
-        if (!terminalOpen) {
+        if (!kb.terminalOpen) {
           e.preventDefault();
           setTerminalOpen(true);
         }
       } else if (mod && e.key === "b") {
         e.preventDefault();
-        toggleSidebarCollapsed();
+        kb.toggleSidebarCollapsed();
       } else if (mod && e.key === "n") {
         e.preventDefault();
-        void createNewSession();
+        void kb.createNewSession();
       } else if (mod && e.key === ",") {
         e.preventDefault();
-        if (mainView === "settings") {
-          closeSettingsView();
+        if (kb.mainView === "settings") {
+          kb.closeSettingsView();
         } else {
-          openSettingsView();
+          kb.openSettingsView();
         }
       } else if (e.key === "Escape") {
-        if (mainView === "settings") {
-          closeSettingsView();
+        if (kb.mainView === "settings") {
+          kb.closeSettingsView();
         }
       }
     };
@@ -626,7 +640,7 @@ export default function App() {
       cleanup();
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [bootApp, desktopApi, mainView, terminalOpen]);
+  }, [desktopApi]);
 
   const createNewSession = useCallback(async () => {
     if (!desktopApi) {
@@ -1071,6 +1085,12 @@ export default function App() {
   const closeSettingsView = useCallback(() => {
     navigate("/");
   }, [navigate]);
+
+  // 每次渲染同步更新键盘快捷键需要的动态值
+  kbStateRef.current = {
+    mainView, terminalOpen, createNewSession,
+    closeSettingsView, openSettingsView, toggleSidebarCollapsed,
+  };
 
   const openArchivedSessionFromSettings = useCallback(
     async (sessionId: string) => {
