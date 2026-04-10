@@ -468,7 +468,7 @@ export function Sidebar({
         className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${
           isSettings
             ? "pointer-events-auto translate-x-0 opacity-100"
-            : "pointer-events-none -translate-x-2 opacity-0 [content-visibility:hidden]"
+            : "pointer-events-none -translate-x-2 opacity-0"
         }`}
       >
         {settingsSidebar}
@@ -477,7 +477,7 @@ export function Sidebar({
         className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${
           !isSettings
             ? "pointer-events-auto translate-x-0 opacity-100"
-            : "pointer-events-none translate-x-2 opacity-0 [content-visibility:hidden]"
+            : "pointer-events-none translate-x-2 opacity-0"
         }`}
       >
     <aside className="flex h-full bg-transparent flex-col text-[13px] text-[color:var(--chela-text-primary)]">

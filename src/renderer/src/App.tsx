@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CommandLineIcon,
   RectangleGroupIcon,
@@ -342,18 +342,22 @@ export default function App() {
     }
   }, [desktopApi]);
 
+  // workspace 变化时需要刷 git 的 ref，避免放进 deps 触发额外 effect
+  const workspaceRef = useRef(settings?.workspace);
+  useEffect(() => { workspaceRef.current = settings?.workspace; }, [settings?.workspace]);
+
   useEffect(() => {
     if (mainView !== "thread") {
       return;
     }
 
-    // 从设置页切回时，如果最近 2 秒内刷新过就跳过，避免不必要的 IPC 和重渲染
-    if (Date.now() - lastGitRefreshRef.current < 2_000) {
+    // 从设置页切回时，如果最近 5 秒内刷新过就跳过，避免不必要的 IPC 和重渲染
+    if (Date.now() - lastGitRefreshRef.current < 5_000) {
       return;
     }
 
     void refreshGitOverview();
-  }, [mainView, refreshGitOverview, settings?.workspace]);
+  }, [mainView, refreshGitOverview]);
 
   useEffect(() => {
     if (mainView !== "thread" || !diffPanelOpen) {
@@ -1061,15 +1065,11 @@ export default function App() {
   }, [desktopApi]);
 
   const openSettingsView = useCallback((section: SettingsSection = "general") => {
-    startTransition(() => {
-      navigate(`${SETTINGS_ROUTE_PREFIX}/${section}`);
-    });
+    navigate(`${SETTINGS_ROUTE_PREFIX}/${section}`);
   }, [navigate]);
 
   const closeSettingsView = useCallback(() => {
-    startTransition(() => {
-      navigate("/");
-    });
+    navigate("/");
   }, [navigate]);
 
   const openArchivedSessionFromSettings = useCallback(
@@ -1338,13 +1338,12 @@ export default function App() {
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebarCollapsed}
       />
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1" {...(sidebarAnimating ? { "data-sidebar-animating": "" } : {})}>
         <ResizablePanelGroup
           orientation="horizontal"
           className="min-h-0 h-full overflow-hidden bg-transparent"
           onLayoutChanged={handleShellLayoutChanged}
           resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
-          {...(sidebarAnimating ? { "data-sidebar-animating": "" } : {})}
         >
           <ResizablePanel
             id="shell-sidebar"
@@ -1421,7 +1420,7 @@ export default function App() {
                 className={`absolute inset-0 min-h-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${
                   mainView === "thread"
                     ? "pointer-events-auto translate-y-0 opacity-100"
-                    : "pointer-events-none -translate-y-1 opacity-0 [content-visibility:hidden]"
+                    : "pointer-events-none -translate-y-1 opacity-0"
                 }`}
                 aria-hidden={mainView !== "thread"}
               >
@@ -1432,7 +1431,7 @@ export default function App() {
                 className={`absolute inset-0 min-h-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${
                   mainView === "settings"
                     ? "pointer-events-auto translate-y-0 opacity-100"
-                    : "pointer-events-none translate-y-1 opacity-0 [content-visibility:hidden]"
+                    : "pointer-events-none translate-y-1 opacity-0"
                 }`}
                 aria-hidden={mainView !== "settings"}
               >
