@@ -188,51 +188,49 @@ export function Sidebar({
     sessions: regularSummaries.filter((s) => s.groupId === group.id),
   }));
 
-  if (viewMode === "settings") {
-    return (
-      <aside className="flex h-full flex-col bg-transparent text-[13px] text-[color:var(--chela-text-primary)]">
-        <div className="px-4 pb-2 pt-4">
-          <p className="text-[11px] uppercase tracking-[0.14em] text-[color:var(--chela-text-tertiary)]">
-            设置
-          </p>
-        </div>
+  const settingsSidebar = (
+    <aside className="flex h-full flex-col bg-transparent text-[13px] text-[color:var(--chela-text-primary)]">
+      <div className="px-4 pb-2 pt-4">
+        <p className="text-[11px] uppercase tracking-[0.14em] text-[color:var(--chela-text-tertiary)]">
+          设置
+        </p>
+      </div>
 
-        <div className="flex-1 overflow-y-auto px-3 pb-2">
-          <div className="space-y-1">
-            {settingsItems.map(({ id, label, icon: Icon }) => {
-              const active = activeSettingsSection === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => onSelectSettingsSection?.(id)}
-                  className={`flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-3 py-2 text-left text-[12px] transition ${
-                    active
-                      ? "bg-[color:var(--chela-accent-subtle)] text-[color:var(--chela-accent-text)] font-medium"
-                      : "text-[color:var(--chela-text-secondary)] hover:bg-[color:var(--chela-accent-subtle)] hover:text-[color:var(--chela-accent-text)]"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{label}</span>
-                </button>
-              );
-            })}
-          </div>
+      <div className="flex-1 overflow-y-auto px-3 pb-2">
+        <div className="space-y-1">
+          {settingsItems.map(({ id, label, icon: Icon }) => {
+            const active = activeSettingsSection === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onSelectSettingsSection?.(id)}
+                className={`chela-list-item flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left text-[12px] transition ${
+                  active
+                    ? "chela-list-item-active font-medium"
+                    : "text-[color:var(--chela-text-secondary)] hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{label}</span>
+              </button>
+            );
+          })}
         </div>
+      </div>
 
-        <div className="px-3 py-3">
-          <button
-            type="button"
-            onClick={onExitSettings}
-            className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-3 py-2 text-[12px] text-[color:var(--chela-text-secondary)] transition hover:bg-[color:var(--chela-accent-subtle)] hover:text-[color:var(--chela-accent-text)]"
-          >
-            <ArrowUturnLeftIcon className="h-3.5 w-3.5" />
-            返回
-          </button>
-        </div>
-      </aside>
-    );
-  }
+      <div className="px-3 py-3">
+        <button
+          type="button"
+          onClick={onExitSettings}
+          className="chela-list-item flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-[12px] text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
+        >
+          <ArrowUturnLeftIcon className="h-3.5 w-3.5" />
+          返回
+        </button>
+      </div>
+    </aside>
+  );
 
   const renderThreadItem = (summary: ChatSessionSummary, indented = false) => {
     const active = summary.id === activeSessionId;
@@ -278,9 +276,9 @@ export function Sidebar({
             setThreadMenuOpenFor(null);
             setArchiveConfirmFor(null);
           }}
-          className={`group flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-shell)] py-2 transition ${
-            indented ? "pl-6 pr-2.5" : "px-3"
-          } ${active ? "bg-[color:var(--chela-accent-subtle)] text-[color:var(--chela-accent-text)] font-medium" : "hover:bg-[color:var(--chela-accent-subtle)]"}`}
+          className={`chela-list-item group flex cursor-pointer items-center gap-1.5 py-2.5 transition ${
+            indented ? "pl-6 pr-2.5" : "px-3.5"
+          } ${active ? "chela-list-item-active font-medium" : ""}`}
         >
           <div
             className={`flex h-5 shrink-0 items-center overflow-visible transition-[width,opacity] duration-150 ${showPinAction}`}
@@ -325,7 +323,7 @@ export function Sidebar({
                 />
               ) : (
                 <span
-                  className={`truncate text-[12px] ${active ? "font-medium text-[color:var(--chela-accent-text)]" : "text-[color:var(--chela-text-secondary)]"}`}
+                  className={`truncate text-[12px] ${active ? "font-medium text-[color:var(--color-control-selected-text)]" : "text-[color:var(--chela-text-secondary)]"}`}
                 >
                   {summary.title}
                 </span>
@@ -378,7 +376,7 @@ export function Sidebar({
                 setArchiveConfirmFor(null);
                 setThreadMenuOpenFor(null);
               }}
-              className="pointer-events-auto h-6 cursor-pointer rounded-full bg-red-500/10 px-2 text-[10px] leading-none font-medium text-red-600 transition hover:bg-red-500/15 dark:bg-red-500/20 dark:text-red-300"
+              className="chela-danger-soft pointer-events-auto h-6 cursor-pointer rounded-full px-2.5 text-[10px] leading-none font-medium transition hover:brightness-[0.98]"
             >
               确认
             </button>
@@ -387,7 +385,7 @@ export function Sidebar({
         {isThreadMenuOpen ? (
           <div
             onClick={(e) => e.stopPropagation()}
-            className="absolute right-2 top-full z-20 mt-1 min-w-[132px] rounded-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)] py-1 shadow-[var(--chela-shadow-lg)]"
+            className="chela-panel-elevated absolute right-2 top-full z-20 mt-1 min-w-[132px] rounded-[calc(var(--radius-shell)+2px)] py-1.5"
           >
             <button
               type="button"
@@ -396,7 +394,7 @@ export function Sidebar({
                 setSessionRenameValue(summary.title);
                 setThreadMenuOpenFor(null);
               }}
-              className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-[color:var(--chela-text-primary)] hover:bg-[color:var(--chela-accent-subtle)]"
+              className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-[color:var(--chela-text-primary)] hover:bg-[color:var(--color-control-bg-hover)]"
             >
               重命名
             </button>
@@ -407,7 +405,7 @@ export function Sidebar({
                   setMovingSessionId(isMoving ? null : summary.id);
                   setThreadMenuOpenFor(null);
                 }}
-                className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-[color:var(--chela-text-primary)] hover:bg-[color:var(--chela-accent-subtle)]"
+                className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-[color:var(--chela-text-primary)] hover:bg-[color:var(--color-control-bg-hover)]"
               >
                 分组
               </button>
@@ -419,7 +417,7 @@ export function Sidebar({
         {isMoving && (
           <div
             onClick={(e) => e.stopPropagation()}
-            className={`mx-2 mb-2 rounded-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)] py-1 shadow-[var(--chela-shadow-lg)] ${indented ? "ml-6" : ""}`}
+            className={`chela-panel-elevated mx-2 mb-2 rounded-[calc(var(--radius-shell)+2px)] py-1.5 ${indented ? "ml-6" : ""}`}
           >
             {summary.groupId && (
               <button
@@ -428,7 +426,7 @@ export function Sidebar({
                   onSetSessionGroup(summary.id, null);
                   setMovingSessionId(null);
                 }}
-                className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] text-[color:var(--chela-text-secondary)] hover:bg-[color:var(--chela-accent-subtle)] hover:text-[color:var(--chela-accent-text)]"
+                className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] text-[color:var(--chela-text-secondary)] hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
               >
                 移出分组
               </button>
@@ -441,9 +439,9 @@ export function Sidebar({
                   onSetSessionGroup(summary.id, g.id);
                   setMovingSessionId(null);
                 }}
-                className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-[color:var(--chela-accent-subtle)] ${
+                className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-[color:var(--color-control-bg-hover)] ${
                   summary.groupId === g.id
-                    ? "text-[color:var(--chela-accent-text)]"
+                    ? "text-[color:var(--color-control-selected-text)]"
                     : "text-[color:var(--chela-text-secondary)] hover:text-[color:var(--chela-text-primary)]"
                 }`}
               >
@@ -462,14 +460,33 @@ export function Sidebar({
     );
   };
 
+  const isSettings = viewMode === "settings";
+
   return (
+    <div className="relative h-full overflow-hidden">
+      <div
+        className={`absolute inset-0 transition-[opacity,transform] duration-200 ease-out ${
+          isSettings
+            ? "pointer-events-auto translate-x-0 opacity-100"
+            : "pointer-events-none -translate-x-2 opacity-0"
+        }`}
+      >
+        {settingsSidebar}
+      </div>
+      <div
+        className={`absolute inset-0 transition-[opacity,transform] duration-200 ease-out ${
+          !isSettings
+            ? "pointer-events-auto translate-x-0 opacity-100"
+            : "pointer-events-none translate-x-2 opacity-0"
+        }`}
+      >
     <aside className="flex h-full bg-transparent flex-col text-[13px] text-[color:var(--chela-text-primary)]">
       {/* Top: New thread */}
       <div className="px-3 pb-2 pt-3">
         <button
           type="button"
           onClick={onNewSession}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-2.5 py-2 text-[12px] font-medium text-[color:var(--chela-text-secondary)] transition hover:bg-[color:var(--chela-accent-subtle)] hover:text-[color:var(--chela-text-primary)]"
+          className="chela-list-item flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-[12px] font-medium text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
         >
           <SquarePen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
           <span>新线程</span>
@@ -510,7 +527,7 @@ export function Sidebar({
                     setGroupMenuOpenFor(null);
                     setMovingSessionId(null);
                   }}
-                  className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--chela-accent-subtle)] hover:text-[color:var(--chela-accent-text)]"
+                  className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
                   aria-label="新建分组"
                 >
                   <FolderPlusIcon className="h-3.5 w-3.5" />
@@ -534,7 +551,7 @@ export function Sidebar({
               archivedSummaries.map((summary) => (
                 <div
                   key={summary.id}
-                  className="group flex cursor-pointer items-center justify-between rounded-[var(--radius-shell)] px-3 py-2 transition hover:bg-[color:var(--chela-accent-subtle)]"
+                  className="group flex cursor-pointer items-center justify-between rounded-[var(--radius-shell)] px-3 py-2 transition hover:bg-[color:var(--color-control-bg-hover)]"
                 >
                   <button
                     type="button"
@@ -552,7 +569,7 @@ export function Sidebar({
                     <button
                       type="button"
                       onClick={() => onUnarchiveSession(summary.id)}
-                      className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] hover:bg-[color:var(--chela-accent-subtle)] hover:text-[color:var(--chela-accent-text)]"
+                      className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
                       title="恢复"
                     >
                       <ArrowUturnLeftIcon className="h-3 w-3" />
@@ -572,7 +589,7 @@ export function Sidebar({
           </div>
         ) : (
           <div
-            className={`px-3 transition-colors ${dragOverUngrouped ? "rounded-2xl bg-[color:var(--chela-accent-subtle)]" : ""}`}
+            className={`px-3 transition-colors ${dragOverUngrouped ? "rounded-2xl bg-[color:var(--color-control-selected-bg)]" : ""}`}
             onDragOver={(e) => {
               if (dragSessionIdRef.current) {
                 const sid = dragSessionIdRef.current;
@@ -601,7 +618,7 @@ export function Sidebar({
           >
             {/* Create group input */}
             {creatingGroup && (
-              <div className="mb-2 flex items-center rounded-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)] px-2 py-2 shadow-[var(--chela-shadow-sm)]">
+              <div className="chela-panel-surface mb-2 flex items-center rounded-[calc(var(--radius-shell)+2px)] px-2.5 py-2">
                 <span className="shrink-0 text-transparent">
                   <ChevronRightIcon className="h-3 w-3" />
                 </span>
@@ -635,7 +652,7 @@ export function Sidebar({
               return (
                 <div
                   key={group.id}
-                  className={`mb-2 rounded-[var(--radius-shell)] transition-colors ${isDragOver ? "bg-[color:var(--chela-accent-subtle)]" : "bg-transparent"}`}
+                  className={`mb-2 rounded-[var(--radius-shell)] transition-colors ${isDragOver ? "bg-[color:var(--color-control-selected-bg)]" : "bg-transparent"}`}
                   onDragOver={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
@@ -658,7 +675,7 @@ export function Sidebar({
                   }}
                 >
                   {/* Group header */}
-                  <div className="group flex items-center rounded-[var(--radius-shell)] px-2 py-2 transition hover:bg-[color:var(--chela-accent-subtle)]">
+                  <div className="chela-list-item group flex items-center px-2.5 py-2.5 transition">
                     <button
                       type="button"
                       onClick={() => toggleGroupCollapse(group.id)}
@@ -708,7 +725,7 @@ export function Sidebar({
                               );
                               setMovingSessionId(null);
                             }}
-                            className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--chela-accent-subtle)] hover:text-[color:var(--chela-accent-text)]"
+                            className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
                             aria-label="分组操作"
                           >
                             <EllipsisHorizontalIcon className="h-3.5 w-3.5" />
@@ -724,7 +741,7 @@ export function Sidebar({
                               e.stopPropagation();
                               onCreateSessionInGroup(group.id);
                             }}
-                            className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--chela-accent-subtle)] hover:text-[color:var(--chela-accent-text)]"
+                            className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
                             aria-label={`在 ${group.name} 中开始新线程`}
                           >
                             <SquarePen className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -737,7 +754,7 @@ export function Sidebar({
                       {isGroupMenuOpen && (
                         <div
                           onClick={(e) => e.stopPropagation()}
-                          className="absolute right-0 top-full z-20 mt-1 min-w-[88px] rounded-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)] py-1 shadow-[var(--chela-shadow-lg)]"
+                          className="chela-panel-elevated absolute right-0 top-full z-20 mt-1 min-w-[88px] rounded-[calc(var(--radius-shell)+2px)] py-1.5"
                         >
                           <button
                             type="button"
@@ -746,7 +763,7 @@ export function Sidebar({
                               setRenameValue(group.name);
                               setGroupMenuOpenFor(null);
                             }}
-                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-[color:var(--chela-text-primary)] hover:bg-[color:var(--chela-accent-subtle)]"
+                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-[color:var(--chela-text-primary)] hover:bg-[color:var(--color-control-bg-hover)]"
                           >
                             重命名
                           </button>
@@ -799,12 +816,14 @@ export function Sidebar({
         <button
           type="button"
           onClick={onOpenSettings}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-3 py-2 text-[12px] text-[color:var(--chela-text-secondary)] transition hover:bg-[color:var(--chela-accent-subtle)] hover:text-[color:var(--chela-accent-text)]"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-3 py-2 text-[12px] text-[color:var(--chela-text-secondary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
         >
           <Cog6ToothIcon className="h-3.5 w-3.5" />
           设置
         </button>
       </div>
     </aside>
+      </div>
+    </div>
   );
 }

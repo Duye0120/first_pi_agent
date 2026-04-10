@@ -1,11 +1,4 @@
-import {
-  startTransition,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CommandLineIcon,
   RectangleGroupIcon,
@@ -39,7 +32,9 @@ import {
 import {
   EMPTY_CONTEXT_USAGE_SUMMARY,
 } from "@renderer/lib/context-usage";
+import { loadProviderDirectory } from "@renderer/lib/provider-directory";
 import { mergeAttachments, upsertSummary } from "@renderer/lib/session";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const ACTIVE_SESSION_STORAGE_KEY = "chela.active-session-id";
 const LEGACY_ACTIVE_SESSION_STORAGE_KEY = "first-pi-agent.active-session-id";
@@ -56,6 +51,34 @@ const DEFAULT_DIFF_PANEL_SIZE = 28;
 const MIN_DIFF_PANEL_SIZE = 20;
 const MAX_DIFF_PANEL_SIZE = 44;
 const ROOT_UI_THEME_DATASET = "theme";
+const SETTINGS_ROUTE_PREFIX = "/settings";
+const SETTINGS_SECTION_IDS: SettingsSection[] = [
+  "general",
+  "keys",
+  "appearance",
+  "terminal",
+  "workspace",
+  "archived",
+  "about",
+];
+
+function resolveSettingsSectionFromPath(pathname: string): SettingsSection | null {
+  if (!pathname.startsWith(SETTINGS_ROUTE_PREFIX)) {
+    return null;
+  }
+
+  const section = pathname
+    .slice(SETTINGS_ROUTE_PREFIX.length)
+    .replace(/^\/+/, "");
+
+  if (!section) {
+    return "general";
+  }
+
+  return SETTINGS_SECTION_IDS.includes(section as SettingsSection)
+    ? (section as SettingsSection)
+    : "general";
+}
 
 function clampSidebarSize(size: number) {
   return Math.min(MAX_SIDEBAR_SIZE, Math.max(MIN_SIDEBAR_SIZE, size));
@@ -152,6 +175,8 @@ function applyCustomThemeVariables(
 
 export default function App() {
   const desktopApi = window.desktopApi;
+  const navigate = useNavigate();
+  const location = useLocation();
   const [booting, setBooting] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
   const [isPickingFiles, setIsPickingFiles] = useState(false);
@@ -172,9 +197,6 @@ export default function App() {
   const [frameState, setFrameState] = useState<WindowFrameState>({
     isMaximized: false,
   });
-  const [mainView, setMainView] = useState<"thread" | "settings">("thread");
-  const [settingsSection, setSettingsSection] =
-    useState<SettingsSection>("general");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [sidebarSize, setSidebarSize] = useState(() => {
@@ -209,6 +231,16 @@ export default function App() {
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("off");
   const [gitOverview, setGitOverview] = useState<GitDiffOverview | null>(null);
   const [gitOverviewLoading, setGitOverviewLoading] = useState(false);
+  const [sidebarAnimating, setSidebarAnimating] = useState(false);
+
+  const settingsSection = useMemo(
+    () => resolveSettingsSectionFromPath(location.pathname) ?? "general",
+    [location.pathname],
+  );
+  const mainView: "thread" | "settings" =
+    resolveSettingsSectionFromPath(location.pathname) === null
+      ? "thread"
+      : "settings";
 
   const activeSessionId = activeSession?.id ?? null;
   const sidebarPanelRef = useRef<{
@@ -220,6 +252,7 @@ export default function App() {
   const activeSessionIdRef = useRef<string | null>(null);
   const sessionCacheRef = useRef<Record<string, ChatSession>>({});
   const appliedCustomThemeKeysRef = useRef<string[]>([]);
+  const lastGitRefreshRef = useRef(0);
 
   useEffect(() => {
     summariesRef.current = summaries;
@@ -298,6 +331,7 @@ export default function App() {
       return;
     }
 
+    lastGitRefreshRef.current = Date.now();
     setGitOverviewLoading(true);
 
     try {
@@ -310,6 +344,11 @@ export default function App() {
 
   useEffect(() => {
     if (mainView !== "thread") {
+      return;
+    }
+
+    // 从设置页切回时，如果最近 2 秒内刷新过就跳过，避免不必要的 IPC 和重渲染
+    if (Date.now() - lastGitRefreshRef.current < 2_000) {
       return;
     }
 
@@ -385,9 +424,7 @@ export default function App() {
 
   const hydrateSession = useCallback((session: ChatSession) => {
     cacheSession(session);
-    startTransition(() => {
-      setActiveSession(session);
-    });
+    setActiveSession(session);
     localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, session.id);
   }, [cacheSession]);
 
@@ -498,6 +535,8 @@ export default function App() {
         desktopApi.sessions.listArchived(),
         desktopApi.groups.list(),
         desktopApi.settings.get(),
+        // Warm the provider directory cache so SettingsView renders instantly
+        loadProviderDirectory(desktopApi).catch(() => null),
       ]);
 
       setDiffPanelOpen(uiState.diffPanelOpen);
@@ -993,7 +1032,14 @@ export default function App() {
     }
   }, []);
 
+  const sidebarAnimatingTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => () => clearTimeout(sidebarAnimatingTimerRef.current), []);
+
   const toggleSidebarCollapsed = useCallback(() => {
+    setSidebarAnimating(true);
+    clearTimeout(sidebarAnimatingTimerRef.current);
+    sidebarAnimatingTimerRef.current = setTimeout(() => setSidebarAnimating(false), 280);
     setSidebarCollapsed((current) => !current);
   }, []);
 
@@ -1015,17 +1061,12 @@ export default function App() {
   }, [desktopApi]);
 
   const openSettingsView = useCallback((section: SettingsSection = "general") => {
-    startTransition(() => {
-      setSettingsSection(section);
-      setMainView("settings");
-    });
-  }, []);
+    navigate(`${SETTINGS_ROUTE_PREFIX}/${section}`);
+  }, [navigate]);
 
   const closeSettingsView = useCallback(() => {
-    startTransition(() => {
-      setMainView("thread");
-    });
-  }, []);
+    navigate("/");
+  }, [navigate]);
 
   const openArchivedSessionFromSettings = useCallback(
     async (sessionId: string) => {
@@ -1076,6 +1117,174 @@ export default function App() {
     return [...ids].filter((sessionId) => Boolean(sessionCache[sessionId]));
   }, [activeSessionId, runningSessionIds, sessionCache]);
 
+  const threadRuntimeLayer = useMemo(() => {
+    if (!desktopApi) {
+      return (
+        <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
+          当前没有可用线程。
+        </div>
+      );
+    }
+
+    if (mountedSessionIds.length === 0) {
+      return (
+        <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
+          当前没有可用线程。
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-[color:var(--chela-bg-surface)]">
+        {mountedSessionIds.map((sessionId) => {
+          const session = sessionCache[sessionId];
+          if (!session) {
+            return null;
+          }
+
+          const visible = sessionId === activeSessionId;
+
+          return (
+            <div
+              key={sessionId}
+              className={visible ? "flex h-full min-h-0 flex-1 flex-col" : "hidden"}
+              aria-hidden={!visible}
+            >
+              <AssistantThreadPanel
+                session={session}
+                desktopApi={desktopApi}
+                onPersistSession={persistSession}
+                onReloadSession={reloadSession}
+                currentModelId={currentModelId}
+                thinkingLevel={thinkingLevel}
+                terminalOpen={terminalOpen}
+                isPickingFiles={isPickingFiles}
+                onAttachFiles={attachFiles}
+                onPasteFiles={pasteFiles}
+                onRemoveAttachment={removeAttachment}
+                onModelChange={handleModelChange}
+                onThinkingLevelChange={handleThinkingLevelChange}
+                onBranchChanged={refreshGitOverview}
+                onRunStateChange={handleSessionRunStateChange}
+                branchSummary={gitOverview?.branch ?? null}
+                contextSummary={
+                  contextSummaryBySessionId[session.id] ??
+                  EMPTY_CONTEXT_USAGE_SUMMARY
+                }
+                visible={visible}
+                disableGlobalSideEffects={hasAnyRunningSessions}
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  }, [
+    activeSessionId,
+    attachFiles,
+    contextSummaryBySessionId,
+    currentModelId,
+    desktopApi,
+    handleModelChange,
+    handleSessionRunStateChange,
+    handleThinkingLevelChange,
+    hasAnyRunningSessions,
+    isPickingFiles,
+    mountedSessionIds,
+    removeAttachment,
+    pasteFiles,
+    persistSession,
+    refreshGitOverview,
+    reloadSession,
+    sessionCache,
+    terminalOpen,
+    thinkingLevel,
+    gitOverview?.branch,
+  ]);
+
+  const settingsContent = useMemo(
+    () => (
+      <SettingsView
+        activeSection={settingsSection}
+        settings={settings}
+        currentModelId={currentModelId}
+        thinkingLevel={thinkingLevel}
+        onModelChange={handleModelChange}
+        onThinkingLevelChange={handleThinkingLevelChange}
+        onSettingsChange={handleSettingsChange}
+        archivedSummaries={archivedSummaries}
+        onOpenArchivedSession={openArchivedSessionFromSettings}
+        onUnarchiveSession={(sessionId) => {
+          void unarchiveSession(sessionId);
+        }}
+        onDeleteSession={(sessionId) => {
+          void deleteSessionPermanently(sessionId);
+        }}
+      />
+    ),
+    [
+      archivedSummaries,
+      currentModelId,
+      deleteSessionPermanently,
+      handleModelChange,
+      handleSettingsChange,
+      handleThinkingLevelChange,
+      openArchivedSessionFromSettings,
+      settings,
+      settingsSection,
+      thinkingLevel,
+      unarchiveSession,
+    ],
+  );
+
+  const threadPanels = useMemo(
+    () =>
+      diffPanelOpen ? (
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="min-h-0 bg-[color:var(--chela-bg-surface)]"
+          onLayoutChanged={handleDiffOnlyLayoutChanged}
+          resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
+        >
+          <ResizablePanel
+            id="thread-main"
+            defaultSize={toPercentageSize(100 - normalizedDiffPanelSize)}
+            minSize={`${100 - MAX_DIFF_PANEL_SIZE}%`}
+          >
+            <section className="flex h-full min-h-0 flex-col bg-[color:var(--chela-bg-surface)]">
+              {threadRuntimeLayer}
+            </section>
+          </ResizablePanel>
+          <ResizableHandle className="-mx-px w-px" />
+          <ResizablePanel
+            id="thread-diff"
+            defaultSize={toPercentageSize(normalizedDiffPanelSize)}
+            minSize={`${MIN_DIFF_PANEL_SIZE}%`}
+            maxSize={`${MAX_DIFF_PANEL_SIZE}%`}
+          >
+            <DiffPanel
+              overview={gitOverview}
+              isLoading={gitOverviewLoading}
+              onRefresh={refreshGitOverview}
+            />
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
+        <section className="flex h-full min-h-0 flex-col bg-[color:var(--chela-bg-surface)]">
+          {threadRuntimeLayer}
+        </section>
+      ),
+    [
+      diffPanelOpen,
+      gitOverview,
+      gitOverviewLoading,
+      handleDiffOnlyLayoutChanged,
+      normalizedDiffPanelSize,
+      refreshGitOverview,
+      threadRuntimeLayer,
+    ],
+  );
+
   if (booting) {
     return (
       <main className="grid h-screen place-items-center bg-[#f0f0f0] text-gray-400">
@@ -1115,123 +1324,6 @@ export default function App() {
     );
   }
 
-  const threadRuntimeLayer =
-    desktopApi ? (
-      mountedSessionIds.length > 0 ? (
-        <div className="flex h-full min-h-0 flex-col bg-[color:var(--chela-bg-surface)]">
-          {mountedSessionIds.map((sessionId) => {
-            const session = sessionCache[sessionId];
-            if (!session) {
-              return null;
-            }
-
-            const visible = mainView === "thread" && sessionId === activeSessionId;
-
-            return (
-              <div
-                key={sessionId}
-                className={visible ? "flex h-full min-h-0 flex-1 flex-col" : "hidden"}
-                aria-hidden={!visible}
-              >
-                <AssistantThreadPanel
-                  session={session}
-                  desktopApi={desktopApi}
-                  onPersistSession={persistSession}
-                  onReloadSession={reloadSession}
-                  currentModelId={currentModelId}
-                  thinkingLevel={thinkingLevel}
-                  terminalOpen={terminalOpen}
-                  isPickingFiles={isPickingFiles}
-                  onAttachFiles={attachFiles}
-                  onPasteFiles={pasteFiles}
-                  onRemoveAttachment={removeAttachment}
-                  onModelChange={handleModelChange}
-                  onThinkingLevelChange={handleThinkingLevelChange}
-                  onBranchChanged={refreshGitOverview}
-                  onRunStateChange={handleSessionRunStateChange}
-                  branchSummary={gitOverview?.branch ?? null}
-                  contextSummary={
-                    contextSummaryBySessionId[session.id] ??
-                    EMPTY_CONTEXT_USAGE_SUMMARY
-                  }
-                  visible={visible}
-                  disableGlobalSideEffects={hasAnyRunningSessions}
-                />
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
-          当前没有可用线程。
-        </div>
-      )
-    ) : (
-      <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
-        当前没有可用线程。
-      </div>
-    );
-
-  const settingsOverlay =
-    mainView === "settings" ? (
-      <div className="absolute inset-0 z-10 min-h-0 bg-[color:var(--chela-bg-surface)]">
-        <SettingsView
-          activeSection={settingsSection}
-          settings={settings}
-          currentModelId={currentModelId}
-          thinkingLevel={thinkingLevel}
-          onModelChange={handleModelChange}
-          onThinkingLevelChange={handleThinkingLevelChange}
-          onSettingsChange={handleSettingsChange}
-          archivedSummaries={archivedSummaries}
-          onOpenArchivedSession={openArchivedSessionFromSettings}
-          onUnarchiveSession={(sessionId) => {
-            void unarchiveSession(sessionId);
-          }}
-          onDeleteSession={(sessionId) => {
-            void deleteSessionPermanently(sessionId);
-          }}
-        />
-      </div>
-    ) : null;
-
-  const threadPanels =
-    diffPanelOpen ? (
-      <ResizablePanelGroup
-        orientation="horizontal"
-        className="min-h-0 bg-[color:var(--chela-bg-surface)]"
-        onLayoutChanged={handleDiffOnlyLayoutChanged}
-        resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
-      >
-        <ResizablePanel
-          id="thread-main"
-          defaultSize={toPercentageSize(100 - normalizedDiffPanelSize)}
-          minSize={`${100 - MAX_DIFF_PANEL_SIZE}%`}
-        >
-          <section className="flex h-full min-h-0 flex-col bg-[color:var(--chela-bg-surface)]">
-            {threadRuntimeLayer}
-          </section>
-        </ResizablePanel>
-        <ResizableHandle className="-mx-px w-px" />
-        <ResizablePanel
-          id="thread-diff"
-          defaultSize={toPercentageSize(normalizedDiffPanelSize)}
-          minSize={`${MIN_DIFF_PANEL_SIZE}%`}
-          maxSize={`${MAX_DIFF_PANEL_SIZE}%`}
-        >
-          <DiffPanel
-            overview={gitOverview}
-            isLoading={gitOverviewLoading}
-            onRefresh={refreshGitOverview}
-          />
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    ) : (
-      <section className="flex h-full min-h-0 flex-col bg-[color:var(--chela-bg-surface)]">
-        {threadRuntimeLayer}
-      </section>
-    );
-
   return (
     <main className="flex h-screen flex-col overflow-hidden rounded-[var(--radius-shell)] bg-[color:var(--chela-bg-primary)] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
       <TitleBar
@@ -1248,6 +1340,7 @@ export default function App() {
           className="min-h-0 h-full overflow-hidden bg-transparent"
           onLayoutChanged={handleShellLayoutChanged}
           resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
+          {...(sidebarAnimating ? { "data-sidebar-animating": "" } : {})}
         >
           <ResizablePanel
             id="shell-sidebar"
@@ -1258,7 +1351,7 @@ export default function App() {
             minSize={`${MIN_SIDEBAR_SIZE}%`}
             maxSize={`${MAX_SIDEBAR_SIZE}%`}
           >
-            <aside className="relative h-full min-h-0 bg-transparent">
+            <aside className="chela-sidebar-content relative h-full min-h-0 overflow-hidden bg-transparent" data-collapsed={sidebarCollapsed ? "true" : undefined}>
               <Sidebar
                 summaries={summaries}
                 activeSessionId={activeSessionId}
@@ -1280,54 +1373,76 @@ export default function App() {
                 onSetSessionGroup={setSessionGroup}
                 viewMode={mainView === "settings" ? "settings" : "threads"}
                 activeSettingsSection={settingsSection}
-                onSelectSettingsSection={setSettingsSection}
+                onSelectSettingsSection={openSettingsView}
                 onExitSettings={closeSettingsView}
               />
             </aside>
           </ResizablePanel>
           <ResizableHandle className="-mx-px w-px" />
-          <ResizablePanel id="shell-main">
+        <ResizablePanel id="shell-main">
             <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)]">
-            <div className="flex min-h-[52px] items-center justify-end gap-2 px-5 pb-3 pt-4">
-              {mainView === "thread" ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setTerminalOpen((prev) => !prev)}
-                    className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
-                    aria-label={terminalOpen ? "收起终端" : "展开终端"}
-                  >
-                    <CommandLineIcon className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={toggleDiffPanel}
-                    className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
-                    aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
-                  >
-                    <RectangleGroupIcon className="h-4 w-4" />
-                  </Button>
-                </>
-              ) : null}
+            <div
+              className={`flex items-center justify-end gap-2 px-5 transition-[min-height,padding,opacity] duration-200 ease-out ${
+                mainView === "thread"
+                  ? "min-h-[52px] pb-3 pt-4 opacity-100"
+                  : "pointer-events-none min-h-0 overflow-hidden py-0 opacity-0"
+              }`}
+              aria-hidden={mainView !== "thread"}
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setTerminalOpen((prev) => !prev)}
+                className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
+                aria-label={terminalOpen ? "收起终端" : "展开终端"}
+              >
+                <CommandLineIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={toggleDiffPanel}
+                className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
+                aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
+              >
+                <RectangleGroupIcon className="h-4 w-4" />
+              </Button>
             </div>
 
             <div className="relative min-h-0 flex-1 bg-[color:var(--chela-bg-surface)]">
-              {threadPanels}
-              {settingsOverlay}
+              <div
+                className={`absolute inset-0 min-h-0 transition-[opacity,transform] duration-200 ease-out ${
+                  mainView === "thread"
+                    ? "pointer-events-auto translate-y-0 opacity-100"
+                    : "pointer-events-none -translate-y-1 opacity-0"
+                }`}
+                aria-hidden={mainView !== "thread"}
+              >
+                {threadPanels}
+              </div>
+
+              <div
+                  className={`absolute inset-0 min-h-0 transition-[opacity,transform] duration-200 ease-out ${
+                    mainView === "settings"
+                      ? "pointer-events-auto translate-y-0 opacity-100"
+                      : "pointer-events-none translate-y-1 opacity-0"
+                  }`}
+                  aria-hidden={mainView !== "settings"}
+                >
+                  {settingsContent}
+                </div>
             </div>
 
-            {mainView === "thread" ? (
+            <div className={mainView === "thread" ? "" : "hidden"}>
               <TerminalDrawer
                 open={terminalOpen}
                 onToggle={() => setTerminalOpen((prev) => !prev)}
                 settings={settings}
               />
-            ) : null}
+            </div>
           </div>
         </section>
         </ResizablePanel>
