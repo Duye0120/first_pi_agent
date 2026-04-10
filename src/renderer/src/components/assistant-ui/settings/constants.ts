@@ -10,7 +10,7 @@ export const SETTINGS_SECTIONS: {
   {
     id: "general",
     label: "常规",
-    description: "默认模型、思考强度等基础行为设置。",
+    description: "默认模型、思考强度、时区这些基础行为设置。",
   },
   {
     id: "keys",
@@ -19,7 +19,8 @@ export const SETTINGS_SECTIONS: {
   },
   { id: "appearance", label: "外观", description: "主题、字号和代码字体。" },
   { id: "terminal", label: "终端", description: "Shell、终端字体和滚动历史。" },
-  { id: "workspace", label: "工作区", description: "查看当前工作目录和 Soul 文件状态。" },
+  { id: "logs", label: "日志", description: "查看应用日志和审计日志，方便排错。" },
+  { id: "workspace", label: "工作区", description: "设置默认工作目录，顺手看规则文件状态。" },
   { id: "archived", label: "已归档", description: "统一查看、恢复或删除已归档线程。" },
   { id: "about", label: "关于", description: "应用信息与当前技术栈。" },
 ] as const;

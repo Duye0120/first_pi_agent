@@ -1,5 +1,10 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { Type } from "@mariozechner/pi-ai";
+import { getSettings } from "../settings.js";
+import {
+  formatDateTimeInTimeZone,
+  resolveConfiguredTimeZone,
+} from "../../shared/timezone.js";
 
 const parameters = Type.Object({});
 
@@ -16,11 +21,8 @@ export const getTimeTool: AgentTool<typeof parameters, GetTimeDetails> = {
   parameters,
   async execute(_toolCallId, _params) {
     const now = new Date();
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-    const localTime = now.toLocaleString("zh-CN", {
-      hour12: false,
-      timeZone,
-    });
+    const timeZone = resolveConfiguredTimeZone(getSettings().timeZone);
+    const localTime = formatDateTimeInTimeZone(now, timeZone);
 
     return {
       content: [

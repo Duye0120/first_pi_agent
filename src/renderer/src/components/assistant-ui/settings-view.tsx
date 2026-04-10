@@ -16,6 +16,7 @@ import { AppearanceSection } from "./settings/appearance-section";
 import { ArchivedSection } from "./settings/archived-section";
 import { GeneralSection } from "./settings/general-section";
 import { KeysSection } from "./settings/keys-section";
+import { LogsSection } from "./settings/logs-section";
 import { TerminalSection } from "./settings/terminal-section";
 import type { SettingsViewProps } from "./settings/types";
 import { WorkspaceSection } from "./settings/workspace-section";
@@ -40,13 +41,15 @@ export function SettingsView({
   const [sources, setSources] = useState<ProviderSource[]>([]);
   const [entries, setEntries] = useState<ModelEntry[]>([]);
   const [soulStatus, setSoulStatus] = useState<SoulFilesStatus | null>(null);
+  const [directoryLoaded, setDirectoryLoaded] = useState(false);
 
-  const loadDirectory = useCallback(async () => {
-    if (!desktopApi) return;
-    const nextDirectory = await loadProviderDirectory(desktopApi);
+  const loadDirectory = useCallback(async (force = false) => {
+    if (!desktopApi || (directoryLoaded && !force)) return;
+    const nextDirectory = await loadProviderDirectory(desktopApi, { force });
     setSources(nextDirectory.sources);
     setEntries(nextDirectory.entries);
-  }, [desktopApi]);
+    setDirectoryLoaded(true);
+  }, [desktopApi, directoryLoaded]);
 
   const loadSoulStatus = useCallback(async () => {
     if (!desktopApi) return;
@@ -55,17 +58,13 @@ export function SettingsView({
   }, [desktopApi]);
 
   useEffect(() => {
-    void loadDirectory();
-  }, [loadDirectory]);
-
-  useEffect(() => {
     if (activeSection === "general" || activeSection === "keys") {
       void loadDirectory();
     }
-    if (activeSection === "workspace") {
+    if (activeSection === "workspace" && settings?.workspace) {
       void loadSoulStatus();
     }
-  }, [activeSection, loadDirectory, loadSoulStatus]);
+  }, [activeSection, loadDirectory, loadSoulStatus, settings?.workspace]);
 
   const modelOptions = useMemo(() => {
     const nextOptions: ModelOption[] = buildSelectableModelOptions(
@@ -112,7 +111,7 @@ export function SettingsView({
 
   if (!settings) {
     return (
-      <div className="grid h-full place-items-center bg-shell-panel px-6 text-sm text-muted-foreground">
+      <div className="grid h-full place-items-center bg-transparent px-6 text-sm text-muted-foreground">
         正在加载设置…
       </div>
     );
@@ -121,24 +120,22 @@ export function SettingsView({
   const meta = SECTION_META[activeSection];
 
   return (
-    <div className="flex h-full flex-col bg-shell-panel">
-      <div className="flex-1 overflow-y-auto px-8 pb-10 pt-4">
-        <div className="mx-auto w-full max-w-[56rem]">
-          <header className="mb-6">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
-              设置
-            </p>
-            <h1 className="mt-3 text-[26px] font-semibold tracking-[-0.02em] text-foreground">
+    <div className="flex h-full flex-col bg-transparent">
+      <div className="flex-1 overflow-y-auto px-8 pb-12 pt-5">
+        <div className="mx-auto h-full w-full max-w-[58rem]">
+          <header className="mb-7">
+            <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-foreground">
               {meta.label}
             </h1>
-            <p className="mt-2 max-w-[640px] text-[13px] leading-6 text-muted-foreground">
+            <p className="mt-2.5 max-w-[680px] text-[13px] leading-6 text-muted-foreground">
               {meta.description}
             </p>
           </header>
 
-          <div className="space-y-3">
+          <div className="space-y-4 pb-8">
             {activeSection === "general" ? (
               <GeneralSection
+                settings={settings}
                 currentModelId={currentModelId}
                 thinkingLevel={effectiveThinkingLevel}
                 canConfigureThinking={thinkingEnabled}
@@ -147,6 +144,7 @@ export function SettingsView({
                 modelOptions={modelOptions}
                 onModelChange={onModelChange}
                 onThinkingLevelChange={onThinkingLevelChange}
+                onSettingsChange={onSettingsChange}
               />
             ) : null}
 
@@ -156,6 +154,7 @@ export function SettingsView({
                 initialSources={sources}
                 initialEntries={entries}
                 onDirectoryChanged={loadDirectory}
+                onModelChange={onModelChange}
               />
             ) : null}
 
@@ -173,8 +172,14 @@ export function SettingsView({
               />
             ) : null}
 
+            {activeSection === "logs" ? <LogsSection /> : null}
+
             {activeSection === "workspace" ? (
-              <WorkspaceSection settings={settings} soulStatus={soulStatus} />
+              <WorkspaceSection
+                settings={settings}
+                soulStatus={soulStatus}
+                onSettingsChange={onSettingsChange}
+              />
             ) : null}
 
             {activeSection === "archived" ? (

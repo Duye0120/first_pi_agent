@@ -34,7 +34,7 @@ export function TitleBar({
             <button
               type="button"
               onClick={onToggleSidebar}
-              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-[10px] text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--chela-accent-subtle)] hover:text-[color:var(--chela-text-primary)]"
+              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-[10px] text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
               aria-label={sidebarCollapsed ? "展开侧栏" : "收起侧栏"}
             >
               {sidebarCollapsed ? (

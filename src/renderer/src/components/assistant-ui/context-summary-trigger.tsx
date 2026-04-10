@@ -177,7 +177,7 @@ function ContextExpandedSummary({
       </div>
 
       {(usedPercent || remainingPercent) && (
-        <div className="grid grid-cols-2 gap-2 rounded-[14px] bg-shell-panel-elevated px-3 py-2.5">
+        <div className="grid grid-cols-2 gap-2 rounded-[14px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-2.5 shadow-[var(--color-control-shadow)]">
           <div>
             <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
               已用
@@ -210,7 +210,7 @@ function ContextExpandedSummary({
         ))}
       </div>
 
-      <div className="rounded-[14px] bg-shell-toolbar-hover px-3 py-2.5">
+      <div className="rounded-[14px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-2.5 shadow-[var(--color-control-shadow)]">
         <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
           续接摘要
         </p>
@@ -253,7 +253,7 @@ function ContextExpandedSummary({
       ) : null}
 
       {summary.nextActions.length > 0 ? (
-        <div className="rounded-[14px] bg-shell-panel-elevated px-3 py-2.5">
+        <div className="rounded-[14px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-2.5 shadow-[var(--color-control-shadow)]">
           <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
             下一步
           </p>
@@ -270,7 +270,7 @@ function ContextExpandedSummary({
       {summary.risks.length > 0 || summary.importantFiles.length > 0 ? (
         <div className="grid gap-2 sm:grid-cols-2">
           {summary.risks.length > 0 ? (
-            <div className="rounded-[14px] bg-shell-toolbar-hover px-3 py-2.5">
+            <div className="rounded-[14px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-2.5 shadow-[var(--color-control-shadow)]">
               <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
                 风险
               </p>
@@ -288,7 +288,7 @@ function ContextExpandedSummary({
           ) : null}
 
           {summary.importantFiles.length > 0 ? (
-            <div className="rounded-[14px] bg-shell-toolbar-hover px-3 py-2.5">
+            <div className="rounded-[14px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-2.5 shadow-[var(--color-control-shadow)]">
               <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
                 关键文件
               </p>
@@ -308,7 +308,7 @@ function ContextExpandedSummary({
       ) : null}
 
       {summary.autoCompactBlocked ? (
-        <div className="rounded-[14px] bg-shell-toolbar-hover px-3 py-2.5">
+        <div className="rounded-[14px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-2.5 shadow-[var(--color-control-shadow)]">
           <p className="text-[10px] tracking-[0.18em] text-[color:var(--color-text-muted)]">
             自动 Compact
           </p>
@@ -333,7 +333,7 @@ function ContextExpandedSummary({
             }
           }}
           disabled={!summary.canCompact || summary.isCompacting}
-          className="h-8 rounded-full border-none bg-shell-toolbar-hover px-3 text-[12px] shadow-none hover:bg-shell-panel-contrast disabled:cursor-not-allowed disabled:opacity-55"
+          className="h-8 rounded-full px-3 text-[12px]"
         >
           {summary.isCompacting ? "Compacting…" : "Compact"}
         </Button>

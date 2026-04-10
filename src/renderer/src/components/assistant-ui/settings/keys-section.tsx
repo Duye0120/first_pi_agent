@@ -28,6 +28,11 @@ import {
 import { Switch } from "@renderer/components/assistant-ui/switch";
 import { TooltipIconButton } from "@renderer/components/assistant-ui/tooltip-icon-button";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@renderer/components/ui/popover";
+import {
   findKnownModelMetadata,
   getUnknownModelCapabilities,
   getUnknownModelLimits,
@@ -288,6 +293,34 @@ function createWorkspaceMap(
   );
 }
 
+function compareSourceWorkspace(
+  left: SourceWorkspace,
+  right: SourceWorkspace,
+): number {
+  if (left.sourceDraft.enabled !== right.sourceDraft.enabled) {
+    return left.sourceDraft.enabled ? -1 : 1;
+  }
+
+  if (left.kind !== right.kind) {
+    return left.kind === "builtin" ? -1 : 1;
+  }
+
+  return (left.sourceDraft.name || "未命名提供商").localeCompare(
+    right.sourceDraft.name || "未命名提供商",
+    "zh-CN",
+  );
+}
+
+function sortSourceWorkspaces(workspaces: SourceWorkspace[]): SourceWorkspace[] {
+  return [...workspaces].sort(compareSourceWorkspace);
+}
+
+function getDefaultSelectedSourceId(
+  workspaces: Record<string, SourceWorkspace>,
+): string | null {
+  return sortSourceWorkspaces(Object.values(workspaces))[0]?.sourceId ?? null;
+}
+
 function createNewCustomWorkspace(): SourceWorkspace {
   const workspace: SourceWorkspace = {
     sourceId: `draft-source:${crypto.randomUUID()}`,
@@ -355,16 +388,18 @@ export function KeysSection({
   initialSources,
   initialEntries,
   onDirectoryChanged,
+  onModelChange,
 }: {
   currentModelId: string;
   initialSources: ProviderSource[];
   initialEntries: ModelEntry[];
   onDirectoryChanged: () => void;
+  onModelChange: (modelEntryId: string) => void;
 }) {
   const desktopApi = window.desktopApi;
   const [search, setSearch] = useState("");
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(
-    initialSources[0]?.id ?? null,
+    getDefaultSelectedSourceId(createWorkspaceMap(initialSources, initialEntries)),
   );
   const [workspaces, setWorkspaces] = useState<Record<string, SourceWorkspace>>(
     () => createWorkspaceMap(initialSources, initialEntries),
@@ -378,6 +413,7 @@ export function KeysSection({
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingEntrySnapshot, setEditingEntrySnapshot] =
     useState<EditableEntry | null>(null);
+  const [deleteSourceConfirmOpen, setDeleteSourceConfirmOpen] = useState(false);
   const hasWorkspacesRef = useRef(Object.keys(workspaces).length > 0);
 
   useEffect(() => {
@@ -407,16 +443,21 @@ export function KeysSection({
           allEntries,
           credentialsMap,
         );
+        const defaultSourceId = getDefaultSelectedSourceId(nextWorkspaces);
 
         setWorkspaces(nextWorkspaces);
         setSelectedSourceId((current) => {
           if (preferredSourceId && nextWorkspaces[preferredSourceId]) {
             return preferredSourceId;
           }
-          if (current && nextWorkspaces[current]) {
+          if (
+            current &&
+            nextWorkspaces[current] &&
+            nextWorkspaces[current].sourceDraft.enabled
+          ) {
             return current;
           }
-          return sources[0]?.id ?? null;
+          return defaultSourceId;
         });
         setTestResult(null);
         onDirectoryChanged();
@@ -440,12 +481,26 @@ export function KeysSection({
 
     const nextWorkspaces = createWorkspaceMap(initialSources, initialEntries);
     setWorkspaces(nextWorkspaces);
-    setSelectedSourceId((current) => current ?? initialSources[0]?.id ?? null);
+    setSelectedSourceId((current) => {
+      if (
+        current &&
+        nextWorkspaces[current] &&
+        nextWorkspaces[current].sourceDraft.enabled
+      ) {
+        return current;
+      }
+
+      return getDefaultSelectedSourceId(nextWorkspaces);
+    });
     setLoading(false);
   }, [initialEntries, initialSources, workspaces]);
 
   useEffect(() => {
     setApiKeyVisible(false);
+  }, [selectedSourceId]);
+
+  useEffect(() => {
+    setDeleteSourceConfirmOpen(false);
   }, [selectedSourceId]);
 
   const sourceList = useMemo(() => {
@@ -462,20 +517,7 @@ export function KeysSection({
             .includes(query)
         );
       })
-      .sort((left, right) => {
-        if (left.sourceDraft.enabled !== right.sourceDraft.enabled) {
-          return left.sourceDraft.enabled ? -1 : 1;
-        }
-
-        if (left.kind !== right.kind) {
-          return left.kind === "builtin" ? -1 : 1;
-        }
-
-        return (left.sourceDraft.name || "未命名提供商").localeCompare(
-          right.sourceDraft.name || "未命名提供商",
-          "zh-CN",
-        );
-      });
+      .sort(compareSourceWorkspace);
   }, [search, workspaces]);
 
   const currentWorkspace = selectedSourceId
@@ -557,11 +599,6 @@ export function KeysSection({
   const handleDeleteSource = useCallback(async () => {
     if (!desktopApi || !currentWorkspace) return;
 
-    if (currentWorkspace.entries.length > 0) {
-      setError("删除提供商前，请先清空它下面的模型条目。");
-      return;
-    }
-
     if (!currentWorkspace.persistedSourceId) {
       const nextSourceId =
         Object.keys(workspaces).find(
@@ -575,6 +612,7 @@ export function KeysSection({
       });
       setSelectedSourceId(nextSourceId);
       setError(null);
+      setDeleteSourceConfirmOpen(false);
       return;
     }
 
@@ -582,11 +620,16 @@ export function KeysSection({
       await desktopApi.providers.deleteSource(
         currentWorkspace.persistedSourceId,
       );
+      setDeleteSourceConfirmOpen(false);
       await reload();
+      const nextSettings = await desktopApi.settings.get();
+      if (nextSettings.defaultModelId !== currentModelId) {
+        onModelChange(nextSettings.defaultModelId);
+      }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "删除失败");
     }
-  }, [currentWorkspace, desktopApi, reload, workspaces]);
+  }, [currentModelId, currentWorkspace, desktopApi, onModelChange, reload, workspaces]);
 
   const handleSave = useCallback(async () => {
     if (!desktopApi || !currentWorkspace) return;
@@ -679,7 +722,7 @@ export function KeysSection({
 
   if (loading) {
     return (
-      <div className="grid h-[640px] place-items-center rounded-[var(--radius-shell)] bg-shell-panel-muted/60 text-sm text-muted-foreground">
+      <div className="grid h-[640px] place-items-center rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] text-sm text-muted-foreground shadow-[var(--color-control-shadow)]">
         正在加载提供商与模型目录…
       </div>
     );
@@ -687,7 +730,7 @@ export function KeysSection({
 
   return (
     <div className="grid h-[680px] min-h-0 grid-cols-[280px_minmax(0,1fr)] gap-4">
-      <div className="flex min-h-0 flex-col rounded-[var(--radius-shell)] bg-shell-panel-muted/60">
+      <div className="flex min-h-0 flex-col rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] shadow-[var(--color-control-shadow)]">
         <div className="space-y-3 px-4 py-4">
           <FieldInput
             value={search}
@@ -722,8 +765,8 @@ export function KeysSection({
                   }}
                   className={`w-full rounded-[var(--radius-shell)] px-3 py-2 text-left transition-colors ${
                     isSelected
-                      ? "bg-accent-subtle text-accent-text font-medium"
-                      : "bg-transparent text-foreground hover:bg-shell-panel-muted"
+                      ? "bg-[color:var(--color-control-selected-bg)] text-[color:var(--color-control-selected-text)] font-medium"
+                      : "bg-transparent text-foreground hover:bg-[color:var(--color-control-bg-hover)]"
                   }`}
                 >
                   <div className="truncate text-[13px] font-semibold text-foreground">
@@ -760,7 +803,7 @@ export function KeysSection({
       </div>
 
       {currentWorkspace ? (
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-shell)] bg-shell-panel-muted/60">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] shadow-[var(--color-control-shadow)]">
           <div className="flex items-start justify-between border-b border-[color:var(--color-border-light)] px-6 py-5">
             <div>
               <div className="text-[20px] font-semibold text-foreground">
@@ -803,15 +846,54 @@ export function KeysSection({
               />
 
               {currentWorkspace.kind === "custom" ? (
-                <TooltipIconButton
-                  type="button"
-                  tooltip="删除提供商"
-                  aria-label="删除提供商"
-                  onClick={() => void handleDeleteSource()}
-                  className="h-9 w-9 rounded-[var(--radius-shell)] text-red-500 hover:bg-red-50 hover:text-red-600"
+                <Popover
+                  open={deleteSourceConfirmOpen}
+                  onOpenChange={setDeleteSourceConfirmOpen}
                 >
-                  <Trash2Icon className="h-4 w-4" />
-                </TooltipIconButton>
+                  <PopoverTrigger asChild>
+                    <TooltipIconButton
+                      type="button"
+                      tooltip="删除提供商"
+                      aria-label="删除提供商"
+                      className="h-9 w-9 rounded-[var(--radius-shell)] text-red-500 hover:bg-red-50 hover:text-red-600"
+                    >
+                      <Trash2Icon className="h-4 w-4" />
+                    </TooltipIconButton>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    className="w-[280px] rounded-[var(--radius-shell)] p-3"
+                  >
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[13px] font-medium text-foreground">
+                          确认删除这个提供商？
+                        </p>
+                        <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                          会一起删掉它下面的 {currentWorkspace.entries.length} 个模型条目。
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-8 px-3 text-[12px]"
+                          onClick={() => setDeleteSourceConfirmOpen(false)}
+                        >
+                          取消
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          className="h-8 px-3 text-[12px]"
+                          onClick={() => void handleDeleteSource()}
+                        >
+                          确认删除
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               ) : null}
             </div>
           </div>
@@ -895,7 +977,7 @@ export function KeysSection({
                     </>
                   ) : (
                     <>
-                      <div className="rounded-[var(--radius-shell)] bg-shell-panel-contrast px-4 py-4">
+                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-4 py-4 shadow-[var(--color-control-shadow)]">
                         <label className="inline-flex items-start gap-3 text-[13px] text-foreground">
                           <Switch
                             checked={
@@ -1033,7 +1115,7 @@ export function KeysSection({
                             {getEntryDisplayName(entry)}
                           </span>
                           {!entry.builtin && (
-                            <span className="rounded bg-shell-panel-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            <span className="rounded bg-[color:var(--color-control-bg)] px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-[var(--color-control-shadow)]">
                               Manual
                             </span>
                           )}
@@ -1045,7 +1127,7 @@ export function KeysSection({
                             tooltip="模型高级项"
                             size="icon"
                             onClick={() => handleOpenEntryDialog(entry)}
-                            className="h-8 w-8 rounded-[var(--radius-shell)] text-muted-foreground hover:bg-shell-panel-muted hover:text-foreground"
+                            className="h-8 w-8 rounded-[var(--radius-shell)] text-muted-foreground hover:bg-[color:var(--color-control-bg-hover)] hover:text-foreground"
                           >
                             <SlidersHorizontalIcon className="h-4 w-4" />
                           </TooltipIconButton>
@@ -1159,7 +1241,7 @@ export function KeysSection({
                             }),
                           )
                         }
-                        className="h-8 rounded-[var(--radius-shell)] px-3 text-[12px] text-foreground hover:bg-shell-panel-muted"
+                        className="h-8 rounded-[var(--radius-shell)] px-3 text-[12px] text-foreground hover:bg-[color:var(--color-control-bg-hover)]"
                       >
                         + 添加模型条目
                       </Button>
@@ -1198,7 +1280,7 @@ export function KeysSection({
                   variant="outline"
                   onClick={() => void handleTest()}
                   disabled={testing || saving}
-                  className="h-9 rounded-[var(--radius-shell)] bg-shell-panel-contrast px-4 text-[12px] hover:bg-shell-panel-muted"
+                  className="h-9 rounded-[var(--radius-shell)] px-4 text-[12px]"
                 >
                   {testing ? "测试中…" : "测试连接"}
                 </Button>
@@ -1227,7 +1309,7 @@ export function KeysSection({
             }}
           >
             {currentEntry ? (
-              <DialogContent className="flex max-h-[min(84vh,760px)] max-w-[760px] flex-col gap-0 overflow-hidden rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel p-0 shadow-lg">
+              <DialogContent className="flex max-h-[min(84vh,760px)] max-w-[760px] flex-col gap-0 overflow-hidden rounded-[var(--radius-shell)] p-0">
                 <div className="shrink-0 border-b border-[color:var(--color-border-light)] px-5 py-4">
                   <DialogTitle className="text-[18px] text-foreground">
                     {getEntryDisplayName(currentEntry)}
@@ -1301,7 +1383,7 @@ export function KeysSection({
                       {CAPABILITY_FIELDS.map(({ key, label }) => (
                         <div
                           key={key}
-                          className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-3 py-3"
+                          className="rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-3 shadow-[var(--color-control-shadow)]"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0 text-[12px] font-medium text-foreground">
@@ -1342,7 +1424,7 @@ export function KeysSection({
                     </div>
 
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-3 py-3">
+                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-3 shadow-[var(--color-control-shadow)]">
                         <div className="flex items-baseline justify-between gap-3">
                           <div className="text-[12px] font-medium text-foreground">
                             上下文窗口
@@ -1388,7 +1470,7 @@ export function KeysSection({
                         </div>
                       </div>
 
-                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-3 py-3">
+                      <div className="rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-3 shadow-[var(--color-control-shadow)]">
                         <div className="flex items-baseline justify-between gap-3">
                           <div className="text-[12px] font-medium text-foreground">
                             最大输出 Tokens
@@ -1459,7 +1541,7 @@ export function KeysSection({
                           }),
                         )
                       }
-                      className="min-h-[120px] w-full rounded-[var(--radius-shell)] border border-[color:var(--color-border-light)] bg-shell-panel-contrast px-3 py-2.5 font-mono text-[12px] text-foreground outline-none transition-colors focus:border-ring/40"
+                      className="min-h-[120px] w-full rounded-[var(--radius-shell)] border-none bg-[color:var(--color-control-bg)] px-3 py-2.5 font-mono text-[12px] text-foreground shadow-[var(--color-control-shadow)] ring-1 ring-[color:var(--color-control-border)] outline-none transition-[background-color,color,box-shadow] focus-visible:bg-[color:var(--color-control-bg-active)] focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)]"
                       placeholder='例如：{ "compat": { "supportsStore": false } }'
                     />
                   </div>
@@ -1475,7 +1557,7 @@ export function KeysSection({
                         type="button"
                         variant="outline"
                         onClick={handleCancelEntryDialog}
-                        className="h-8 rounded-[var(--radius-shell)] bg-shell-panel-contrast px-3 text-[12px] hover:bg-shell-panel-muted"
+                        className="h-8 rounded-[var(--radius-shell)] px-3 text-[12px]"
                       >
                         取消
                       </Button>
@@ -1495,7 +1577,7 @@ export function KeysSection({
           </Dialog>
         </div>
       ) : (
-        <div className="grid place-items-center rounded-[var(--radius-shell)] bg-shell-panel-muted/60 text-sm text-muted-foreground">
+        <div className="grid place-items-center rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] text-sm text-muted-foreground shadow-[var(--color-control-shadow)]">
           请选择一个提供商。
         </div>
       )}

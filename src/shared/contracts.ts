@@ -142,6 +142,7 @@ export type ThinkingLevel = "off" | "low" | "medium" | "high" | "xhigh";
 export type Settings = {
   defaultModelId: string;
   thinkingLevel: ThinkingLevel;
+  timeZone: string;
   theme: "light" | "dark" | "custom";
   customTheme: Record<string, string> | null;
   terminal: {
@@ -194,6 +195,24 @@ export type ClipboardFilePayload = {
 export type MessageUsage = {
   inputTokens: number;
   outputTokens: number;
+};
+
+export type DiagnosticLogId = "app" | "audit";
+
+export type DiagnosticLogSnapshot = {
+  id: DiagnosticLogId;
+  label: string;
+  path: string;
+  exists: boolean;
+  sizeBytes: number;
+  updatedAt: string | null;
+  tail: string;
+  lineCount: number;
+};
+
+export type DiagnosticLogBundle = {
+  generatedAt: string;
+  files: DiagnosticLogSnapshot[];
 };
 
 export type RunKind = "chat" | "compact" | "system";
@@ -501,6 +520,8 @@ export type DesktopApi = {
   settings: {
     get: () => Promise<Settings>;
     update: (partial: Partial<Settings>) => Promise<void>;
+    getLogSnapshot: () => Promise<DiagnosticLogBundle>;
+    openLogFolder: (logId: DiagnosticLogId) => Promise<void>;
   };
   providers: {
     listSources: () => Promise<ProviderSource[]>;
@@ -521,6 +542,8 @@ export type DesktopApi = {
   workspace: {
     change: (path: string) => Promise<void>;
     getSoul: () => Promise<SoulFilesStatus>;
+    pickFolder: () => Promise<string | null>;
+    openFolder: () => Promise<void>;
   };
   terminal: {
     create: (options?: { cwd?: string }) => Promise<string>;
@@ -531,6 +554,7 @@ export type DesktopApi = {
     onExit: (callback: (terminalId: string, exitCode: number) => void) => () => void;
   };
   git: {
+    getSummary: () => Promise<GitBranchSummary>;
     getSnapshot: () => Promise<GitDiffOverview>;
     listBranches: () => Promise<GitBranchEntry[]>;
     switchBranch: (branchName: string) => Promise<void>;

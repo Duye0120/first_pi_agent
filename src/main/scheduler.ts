@@ -14,6 +14,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { bus } from "./event-bus.js";
 import { appLogger } from "./logger.js";
+import { getSettings } from "./settings.js";
+import { getClockTimeInTimeZone, resolveConfiguredTimeZone } from "../shared/timezone.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -146,7 +148,8 @@ class Scheduler {
 
   private checkDailyJobs(): void {
     const now = new Date();
-    const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const timeZone = resolveConfiguredTimeZone(getSettings().timeZone);
+    const hhmm = getClockTimeInTimeZone(now, timeZone);
 
     for (const job of this.jobs.values()) {
       if (job.def.type === "daily" && job.def.enabled && job.def.time === hhmm) {

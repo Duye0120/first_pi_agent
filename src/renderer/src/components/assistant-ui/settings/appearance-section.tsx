@@ -10,10 +10,7 @@ export function AppearanceSection({
   onSettingsChange: (partial: Partial<Settings>) => void;
 }) {
   return (
-    <SettingsCard
-      title="外观"
-      description="主题、字号和代码字体都从这里统一控制。"
-    >
+    <SettingsCard>
       <SettingsRow label="主题" hint="切换应用主题模式。">
         <FieldSelect
           value={settings.theme}

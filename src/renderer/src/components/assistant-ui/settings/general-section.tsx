@@ -1,4 +1,11 @@
+import { useMemo } from "react";
 import type { ThinkingLevel } from "@shared/contracts";
+import {
+  formatDateTimeInTimeZone,
+  getCommonTimeZoneOptions,
+  getSystemTimeZone,
+  resolveConfiguredTimeZone,
+} from "@shared/timezone";
 import {
   ModelSelector,
   type ModelOption,
@@ -6,6 +13,7 @@ import {
 import { FieldSelect, SettingsCard, SettingsRow } from "./shared";
 
 export function GeneralSection({
+  settings,
   currentModelId,
   thinkingLevel,
   canConfigureThinking,
@@ -14,7 +22,9 @@ export function GeneralSection({
   modelOptions,
   onModelChange,
   onThinkingLevelChange,
+  onSettingsChange,
 }: {
+  settings: { timeZone: string };
   currentModelId: string;
   thinkingLevel: ThinkingLevel;
   canConfigureThinking: boolean;
@@ -23,14 +33,21 @@ export function GeneralSection({
   modelOptions: ModelOption[];
   onModelChange: (modelEntryId: string) => void;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
+  onSettingsChange: (partial: { timeZone: string }) => void;
 }) {
   const currentModel =
     modelOptions.find((option) => option.id === currentModelId) ?? null;
+  const systemTimeZone = useMemo(() => getSystemTimeZone(), []);
+  const resolvedTimeZone = resolveConfiguredTimeZone(settings.timeZone);
+  const timeZoneOptions = useMemo(
+    () => getCommonTimeZoneOptions(systemTimeZone, settings.timeZone),
+    [settings.timeZone, systemTimeZone],
+  );
 
   return (
     <SettingsCard
-      title="模型与推理"
-      description="这些配置会直接影响新消息默认使用的模型和思考强度。"
+      title="默认行为"
+      description="默认模型、思考强度、时区都放这。后面的定时任务和心跳也会直接吃这套配置。"
     >
       <SettingsRow
         label="默认模型"
@@ -50,7 +67,7 @@ export function GeneralSection({
                 ? `当前默认模型：${currentModel.name}`
                 : "选择默认模型"
             }
-            className="h-9 w-full justify-between rounded-[var(--radius-shell)] bg-shell-panel-contrast px-3 text-[13px] text-foreground shadow-none hover:bg-shell-panel-contrast"
+            className="h-9 w-full justify-between px-3 text-[13px]"
           />
           <ModelSelector.Content
             align="start"
@@ -75,6 +92,17 @@ export function GeneralSection({
                   },
                 ]
           }
+        />
+      </SettingsRow>
+
+      <SettingsRow
+        label="时区"
+        hint={`当前生效：${resolvedTimeZone} · ${formatDateTimeInTimeZone(new Date(), resolvedTimeZone)}`}
+      >
+        <FieldSelect
+          value={settings.timeZone}
+          onChange={(value) => onSettingsChange({ timeZone: value })}
+          options={timeZoneOptions}
         />
       </SettingsRow>
     </SettingsCard>

@@ -15,6 +15,8 @@ import { scheduler } from "../scheduler.js";
 import { listSessions, loadSession } from "../store.js";
 import { getMemdirStore } from "../memory/service.js";
 import { processPersonalityDrift, buildPersonalityDriftPromptText } from "./personality-drift.js";
+import { getSettings } from "../settings.js";
+import { getDateKeyInTimeZone, resolveConfiguredTimeZone } from "../../shared/timezone.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,15 +44,15 @@ const DAILY_REFLECTION_TIME = "02:00"; // 凌晨 2 点
 // ---------------------------------------------------------------------------
 
 function getTodaySessions(): { sessionId: string; title: string; messageCount: number; messages: string[] }[] {
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10); // "YYYY-MM-DD"
+  const timeZone = resolveConfiguredTimeZone(getSettings().timeZone);
+  const todayStr = getDateKeyInTimeZone(new Date(), timeZone);
 
   const summaries = listSessions();
   const result: { sessionId: string; title: string; messageCount: number; messages: string[] }[] = [];
 
   for (const summary of summaries) {
     // 按 updatedAt 过滤今天的 session
-    if (!summary.updatedAt.startsWith(todayStr)) continue;
+    if (getDateKeyInTimeZone(summary.updatedAt, timeZone) !== todayStr) continue;
 
     const session = loadSession(summary.id);
     if (!session || session.messages.length === 0) continue;
@@ -84,7 +86,8 @@ function getTodaySessions(): { sessionId: string; title: string; messageCount: n
 function generateLocalReflection(
   sessions: { sessionId: string; title: string; messageCount: number; messages: string[] }[]
 ): ReflectionReport {
-  const today = new Date().toISOString().slice(0, 10);
+  const timeZone = resolveConfiguredTimeZone(getSettings().timeZone);
+  const today = getDateKeyInTimeZone(new Date(), timeZone);
 
   if (sessions.length === 0) {
     return {
@@ -240,7 +243,8 @@ export { buildPersonalityDriftPromptText };
 // ---------------------------------------------------------------------------
 
 export function getLatestReflection(): ReflectionReport | null {
-  const today = new Date().toISOString().slice(0, 10);
+  const timeZone = resolveConfiguredTimeZone(getSettings().timeZone);
+  const today = getDateKeyInTimeZone(new Date(), timeZone);
   return loadReflection(today);
 }
 

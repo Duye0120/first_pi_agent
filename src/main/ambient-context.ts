@@ -9,6 +9,12 @@
 import { execSync } from "node:child_process";
 import type { PromptSection } from "./prompt-control-plane.js";
 import { appLogger } from "./logger.js";
+import { getSettings } from "./settings.js";
+import {
+  formatDateTimeInTimeZone,
+  getWeekdayLabelInTimeZone,
+  resolveConfiguredTimeZone,
+} from "../shared/timezone.js";
 
 // ---------------------------------------------------------------------------
 // 环境数据收集
@@ -24,9 +30,6 @@ type AmbientData = {
   gitDirty: boolean;
   gitLastCommit: string | null;
 };
-
-const DAY_NAMES = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
-
 function safeExec(cmd: string, cwd: string): string | null {
   try {
     return execSync(cmd, { cwd, timeout: 3000, encoding: "utf-8" }).trim();
@@ -37,12 +40,12 @@ function safeExec(cmd: string, cwd: string): string | null {
 
 export function collectAmbientData(workspacePath: string): AmbientData {
   const now = new Date();
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const timeZone = resolveConfiguredTimeZone(getSettings().timeZone);
 
   return {
-    localTime: now.toLocaleString("zh-CN", { hour12: false, timeZone }),
+    localTime: formatDateTimeInTimeZone(now, timeZone),
     timeZone,
-    dayOfWeek: DAY_NAMES[now.getDay()] || "",
+    dayOfWeek: getWeekdayLabelInTimeZone(now, timeZone),
     platform: process.platform,
     workspacePath,
     gitBranch: safeExec("git rev-parse --abbrev-ref HEAD", workspacePath),
@@ -69,10 +72,11 @@ export function buildAmbientContextSection(
     });
     // 降级：只提供时间
     const now = new Date();
+    const timeZone = resolveConfiguredTimeZone(getSettings().timeZone);
     data = {
-      localTime: now.toLocaleString("zh-CN", { hour12: false }),
-      timeZone: "UTC",
-      dayOfWeek: DAY_NAMES[now.getDay()] || "",
+      localTime: formatDateTimeInTimeZone(now, timeZone),
+      timeZone,
+      dayOfWeek: getWeekdayLabelInTimeZone(now, timeZone),
       platform: process.platform,
       workspacePath,
       gitBranch: null,

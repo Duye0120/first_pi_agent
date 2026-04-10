@@ -144,7 +144,7 @@ export function TerminalDrawer({ open, onToggle, settings }: Props) {
                 onClick={() => setActiveTabId(tab.id)}
                 className={`group relative -mb-px flex shrink-0 items-center gap-2 rounded-t-[6px] px-3 py-1 text-[11px] font-medium transition-colors ${
                   tab.id === activeTabId
-                    ? "z-10 bg-shell-panel-elevated text-foreground shadow-[0_-2px_10px_rgba(0,0,0,0.18)]"
+                    ? "z-10 border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] text-foreground shadow-[var(--color-control-shadow)]"
                     : "border-transparent text-[color:var(--color-text-secondary)] hover:bg-shell-hover hover:text-foreground"
                 }`}
               >

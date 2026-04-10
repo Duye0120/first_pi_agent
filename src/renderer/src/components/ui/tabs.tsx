@@ -14,7 +14,7 @@ const TabsList = ({
   <TabsPrimitive.List
     data-slot="tabs-list"
     className={cn(
-      "inline-flex items-center gap-1 rounded-[18px] bg-shell-panel-elevated p-1",
+      "inline-flex items-center gap-1 rounded-[18px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] p-1 shadow-[var(--color-control-shadow)]",
       className,
     )}
     {...props}
@@ -29,9 +29,9 @@ const TabsTrigger = ({
     data-slot="tabs-trigger"
     className={cn(
       "inline-flex min-w-0 cursor-pointer items-center justify-center gap-2 rounded-[14px] px-4 py-2.5 text-[12px] font-medium text-muted-foreground outline-none transition-colors",
-      "hover:bg-shell-panel hover:text-foreground",
-      "data-[state=active]:bg-foreground data-[state=active]:text-background",
-      "focus-visible:ring-1 focus-visible:ring-ring/35",
+      "hover:bg-[color:var(--color-control-bg-hover)] hover:text-foreground",
+      "data-[state=active]:bg-[color:var(--color-control-selected-bg)] data-[state=active]:text-[color:var(--color-control-selected-text)]",
+      "focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)]",
       className,
     )}
     {...props}

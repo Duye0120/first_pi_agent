@@ -1,6 +1,8 @@
-import { app, type BrowserWindow } from "electron";
-import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { app, shell, type BrowserWindow } from "electron";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { getHarnessAuditLogPath } from "./harness/audit.js";
+import type { DiagnosticLogBundle, DiagnosticLogSnapshot } from "../shared/contracts.js";
 
 export type AppLogLevel = "debug" | "info" | "warn" | "error";
 
@@ -56,6 +58,86 @@ function getLogDirPath(): string {
 
 export function getAppLogPath(): string {
   return join(getLogDirPath(), "app.log");
+}
+
+function buildTail(content: string, maxLines: number): { tail: string; lineCount: number } {
+  const normalized = content.replace(/\r\n/g, "\n");
+  const lines = normalized.split("\n");
+  const meaningfulLines =
+    lines.length > 0 && lines[lines.length - 1] === "" ? lines.slice(0, -1) : lines;
+  const tailLines = meaningfulLines.slice(-maxLines);
+  return {
+    tail: tailLines.join("\n"),
+    lineCount: tailLines.length,
+  };
+}
+
+function buildLogSnapshot(
+  input: { id: DiagnosticLogSnapshot["id"]; label: string; path: string },
+  maxLines: number,
+): DiagnosticLogSnapshot {
+  if (!existsSync(input.path)) {
+    return {
+      id: input.id,
+      label: input.label,
+      path: input.path,
+      exists: false,
+      sizeBytes: 0,
+      updatedAt: null,
+      tail: "",
+      lineCount: 0,
+    };
+  }
+
+  const stat = statSync(input.path);
+  const content = readFileSync(input.path, "utf-8");
+  const { tail, lineCount } = buildTail(content, maxLines);
+
+  return {
+    id: input.id,
+    label: input.label,
+    path: input.path,
+    exists: true,
+    sizeBytes: stat.size,
+    updatedAt: stat.mtime.toISOString(),
+    tail,
+    lineCount,
+  };
+}
+
+export function getDiagnosticLogSnapshot(maxLines = 120): DiagnosticLogBundle {
+  return {
+    generatedAt: new Date().toISOString(),
+    files: [
+      buildLogSnapshot(
+        { id: "app", label: "应用日志", path: getAppLogPath() },
+        maxLines,
+      ),
+      buildLogSnapshot(
+        { id: "audit", label: "审计日志", path: getHarnessAuditLogPath() },
+        maxLines,
+      ),
+    ],
+  };
+}
+
+export async function openDiagnosticLogFolder(
+  logId: DiagnosticLogSnapshot["id"],
+): Promise<void> {
+  const filePath =
+    logId === "audit"
+      ? getHarnessAuditLogPath()
+      : getAppLogPath();
+
+  if (existsSync(filePath)) {
+    shell.showItemInFolder(filePath);
+    return;
+  }
+
+  const result = await shell.openPath(dirname(filePath));
+  if (result) {
+    throw new Error(result);
+  }
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

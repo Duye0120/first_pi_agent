@@ -6,6 +6,7 @@ import {
   ChevronRightIcon,
   CommandLineIcon,
   Cog6ToothIcon,
+  DocumentTextIcon,
   EllipsisHorizontalIcon,
   FolderIcon,
   FolderPlusIcon,
@@ -112,10 +113,30 @@ export function Sidebar({
     { id: "keys", label: "提供商与模型", icon: KeyIcon },
     { id: "appearance", label: "外观", icon: SwatchIcon },
     { id: "terminal", label: "终端", icon: CommandLineIcon },
+    { id: "logs", label: "日志", icon: DocumentTextIcon },
     { id: "workspace", label: "工作区", icon: FolderIcon },
     { id: "archived", label: "已归档", icon: ArchiveBoxIcon },
     { id: "about", label: "关于", icon: InformationCircleIcon },
   ];
+
+  const SidebarFooterAction = ({
+    icon: Icon,
+    label,
+    onClick,
+  }: {
+    icon: typeof Cog6ToothIcon;
+    label: string;
+    onClick?: () => void;
+  }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className="chela-list-item flex h-11 w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-3.5 text-[12px] text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{label}</span>
+    </button>
+  );
 
   useEffect(() => {
     if (creatingGroup) newGroupInputRef.current?.focus();
@@ -219,15 +240,12 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className="px-3 py-3">
-        <button
-          type="button"
+      <div className="px-3 pb-3 pt-2">
+        <SidebarFooterAction
+          icon={ArrowUturnLeftIcon}
+          label="返回"
           onClick={onExitSettings}
-          className="chela-list-item flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-[12px] text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
-        >
-          <ArrowUturnLeftIcon className="h-3.5 w-3.5" />
-          返回
-        </button>
+        />
       </div>
     </aside>
   );
@@ -812,15 +830,12 @@ export function Sidebar({
       </div>
 
       {/* Bottom: Archive entry + Settings */}
-      <div className="px-3 py-3">
-        <button
-          type="button"
+      <div className="px-3 pb-3 pt-2">
+        <SidebarFooterAction
+          icon={Cog6ToothIcon}
+          label="设置"
           onClick={onOpenSettings}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-3 py-2 text-[12px] text-[color:var(--chela-text-secondary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
-        >
-          <Cog6ToothIcon className="h-3.5 w-3.5" />
-          设置
-        </button>
+        />
       </div>
     </aside>
       </div>

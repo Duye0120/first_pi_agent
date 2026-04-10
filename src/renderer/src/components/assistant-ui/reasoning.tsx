@@ -28,7 +28,7 @@ export const AssistantUIReasoning: FC = () => {
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="mb-1.5 overflow-hidden rounded-[14px] bg-shell-panel-muted/62 dark:bg-shell-panel-muted/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
+      className="mb-1.5 overflow-hidden rounded-[14px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] shadow-[var(--color-control-shadow)]"
     >
       <CollapsibleTrigger
         className={cn(

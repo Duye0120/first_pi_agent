@@ -9,10 +9,10 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-foreground text-background shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
-        secondary: "bg-shell-panel-contrast text-foreground",
+          "bg-[color:var(--color-accent)] text-white shadow-[0_6px_18px_rgba(249,115,22,0.16)]",
+        secondary: "bg-[color:var(--color-control-bg)] text-foreground shadow-[var(--color-control-shadow)]",
         outline:
-          "border border-[color:var(--color-border-light)] bg-transparent text-[color:var(--color-text-secondary)]",
+          "border border-[color:var(--color-control-border)] bg-transparent text-[color:var(--color-text-secondary)]",
         success: "bg-emerald-100 text-emerald-900",
         warning: "bg-amber-100 text-amber-900",
         destructive: "bg-rose-100 text-rose-900",

@@ -29,7 +29,7 @@ import {
   getRuntimeApiForProviderType,
   normalizeKnownModelId,
 } from "../shared/provider-directory.js";
-import { getSettings } from "./settings.js";
+import { getSettings, updateSettings } from "./settings.js";
 
 const SOURCES_FILE = "provider-sources.json";
 const ENTRIES_FILE = "model-entries.json";
@@ -683,16 +683,34 @@ export function deleteSource(sourceId: string): void {
     throw new Error("内置 source 不能删除。");
   }
 
-  if (state.entries.some((entry) => entry.sourceId === sourceId)) {
-    throw new Error("请先清空该 source 下的模型条目。");
+  const entriesToDelete = state.entries.filter((entry) => entry.sourceId === sourceId);
+  const nextSources = state.sources.filter((item) => item.id !== sourceId);
+  const nextEntries = state.entries.filter((entry) => entry.sourceId !== sourceId);
+
+  if (entriesToDelete.some((entry) => entry.id === getSettings().defaultModelId)) {
+    const fallbackEntry = sortEntries(nextEntries, nextSources).find((entry) => {
+      if (!entry.enabled) {
+        return false;
+      }
+
+      return nextSources.some(
+        (candidate) => candidate.id === entry.sourceId && candidate.enabled,
+      );
+    });
+
+    if (!fallbackEntry) {
+      throw new Error("当前默认模型也在这个提供商里，且没有其它可用模型可切换，无法删除。");
+    }
+
+    updateSettings({ defaultModelId: fallbackEntry.id });
   }
 
   const nextCredentials = { ...state.credentials };
   delete nextCredentials[sourceId];
 
   writeProviderState({
-    sources: state.sources.filter((item) => item.id !== sourceId),
-    entries: state.entries,
+    sources: nextSources,
+    entries: nextEntries,
     credentials: nextCredentials,
   });
 }

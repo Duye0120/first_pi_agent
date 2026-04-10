@@ -66,7 +66,7 @@ function ToolFallbackRoot({
       open={isOpen}
       onOpenChange={handleOpenChange}
       className={cn(
-        "aui-tool-fallback-root group/tool-fallback-root mb-1.5 w-full overflow-hidden rounded-[14px] bg-shell-panel-muted/62 dark:bg-shell-panel-muted/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] last:mb-0",
+        "aui-tool-fallback-root group/tool-fallback-root mb-1.5 w-full overflow-hidden rounded-[14px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] shadow-[var(--color-control-shadow)] last:mb-0",
         className,
       )}
       style={
@@ -348,7 +348,7 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
     status?.type === "incomplete" && status.reason === "cancelled";
 
   return (
-    <ToolFallbackRoot className={cn(isCancelled && "bg-shell-panel-muted/58")}>
+    <ToolFallbackRoot className={cn(isCancelled && "bg-[color:var(--color-control-bg)]/80")}>
       <ToolFallbackTrigger toolName={toolName} status={status} />
       <ToolFallbackContent>
         <ToolFallbackError status={status} />

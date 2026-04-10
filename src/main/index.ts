@@ -1,7 +1,15 @@
 import { cpSync, existsSync, readdirSync, renameSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  shell,
+  type IpcMainInvokeEvent,
+  type OpenDialogOptions,
+} from "electron";
 import {
   pickFiles,
   readFilePreview,
@@ -66,6 +74,7 @@ import {
 } from "./providers.js";
 import {
   createAndSwitchGitBranch,
+  getGitBranchSummary,
   getGitDiffSnapshot,
   listGitBranches,
   switchGitBranch,
@@ -95,6 +104,8 @@ import { startWebhookServer, stopWebhookServer } from "./webhook.js";
 import {
   appLogger,
   attachWindowLogging,
+  getDiagnosticLogSnapshot,
+  openDiagnosticLogFolder,
   registerProcessLogging,
   summarizeIpcArgs,
 } from "./logger.js";
@@ -654,6 +665,12 @@ function registerIpcHandlers() {
   handleIpc(IPC_CHANNELS.settingsUpdate, async (_event, partial) =>
     updateSettings(partial),
   );
+  handleIpc(IPC_CHANNELS.settingsGetLogSnapshot, async () =>
+    getDiagnosticLogSnapshot(),
+  );
+  handleIpc(IPC_CHANNELS.settingsOpenLogFolder, async (_event, logId) =>
+    openDiagnosticLogFolder(logId),
+  );
 
   // Providers
   handleIpc(IPC_CHANNELS.providersListSources, async () => listSources());
@@ -710,6 +727,31 @@ function registerIpcHandlers() {
     const settings = getSettings();
     return getSoulFilesStatus(settings.workspace);
   });
+  handleIpc(IPC_CHANNELS.workspacePickFolder, async () => {
+    const options: OpenDialogOptions = {
+      title: "选择默认工作区",
+      defaultPath: getSettings().workspace,
+      properties: ["openDirectory"],
+    };
+    const browserWindow = mainWindow ?? BrowserWindow.getFocusedWindow();
+    const result = browserWindow
+      ? await dialog.showOpenDialog(browserWindow, options)
+      : await dialog.showOpenDialog(options);
+
+    if (result.canceled) {
+      return null;
+    }
+
+    return result.filePaths[0] ?? null;
+  });
+  handleIpc(IPC_CHANNELS.workspaceOpenFolder, async () => {
+    const { workspace } = getSettings();
+    const targetPath = existsSync(workspace) ? workspace : dirname(workspace);
+    const result = await shell.openPath(targetPath);
+    if (result) {
+      throw new Error(result);
+    }
+  });
 
   // Terminal
   handleIpc(
@@ -727,6 +769,9 @@ function registerIpcHandlers() {
   );
   handleIpc(IPC_CHANNELS.terminalDestroy, async (_event, id: string) =>
     destroyTerminal(id),
+  );
+  handleIpc(IPC_CHANNELS.gitSummary, async () =>
+    getGitBranchSummary(getSettings().workspace),
   );
   handleIpc(IPC_CHANNELS.gitStatus, async () =>
     getGitDiffSnapshot(getSettings().workspace),

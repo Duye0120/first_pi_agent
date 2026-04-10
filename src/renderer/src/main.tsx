@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 import ReactDOM from "react-dom/client";
+import { HashRouter } from "react-router-dom";
 import App from "./App";
 import { TooltipProvider } from "@renderer/components/ui/tooltip";
 import "./styles.css";
@@ -47,8 +48,10 @@ class RenderErrorBoundary extends Component<{ children: ReactNode }, BoundarySta
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <RenderErrorBoundary>
-    <TooltipProvider delayDuration={150}>
-      <App />
-    </TooltipProvider>
+    <HashRouter>
+      <TooltipProvider delayDuration={150}>
+        <App />
+      </TooltipProvider>
+    </HashRouter>
   </RenderErrorBoundary>,
 );

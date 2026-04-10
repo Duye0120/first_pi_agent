@@ -14,14 +14,16 @@ const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
 
 const selectTriggerVariants = cva(
-  "cursor-pointer flex w-fit items-center justify-between gap-2 whitespace-nowrap rounded-md text-sm outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-muted-foreground [&>span]:line-clamp-1 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "cursor-pointer flex w-fit items-center justify-between gap-2 whitespace-nowrap rounded-[var(--radius-shell)] text-sm text-foreground outline-none transition-[background-color,color,box-shadow,transform] duration-150 disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-muted-foreground ring-1 ring-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] shadow-[var(--color-control-shadow)] hover:bg-[color:var(--color-control-bg-hover)] focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)] [&>span]:line-clamp-1 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         outline:
-          "bg-shell-panel-elevated text-foreground hover:bg-shell-panel-contrast hover:text-foreground",
-        ghost: "hover:bg-shell-panel-contrast hover:text-foreground",
-        muted: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "",
+        ghost:
+          "bg-transparent shadow-none ring-transparent hover:bg-[color:var(--color-control-bg-hover)] hover:ring-[color:var(--color-control-border)]",
+        muted:
+          "bg-[color:var(--color-shell-panel-muted)] text-secondary-foreground shadow-none ring-transparent hover:bg-[color:var(--color-control-bg-hover)]",
       },
       size: {
         default: "h-9 px-3 py-2",
@@ -102,7 +104,7 @@ const SelectContent = ({
       position={position}
       sideOffset={6}
       className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl bg-[color:var(--color-composer-surface)] dark:bg-zinc-900 p-1.5 text-foreground ring-1 ring-[color:var(--color-border-light)] dark:ring-white/10 shadow-[0_20px_44px_rgba(15,23,42,0.14),0_6px_18px_rgba(15,23,42,0.08)] dark:shadow-[0_20px_44px_rgba(0,0,0,0.5)]",
+        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-[calc(var(--radius-shell)+6px)] bg-[color:var(--color-control-panel-bg)] p-1.5 text-foreground ring-1 ring-[color:var(--color-control-border)] shadow-[var(--color-control-panel-shadow)] backdrop-blur-[8px]",
         "data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in",
         "data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out",
         "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
@@ -145,10 +147,11 @@ const SelectItem = ({
   <SelectPrimitive.Item
     data-slot="select-item"
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center gap-2 rounded-lg py-2 pr-9 pl-3 text-[13px] font-medium text-foreground outline-none transition-colors",
-      "data-[state=checked]:bg-accent-subtle data-[state=checked]:text-accent-text",
-      "data-[highlighted]:bg-shell-panel-muted dark:data-[highlighted]:bg-white/5 data-[highlighted]:text-foreground",
-      "focus:bg-shell-panel-muted dark:focus:bg-white/5 focus:text-foreground",
+      "relative flex w-full cursor-pointer select-none items-center gap-2 rounded-[calc(var(--radius-shell)-1px)] py-2 pr-9 pl-3 text-[13px] font-medium text-foreground outline-none transition-colors",
+      "data-[state=checked]:bg-[color:var(--color-control-selected-bg)] data-[state=checked]:text-[color:var(--color-control-selected-text)]",
+      "data-[highlighted]:bg-[color:var(--color-control-bg-hover)] data-[highlighted]:text-foreground",
+      "data-[highlighted]:data-[state=checked]:bg-[color:var(--color-control-selected-bg)] data-[highlighted]:data-[state=checked]:text-[color:var(--color-control-selected-text)]",
+      "focus:bg-[color:var(--color-control-bg-hover)] focus:text-foreground",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       "[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
       className,
@@ -200,8 +203,9 @@ function Select({ options, placeholder, className, ...props }: SelectProps) {
     <SelectRoot {...props}>
       <SelectPrimitive.Trigger
         className={cn(
-          "cursor-pointer flex items-center gap-1.5 rounded-md py-1 pr-2 pl-3 text-sm outline-none transition-colors",
-          "text-muted-foreground hover:bg-muted dark:hover:bg-white/10 hover:text-foreground",
+          "cursor-pointer flex items-center gap-1.5 rounded-[var(--radius-shell)] py-1 pr-2 pl-3 text-sm text-foreground outline-none transition-[background-color,color,box-shadow] duration-150",
+          "ring-1 ring-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] shadow-[var(--color-control-shadow)] hover:bg-[color:var(--color-control-bg-hover)]",
+          "focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)]",
           "disabled:cursor-not-allowed disabled:opacity-50",
           !selectedOption && placeholder && "italic opacity-70",
           className,
@@ -210,7 +214,7 @@ function Select({ options, placeholder, className, ...props }: SelectProps) {
         <span className={"text-[12px]"}>
           {selectedOption?.label ?? placeholder}
         </span>
-        <ChevronDownIcon className="size-3.5 opacity-50" />
+        <ChevronDownIcon className="size-3.5 text-[color:var(--color-text-tertiary)]" />
       </SelectPrimitive.Trigger>
 
       <SelectContent>

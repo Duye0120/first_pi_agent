@@ -563,7 +563,7 @@ const ComposerAction: FC<
             size="sm"
             title={currentModel?.name ?? "选择模型"}
             aria-label={currentModel?.name ? `当前模型：${currentModel.name}` : "选择模型"}
-            className="h-8 rounded-md bg-[color:var(--color-composer-control)] px-2 text-[12px] shadow-none hover:bg-shell-panel-contrast"
+            className="h-8 rounded-[var(--radius-shell)] px-2 text-[12px]"
           >
             <BotIcon className="size-4 shrink-0" />
           </ModelSelector.Trigger>
@@ -586,7 +586,7 @@ const ComposerAction: FC<
               size="sm"
               title={thinkingTitle}
               aria-label={`当前思考强度：${thinkingTitle}`}
-              className="h-8 rounded-md bg-[color:var(--color-composer-control)] px-2 text-[12px] shadow-none hover:bg-shell-panel-contrast"
+              className="h-8 rounded-[var(--radius-shell)] px-2 text-[12px]"
             >
               <BrainCircuitIcon className="size-4 shrink-0" />
             </SelectTrigger>
@@ -718,7 +718,7 @@ const AssistantRunningNotice: FC<{ label: string; compact?: boolean }> = ({
   return (
     <div
       className={cn(
-        "inline-flex w-fit items-center gap-2 rounded-full bg-shell-panel-muted/85 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+        "inline-flex w-fit items-center gap-2 rounded-full border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-[var(--color-control-shadow)]",
         compact && "mb-3 text-[13px]",
       )}
     >
@@ -734,7 +734,7 @@ const AssistantCancelledNotice: FC<{ compact?: boolean }> = ({
   return (
     <div
       className={cn(
-        "inline-flex w-fit items-center gap-2 rounded-full bg-shell-panel-muted/75 px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+        "inline-flex w-fit items-center gap-2 rounded-full border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-[var(--color-control-shadow)]",
         compact && "mb-3 text-[13px]",
       )}
     >

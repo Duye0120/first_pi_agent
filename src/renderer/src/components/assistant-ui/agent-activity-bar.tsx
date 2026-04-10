@@ -535,7 +535,7 @@ const AgentActivityBarImpl: FC<AgentActivityBarProps> = ({
     <div
       className={cn(
         "mb-4 w-full max-w-[760px] overflow-hidden rounded-[24px]",
-        "bg-shell-panel-muted/72 shadow-[0_18px_44px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.46)]",
+        "border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] shadow-[var(--color-control-panel-shadow)]",
         className,
       )}
     >

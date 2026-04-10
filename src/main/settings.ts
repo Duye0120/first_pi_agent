@@ -3,12 +3,36 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Settings, ThinkingLevel } from "../shared/contracts.js";
 import { DEFAULT_MODEL_ENTRY_ID } from "../shared/provider-directory.js";
+import { normalizeTimeZoneSetting, SYSTEM_TIME_ZONE } from "../shared/timezone.js";
 
 const SETTINGS_FILE = "settings.json";
+
+function getDefaultWorkspacePath(): string {
+  try {
+    const documentsPath = app.getPath("documents");
+    if (documentsPath) {
+      return documentsPath;
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    const homePath = app.getPath("home");
+    if (homePath) {
+      return homePath;
+    }
+  } catch {
+    // ignore
+  }
+
+  return process.cwd();
+}
 
 const DEFAULT_SETTINGS: Settings = {
   defaultModelId: DEFAULT_MODEL_ENTRY_ID,
   thinkingLevel: "off",
+  timeZone: SYSTEM_TIME_ZONE,
   theme: "light",
   customTheme: null,
   terminal: {
@@ -24,7 +48,7 @@ const DEFAULT_SETTINGS: Settings = {
     codeFontSize: 13,
     codeFontFamily: "JetBrains Mono",
   },
-  workspace: process.cwd(),
+  workspace: getDefaultWorkspacePath(),
 };
 
 function normalizeThinkingLevel(value: unknown): ThinkingLevel {
@@ -79,8 +103,13 @@ function mergeSettings(source?: Partial<Settings> | null): Settings {
   return {
     ...DEFAULT_SETTINGS,
     ...source,
+    workspace:
+      typeof source?.workspace === "string" && source.workspace.trim()
+        ? source.workspace
+        : getDefaultWorkspacePath(),
     defaultModelId,
     thinkingLevel: normalizeThinkingLevel(sourceWithLegacy.thinkingLevel),
+    timeZone: normalizeTimeZoneSetting(sourceWithLegacy.timeZone),
     terminal: {
       ...DEFAULT_SETTINGS.terminal,
       ...source?.terminal,

@@ -16,6 +16,13 @@ export type SelectableModelOption = {
   source: ProviderSource;
 };
 
+let providerDirectoryCache:
+  | { sources: ProviderSource[]; entries: ModelEntry[] }
+  | null = null;
+let providerDirectoryPromise:
+  | Promise<{ sources: ProviderSource[]; entries: ModelEntry[] }>
+  | null = null;
+
 function deriveLegacyModelEntryName(modelId: string): string {
   return modelId
     .replace(/\//g, " / ")
@@ -66,13 +73,28 @@ export function resolveModelEntryName(
     : entry.name.trim();
 }
 
-export async function loadProviderDirectory(desktopApi: DesktopApi) {
-  const [sources, entries] = await Promise.all([
+export async function loadProviderDirectory(
+  desktopApi: DesktopApi,
+  options?: { force?: boolean },
+) {
+  if (!options?.force && providerDirectoryCache) {
+    return providerDirectoryCache;
+  }
+
+  if (!options?.force && providerDirectoryPromise) {
+    return providerDirectoryPromise;
+  }
+
+  providerDirectoryPromise = Promise.all([
     desktopApi.providers.listSources(),
     desktopApi.models.listEntries(),
-  ]);
+  ]).then(([sources, entries]) => {
+    providerDirectoryCache = { sources, entries };
+    providerDirectoryPromise = null;
+    return providerDirectoryCache;
+  });
 
-  return { sources, entries };
+  return providerDirectoryPromise;
 }
 
 export function buildSelectableModelOptions(

@@ -139,6 +139,18 @@
   --chela-tool-card-radius: 8px;
   --chela-tool-card-padding: 10px 14px;
 
+  /* === Controls === */
+  --chela-control-bg: #f8f4ee;
+  --chela-control-bg-hover: #fdf0e2;
+  --chela-control-bg-active: #fff4ea;
+  --chela-control-panel-bg: rgba(255, 250, 244, 0.98);
+  --chela-control-border: rgba(194, 65, 12, 0.08);
+  --chela-control-focus-ring: rgba(249, 115, 22, 0.18);
+  --chela-control-selected-bg: var(--chela-accent-subtle);
+  --chela-control-selected-text: var(--chela-accent-text);
+  --chela-control-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  --chela-control-panel-shadow: 0 16px 38px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.05);
+
   --chela-thinking-panel-bg: var(--chela-thinking-bg);
   --chela-thinking-panel-border: var(--chela-thinking);
   --chela-thinking-panel-radius: 10px;
@@ -195,12 +207,23 @@
 
   --color-text-primary: var(--chela-text-primary);
   --color-text-secondary: var(--chela-text-secondary);
+  --color-text-tertiary: var(--chela-text-tertiary);
   --color-text-muted: var(--chela-text-muted);
   --color-border: var(--chela-border);
   --color-border-light: var(--chela-border-muted);
 
   --color-composer-surface: var(--chela-bg-surface);
   --color-composer-control: var(--chela-bg-muted);
+  --color-control-bg: var(--chela-control-bg);
+  --color-control-bg-hover: var(--chela-control-bg-hover);
+  --color-control-bg-active: var(--chela-control-bg-active);
+  --color-control-panel-bg: var(--chela-control-panel-bg);
+  --color-control-border: var(--chela-control-border);
+  --color-control-focus-ring: var(--chela-control-focus-ring);
+  --color-control-selected-bg: var(--chela-control-selected-bg);
+  --color-control-selected-text: var(--chela-control-selected-text);
+  --color-control-shadow: var(--chela-control-shadow);
+  --color-control-panel-shadow: var(--chela-control-panel-shadow);
   --color-context-indicator-rest: var(--chela-text-muted);
   --color-context-indicator-track: var(--chela-border);
 
@@ -291,6 +314,18 @@
   --chela-tool-complete: var(--chela-success);
   --chela-tool-error: var(--chela-error);
 
+  /* === Controls === */
+  --chela-control-bg: #2a2622;
+  --chela-control-bg-hover: #332c26;
+  --chela-control-bg-active: rgba(249, 115, 22, 0.12);
+  --chela-control-panel-bg: rgba(37, 31, 26, 0.98);
+  --chela-control-border: rgba(249, 115, 22, 0.1);
+  --chela-control-focus-ring: rgba(249, 115, 22, 0.24);
+  --chela-control-selected-bg: rgba(249, 115, 22, 0.14);
+  --chela-control-selected-text: var(--chela-300);
+  --chela-control-shadow: 0 1px 2px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --chela-control-panel-shadow: 0 18px 42px rgba(0, 0, 0, 0.42), 0 4px 12px rgba(0, 0, 0, 0.22);
+
   /* === 阴影 === */
   --chela-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --chela-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
@@ -347,12 +382,23 @@
 
   --color-text-primary: var(--chela-text-primary);
   --color-text-secondary: var(--chela-text-secondary);
+  --color-text-tertiary: var(--chela-text-tertiary);
   --color-text-muted: var(--chela-text-muted);
   --color-border: var(--chela-border);
   --color-border-light: var(--chela-border-muted);
 
   --color-composer-surface: var(--chela-bg-surface);
   --color-composer-control: var(--chela-bg-muted);
+  --color-control-bg: var(--chela-control-bg);
+  --color-control-bg-hover: var(--chela-control-bg-hover);
+  --color-control-bg-active: var(--chela-control-bg-active);
+  --color-control-panel-bg: var(--chela-control-panel-bg);
+  --color-control-border: var(--chela-control-border);
+  --color-control-focus-ring: var(--chela-control-focus-ring);
+  --color-control-selected-bg: var(--chela-control-selected-bg);
+  --color-control-selected-text: var(--chela-control-selected-text);
+  --color-control-shadow: var(--chela-control-shadow);
+  --color-control-panel-shadow: var(--chela-control-panel-shadow);
   --color-context-indicator-rest: #9ea4ad;
   --color-context-indicator-track: #3a4048;
 

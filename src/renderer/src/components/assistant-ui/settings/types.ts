@@ -9,6 +9,7 @@ export type SettingsSection =
   | "keys"
   | "appearance"
   | "terminal"
+  | "logs"
   | "workspace"
   | "archived"
   | "about";

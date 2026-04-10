@@ -213,10 +213,11 @@ function ModelSelectorItem({
       value={model.id}
       textValue={model.name}
       className={cn(
-        "relative flex w-full cursor-pointer select-none items-center gap-2 rounded-lg py-2 pr-9 pl-3 text-sm text-foreground outline-none transition-colors",
-        "data-[state=checked]:bg-accent-subtle data-[state=checked]:text-accent-text",
-        "data-[highlighted]:bg-shell-panel-muted data-[highlighted]:text-foreground",
-        "focus:bg-shell-panel-muted focus:text-foreground",
+        "relative flex w-full cursor-pointer select-none items-center gap-2 rounded-[calc(var(--radius-shell)-1px)] py-2 pr-9 pl-3 text-sm text-foreground outline-none transition-colors",
+        "data-[state=checked]:bg-[color:var(--color-control-selected-bg)] data-[state=checked]:text-[color:var(--color-control-selected-text)]",
+        "data-[highlighted]:bg-[color:var(--color-control-bg-hover)] data-[highlighted]:text-foreground",
+        "data-[highlighted]:data-[state=checked]:bg-[color:var(--color-control-selected-bg)] data-[highlighted]:data-[state=checked]:text-[color:var(--color-control-selected-text)]",
+        "focus:bg-[color:var(--color-control-bg-hover)] focus:text-foreground",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}

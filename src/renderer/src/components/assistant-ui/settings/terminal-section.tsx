@@ -10,10 +10,7 @@ export function TerminalSection({
   onSettingsChange: (partial: Partial<Settings>) => void;
 }) {
   return (
-    <SettingsCard
-      title="终端"
-      description="这些配置会影响内置终端的默认外观和行为。"
-    >
+    <SettingsCard>
       <SettingsRow label="Shell" hint="选择内置终端默认使用的 shell。">
         <FieldSelect
           value={settings.terminal.shell}

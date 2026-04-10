@@ -491,6 +491,34 @@ export async function getGitDiffSnapshot(workspacePath: string): Promise<GitDiff
   };
 }
 
+export async function getGitBranchSummary(workspacePath: string): Promise<GitBranchSummary> {
+  const repository = await isGitRepository(workspacePath);
+
+  if (!repository) {
+    return createEmptyBranchSummary();
+  }
+
+  try {
+    const result = await runGit(["symbolic-ref", "--short", "-q", "HEAD"], workspacePath);
+    const branchName = result.stdout.trim();
+    if (branchName) {
+      return {
+        branchName,
+        isDetached: false,
+        hasChanges: false,
+      };
+    }
+  } catch {
+    // Detached HEAD 走下面的 fallback。
+  }
+
+  return {
+    branchName: await resolveDetachedHeadLabel(workspacePath),
+    isDetached: true,
+    hasChanges: false,
+  };
+}
+
 export async function listGitBranches(workspacePath: string): Promise<GitBranchEntry[]> {
   await ensureGitRepository(workspacePath);
 

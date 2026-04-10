@@ -62,6 +62,8 @@ const desktopApi: DesktopApi = {
   settings: {
     get: () => ipcRenderer.invoke(IPC_CHANNELS.settingsGet),
     update: (partial) => ipcRenderer.invoke(IPC_CHANNELS.settingsUpdate, partial),
+    getLogSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.settingsGetLogSnapshot),
+    openLogFolder: (logId) => ipcRenderer.invoke(IPC_CHANNELS.settingsOpenLogFolder, logId),
   },
 
   // ── Providers / Models ─────────────────────────────────────
@@ -86,6 +88,8 @@ const desktopApi: DesktopApi = {
   workspace: {
     change: (path) => ipcRenderer.invoke(IPC_CHANNELS.workspaceChange, path),
     getSoul: () => ipcRenderer.invoke(IPC_CHANNELS.workspaceGetSoul),
+    pickFolder: () => ipcRenderer.invoke(IPC_CHANNELS.workspacePickFolder),
+    openFolder: () => ipcRenderer.invoke(IPC_CHANNELS.workspaceOpenFolder),
   },
 
   // ── Terminal (wired in Phase 7) ───────────────────────────
@@ -106,6 +110,7 @@ const desktopApi: DesktopApi = {
     },
   },
   git: {
+    getSummary: () => ipcRenderer.invoke(IPC_CHANNELS.gitSummary),
     getSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.gitStatus),
     listBranches: () => ipcRenderer.invoke(IPC_CHANNELS.gitListBranches),
     switchBranch: (branchName: string) =>

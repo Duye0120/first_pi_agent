@@ -7,6 +7,7 @@ import type {
   ChatSession,
   ChatSessionSummary,
   ContextSummary,
+  GitBranchSummary,
   GitDiffOverview,
   SelectedFile,
   Settings,
@@ -34,6 +35,7 @@ import {
 } from "@renderer/lib/context-usage";
 import { loadProviderDirectory } from "@renderer/lib/provider-directory";
 import { mergeAttachments, upsertSummary } from "@renderer/lib/session";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useLocation, useNavigate } from "react-router-dom";
 
 const ACTIVE_SESSION_STORAGE_KEY = "chela.active-session-id";
@@ -57,6 +59,7 @@ const SETTINGS_SECTION_IDS: SettingsSection[] = [
   "keys",
   "appearance",
   "terminal",
+  "logs",
   "workspace",
   "archived",
   "about",
@@ -136,6 +139,16 @@ function readStoredString(keys: string[]) {
   }
 
   return null;
+}
+
+function clearStoredStrings(keys: string[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  for (const key of keys) {
+    localStorage.removeItem(key);
+  }
 }
 
 function readStoredPanelSize(
@@ -229,6 +242,9 @@ export default function App() {
     "builtin:anthropic:claude-sonnet-4-20250514",
   );
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("off");
+  const [gitBranchSummary, setGitBranchSummary] = useState<GitBranchSummary | null>(
+    null,
+  );
   const [gitOverview, setGitOverview] = useState<GitDiffOverview | null>(null);
   const [gitOverviewLoading, setGitOverviewLoading] = useState(false);
   const [sidebarAnimating, setSidebarAnimating] = useState(false);
@@ -243,16 +259,15 @@ export default function App() {
       : "settings";
 
   const activeSessionId = activeSession?.id ?? null;
-  const sidebarPanelRef = useRef<{
-    collapse: () => void;
-    expand: () => void;
-    isCollapsed: () => boolean;
-  } | null>(null);
+  const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
   const summariesRef = useRef<ChatSessionSummary[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
   const sessionCacheRef = useRef<Record<string, ChatSession>>({});
   const appliedCustomThemeKeysRef = useRef<string[]>([]);
-  const lastGitRefreshRef = useRef(0);
+  const lastGitBranchRefreshRef = useRef(0);
+  const lastGitOverviewRefreshRef = useRef(0);
+  const gitBranchRequestRef = useRef<Promise<GitBranchSummary | null> | null>(null);
+  const gitOverviewRequestRef = useRef<Promise<GitDiffOverview | null> | null>(null);
 
   useEffect(() => {
     summariesRef.current = summaries;
@@ -325,47 +340,88 @@ export default function App() {
     );
   }, [settings]);
 
-  const refreshGitOverview = useCallback(async () => {
+  const refreshGitBranchSummary = useCallback(async () => {
     if (!desktopApi?.git) {
-      setGitOverview(null);
-      return;
+      setGitBranchSummary(null);
+      return null;
     }
 
-    lastGitRefreshRef.current = Date.now();
-    setGitOverviewLoading(true);
-
-    try {
-      const nextOverview = await desktopApi.git.getSnapshot();
-      setGitOverview(nextOverview);
-    } finally {
-      setGitOverviewLoading(false);
+    if (gitBranchRequestRef.current) {
+      return gitBranchRequestRef.current;
     }
+
+    lastGitBranchRefreshRef.current = Date.now();
+    const request = desktopApi.git
+      .getSummary()
+      .then((nextSummary) => {
+        setGitBranchSummary(nextSummary);
+        return nextSummary;
+      })
+      .finally(() => {
+        if (gitBranchRequestRef.current === request) {
+          gitBranchRequestRef.current = null;
+        }
+      });
+
+    gitBranchRequestRef.current = request;
+    return request;
   }, [desktopApi]);
 
-  // workspace 变化时需要刷 git 的 ref，避免放进 deps 触发额外 effect
-  const workspaceRef = useRef(settings?.workspace);
-  useEffect(() => { workspaceRef.current = settings?.workspace; }, [settings?.workspace]);
+  const refreshGitOverview = useCallback(async () => {
+    if (!desktopApi?.git) {
+      setGitBranchSummary(null);
+      setGitOverview(null);
+      return null;
+    }
+
+    if (gitOverviewRequestRef.current) {
+      return gitOverviewRequestRef.current;
+    }
+
+    lastGitOverviewRefreshRef.current = Date.now();
+    setGitOverviewLoading(true);
+
+    const request = desktopApi.git
+      .getSnapshot()
+      .then((nextOverview) => {
+        setGitOverview(nextOverview);
+        setGitBranchSummary(nextOverview.branch);
+        return nextOverview;
+      })
+      .finally(() => {
+        if (gitOverviewRequestRef.current === request) {
+          gitOverviewRequestRef.current = null;
+        }
+        setGitOverviewLoading(false);
+      });
+
+    gitOverviewRequestRef.current = request;
+    return request;
+  }, [desktopApi]);
 
   useEffect(() => {
-    if (mainView !== "thread") {
+    if (mainView !== "thread" || diffPanelOpen) {
       return;
     }
 
-    // 从设置页切回时，如果最近 5 秒内刷新过就跳过，避免不必要的 IPC 和重渲染
-    if (Date.now() - lastGitRefreshRef.current < 5_000) {
+    if (Date.now() - lastGitBranchRefreshRef.current < 1_500) {
       return;
     }
 
-    void refreshGitOverview();
-  }, [mainView, refreshGitOverview]);
+    void refreshGitBranchSummary();
+  }, [diffPanelOpen, mainView, refreshGitBranchSummary]);
 
   useEffect(() => {
     if (mainView !== "thread" || !diffPanelOpen) {
       return;
     }
 
+    if (gitOverview && Date.now() - lastGitOverviewRefreshRef.current < 1_500) {
+      return;
+    }
+
     void refreshGitOverview();
-  }, [diffPanelOpen, mainView, refreshGitOverview]);
+  }, [diffPanelOpen, gitOverview, mainView, refreshGitOverview]);
 
   const cacheSession = useCallback((session: ChatSession) => {
     setSessionCache((current) => {
@@ -431,6 +487,14 @@ export default function App() {
     setActiveSession(session);
     localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, session.id);
   }, [cacheSession]);
+
+  const clearActiveSession = useCallback(() => {
+    setActiveSession(null);
+    clearStoredStrings([
+      ACTIVE_SESSION_STORAGE_KEY,
+      LEGACY_ACTIVE_SESSION_STORAGE_KEY,
+    ]);
+  }, []);
 
   const reloadSession = useCallback(
     async (sessionId: string) => {
@@ -567,8 +631,8 @@ export default function App() {
       }
 
       if (!nextSession) {
-        nextSession = await desktopApi.sessions.create();
-        setSummaries([upsertSummary([], nextSession)[0]]);
+        clearActiveSession();
+        return;
       }
 
       hydrateSession(nextSession);
@@ -580,7 +644,7 @@ export default function App() {
     } finally {
       setBooting(false);
     }
-  }, [desktopApi, hydrateSession, refreshContextSummary]);
+  }, [clearActiveSession, desktopApi, hydrateSession, refreshContextSummary]);
 
   // 用 ref 持有键盘快捷键需要的动态值，避免 effect 因这些值变化而重新执行 bootApp
   const kbStateRef = useRef({
@@ -707,6 +771,7 @@ export default function App() {
       );
 
       await desktopApi.sessions.archive(sessionId);
+      removeCachedSession(sessionId);
       await refreshSessionLists();
 
       if (activeSessionIdRef.current !== sessionId) {
@@ -718,9 +783,15 @@ export default function App() {
         return;
       }
 
-      void createNewSession();
+      clearActiveSession();
     },
-    [createNewSession, desktopApi, refreshSessionLists, selectSession],
+    [
+      clearActiveSession,
+      desktopApi,
+      refreshSessionLists,
+      removeCachedSession,
+      selectSession,
+    ],
   );
 
   const unarchiveSession = useCallback(
@@ -730,6 +801,7 @@ export default function App() {
       }
 
       await desktopApi.sessions.unarchive(sessionId);
+      removeCachedSession(sessionId);
       await refreshSessionLists();
 
       if (activeSessionIdRef.current !== sessionId) {
@@ -742,7 +814,13 @@ export default function App() {
         void refreshContextSummary(sessionId);
       }
     },
-    [desktopApi, hydrateSession, refreshContextSummary, refreshSessionLists],
+    [
+      desktopApi,
+      hydrateSession,
+      refreshContextSummary,
+      refreshSessionLists,
+      removeCachedSession,
+    ],
   );
 
   const deleteSessionPermanently = useCallback(
@@ -761,16 +839,14 @@ export default function App() {
         return;
       }
 
-      setActiveSession(null);
+      clearActiveSession();
 
       if (sessionSummaries[0]) {
         void selectSession(sessionSummaries[0].id);
         return;
       }
-
-      void createNewSession();
     },
-    [createNewSession, desktopApi, refreshSessionLists, selectSession],
+    [clearActiveSession, desktopApi, refreshSessionLists, removeCachedSession, selectSession],
   );
 
   const renameSession = useCallback(
@@ -1050,14 +1126,16 @@ export default function App() {
     }
   }, []);
 
-  const sidebarAnimatingTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const sidebarAnimatingTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
 
   useEffect(() => () => clearTimeout(sidebarAnimatingTimerRef.current), []);
 
   const toggleSidebarCollapsed = useCallback(() => {
     setSidebarAnimating(true);
     clearTimeout(sidebarAnimatingTimerRef.current);
-    sidebarAnimatingTimerRef.current = setTimeout(() => setSidebarAnimating(false), 280);
+    sidebarAnimatingTimerRef.current = setTimeout(() => setSidebarAnimating(false), 520);
     setSidebarCollapsed((current) => !current);
   }, []);
 
@@ -1130,6 +1208,19 @@ export default function App() {
     [desktopApi],
   );
 
+  const handleGitStateChanged = useCallback(async () => {
+    if (diffPanelOpen) {
+      await refreshGitOverview();
+      return;
+    }
+
+    await refreshGitBranchSummary();
+  }, [diffPanelOpen, refreshGitBranchSummary, refreshGitOverview]);
+
+  const handleRefreshGitOverview = useCallback(async () => {
+    await refreshGitOverview();
+  }, [refreshGitOverview]);
+
   const normalizedDiffPanelSize = clampDiffPanelSize(diffPanelSize);
   const hasAnyRunningSessions = runningSessionIds.length > 0;
   const mountedSessionIds = useMemo(() => {
@@ -1151,9 +1242,46 @@ export default function App() {
     }
 
     if (mountedSessionIds.length === 0) {
+      const hasArchivedSessions = archivedSummaries.length > 0;
+      const hasLiveSessions = summaries.length > 0;
+
       return (
-        <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
-          当前没有可用线程。
+        <div className="grid min-h-0 flex-1 place-items-center px-6">
+          <div className="flex max-w-[440px] flex-col items-center gap-3 text-center">
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-[color:var(--chela-text-primary)]">
+                {hasLiveSessions ? "还没有选中的线程" : "当前没有活跃线程"}
+              </p>
+              <p className="text-[12px] leading-5 text-[color:var(--chela-text-secondary)]">
+                {hasArchivedSessions
+                  ? "可以新建一个线程继续，也可以去已归档里恢复之前的对话。"
+                  : "可以先新建一个线程，空线程列表现在也允许保留。"}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  void createNewSession();
+                }}
+                className="rounded-[var(--radius-shell)]"
+              >
+                新建线程
+              </Button>
+              {hasArchivedSessions ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openSettingsView("archived")}
+                  className="rounded-[var(--radius-shell)]"
+                >
+                  查看已归档
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </div>
       );
     }
@@ -1188,9 +1316,9 @@ export default function App() {
                 onRemoveAttachment={removeAttachment}
                 onModelChange={handleModelChange}
                 onThinkingLevelChange={handleThinkingLevelChange}
-                onBranchChanged={refreshGitOverview}
+                onBranchChanged={handleGitStateChanged}
                 onRunStateChange={handleSessionRunStateChange}
-                branchSummary={gitOverview?.branch ?? null}
+                branchSummary={gitBranchSummary}
                 contextSummary={
                   contextSummaryBySessionId[session.id] ??
                   EMPTY_CONTEXT_USAGE_SUMMARY
@@ -1206,25 +1334,29 @@ export default function App() {
   }, [
     activeSessionId,
     attachFiles,
-    contextSummaryBySessionId,
-    currentModelId,
-    desktopApi,
-    handleModelChange,
-    handleSessionRunStateChange,
-    handleThinkingLevelChange,
-    hasAnyRunningSessions,
+      contextSummaryBySessionId,
+      currentModelId,
+      createNewSession,
+      desktopApi,
+      handleModelChange,
+      handleSessionRunStateChange,
+      handleThinkingLevelChange,
+      hasAnyRunningSessions,
     isPickingFiles,
-    mountedSessionIds,
-    removeAttachment,
-    pasteFiles,
-    persistSession,
-    refreshGitOverview,
-    reloadSession,
-    sessionCache,
-    terminalOpen,
-    thinkingLevel,
-    gitOverview?.branch,
-  ]);
+      mountedSessionIds,
+      openSettingsView,
+      removeAttachment,
+      pasteFiles,
+      persistSession,
+      gitBranchSummary,
+      handleGitStateChanged,
+      reloadSession,
+      sessionCache,
+      summaries,
+      archivedSummaries,
+      terminalOpen,
+      thinkingLevel,
+    ]);
 
   const settingsContent = useMemo(
     () => (
@@ -1286,11 +1418,11 @@ export default function App() {
             minSize={`${MIN_DIFF_PANEL_SIZE}%`}
             maxSize={`${MAX_DIFF_PANEL_SIZE}%`}
           >
-            <DiffPanel
-              overview={gitOverview}
-              isLoading={gitOverviewLoading}
-              onRefresh={refreshGitOverview}
-            />
+              <DiffPanel
+                overview={gitOverview}
+                isLoading={gitOverviewLoading}
+                onRefresh={handleRefreshGitOverview}
+              />
           </ResizablePanel>
         </ResizablePanelGroup>
       ) : (
@@ -1302,9 +1434,9 @@ export default function App() {
       diffPanelOpen,
       gitOverview,
       gitOverviewLoading,
+      handleRefreshGitOverview,
       handleDiffOnlyLayoutChanged,
       normalizedDiffPanelSize,
-      refreshGitOverview,
       threadRuntimeLayer,
     ],
   );
@@ -1358,7 +1490,11 @@ export default function App() {
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebarCollapsed}
       />
-      <div className="relative min-h-0 flex-1" {...(sidebarAnimating ? { "data-sidebar-animating": "" } : {})}>
+      <div
+        className="relative min-h-0 flex-1"
+        data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
+        {...(sidebarAnimating ? { "data-sidebar-animating": "" } : {})}
+      >
         <ResizablePanelGroup
           orientation="horizontal"
           className="min-h-0 h-full overflow-hidden bg-transparent"
@@ -1404,7 +1540,7 @@ export default function App() {
           <ResizableHandle className="-mx-px w-px" />
         <ResizablePanel id="shell-main">
             <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)]">
+          <div className="chela-main-content-surface flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)]">
             <div
               className={`flex items-center justify-end gap-2 px-5 transition-[min-height,padding,opacity] duration-200 ease-out ${
                 mainView === "thread"
@@ -1437,22 +1573,13 @@ export default function App() {
 
             <div className="relative min-h-0 flex-1 bg-[color:var(--chela-bg-surface)]">
               <div
-                className={`absolute inset-0 min-h-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${
-                  mainView === "thread"
-                    ? "pointer-events-auto translate-y-0 opacity-100"
-                    : "pointer-events-none -translate-y-1 opacity-0"
-                }`}
+                className={mainView === "thread" ? "h-full min-h-0" : "hidden"}
                 aria-hidden={mainView !== "thread"}
               >
                 {threadPanels}
               </div>
-
               <div
-                className={`absolute inset-0 min-h-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${
-                  mainView === "settings"
-                    ? "pointer-events-auto translate-y-0 opacity-100"
-                    : "pointer-events-none translate-y-1 opacity-0"
-                }`}
+                className={mainView === "settings" ? "h-full min-h-0" : "hidden"}
                 aria-hidden={mainView !== "settings"}
               >
                 {settingsContent}

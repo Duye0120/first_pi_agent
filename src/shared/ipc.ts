@@ -38,6 +38,8 @@ export const IPC_CHANNELS = {
   // Settings
   settingsGet: "settings:get",
   settingsUpdate: "settings:update",
+  settingsGetLogSnapshot: "settings:get-log-snapshot",
+  settingsOpenLogFolder: "settings:open-log-folder",
 
   // Providers
   providersListSources: "providers:list-sources",
@@ -58,6 +60,8 @@ export const IPC_CHANNELS = {
   // Workspace
   workspaceChange: "workspace:change",
   workspaceGetSoul: "workspace:get-soul",
+  workspacePickFolder: "workspace:pick-folder",
+  workspaceOpenFolder: "workspace:open-folder",
 
   // Terminal (main ↔ renderer)
   terminalCreate: "terminal:create",
@@ -72,6 +76,7 @@ export const IPC_CHANNELS = {
   gitStageHunk: "git:stage-hunk",
   gitRevertFile: "git:revert-file",
   gitRevertHunk: "git:revert-hunk",
+  gitSummary: "git:summary",
   gitStatus: "git:status",
   gitListBranches: "git:list-branches",
   gitSwitchBranch: "git:switch-branch",
