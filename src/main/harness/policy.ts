@@ -15,6 +15,17 @@ type ToolPolicyContext = {
   args: Record<string, unknown>;
 };
 
+const MCP_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,96}$/;
+
+function normalizeMcpName(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function isValidMcpName(value: unknown): boolean {
+  const normalized = normalizeMcpName(value);
+  return normalized.length > 0 && MCP_NAME_PATTERN.test(normalized);
+}
+
 function getRiskLevel(toolName: string): HarnessRiskLevel {
   if (
     toolName === "web_fetch" ||
@@ -24,6 +35,7 @@ function getRiskLevel(toolName: string): HarnessRiskLevel {
     toolName === "get_time" ||
     toolName === "glob_search" ||
     toolName === "grep_search" ||
+    toolName === "command_history" ||
     toolName === "todo_read" ||
     toolName === "todo_write" ||
     toolName === "TodoWrite" ||
@@ -38,6 +50,10 @@ function getRiskLevel(toolName: string): HarnessRiskLevel {
   }
 
   if (toolName.startsWith("mcp_")) {
+    return "guarded";
+  }
+
+  if (toolName === "mcp") {
     return "guarded";
   }
 
@@ -293,6 +309,15 @@ export function evaluateToolPolicy({
     };
   }
 
+  if (toolName === "command_history") {
+    return {
+      toolName,
+      riskLevel,
+      decision: { type: "allow" },
+      normalizedArgs: args,
+    };
+  }
+
   if (
     toolName === "todo_read" ||
     toolName === "todo_write" ||
@@ -316,6 +341,62 @@ export function evaluateToolPolicy({
       toolName,
       riskLevel,
       decision: { type: "confirm", reason: "MCP 工具默认需要通过 Harness 确认。" },
+      normalizedArgs: args,
+    };
+  }
+
+  if (toolName === "mcp") {
+    const action = typeof args.action === "string" ? args.action : "";
+    if (action === "list") {
+      const server = normalizeMcpName(args.server);
+      if (server && !MCP_NAME_PATTERN.test(server)) {
+        return {
+          toolName,
+          riskLevel,
+          decision: { type: "deny", reason: "MCP server 名格式无效。" },
+          normalizedArgs: args,
+        };
+      }
+
+      return {
+        toolName,
+        riskLevel,
+        decision: { type: "allow" },
+        normalizedArgs: args,
+      };
+    }
+
+    if (action === "call") {
+      if (!isValidMcpName(args.server)) {
+        return {
+          toolName,
+          riskLevel,
+          decision: { type: "deny", reason: "调用 MCP 工具需要提供格式有效的 server。" },
+          normalizedArgs: args,
+        };
+      }
+
+      if (!isValidMcpName(args.tool)) {
+        return {
+          toolName,
+          riskLevel,
+          decision: { type: "deny", reason: "调用 MCP 工具需要提供格式有效的 tool。" },
+          normalizedArgs: args,
+        };
+      }
+
+      return {
+        toolName,
+        riskLevel,
+        decision: { type: "confirm", reason: "MCP 工具默认需要通过 Harness 确认。" },
+        normalizedArgs: args,
+      };
+    }
+
+    return {
+      toolName,
+      riskLevel,
+      decision: { type: "deny", reason: "MCP action 只能是 list 或 call。" },
       normalizedArgs: args,
     };
   }

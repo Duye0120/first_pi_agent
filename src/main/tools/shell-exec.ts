@@ -6,6 +6,7 @@ import { Type } from "@mariozechner/pi-ai";
 import { checkShellCommand } from "../security.js";
 import { getSettings } from "../settings.js";
 import { buildShellExecSpawn, resolveShell } from "../shell.js";
+import { recordShellCommand } from "./command-history.js";
 
 const parameters = Type.Object({
   command: Type.String({ description: "要执行的 shell 命令" }),
@@ -28,7 +29,10 @@ function sanitizeShellOutput(text: string): string {
   return text.replace(ANSI_ESCAPE_REGEX, "");
 }
 
-export function createShellExecTool(workspacePath: string): AgentTool<typeof parameters, ShellExecDetails> {
+export function createShellExecTool(
+  workspacePath: string,
+  sessionId: string,
+): AgentTool<typeof parameters, ShellExecDetails> {
   const configuredShell = resolveShell(getSettings().terminal.shell);
 
   return {
@@ -40,6 +44,14 @@ export function createShellExecTool(workspacePath: string): AgentTool<typeof par
       const check = checkShellCommand(params.command);
 
       if (!check.allowed) {
+        recordShellCommand({
+          sessionId,
+          command: params.command,
+          cwd: workspacePath,
+          exitCode: -1,
+          durationMs: 0,
+        });
+
         return {
           content: [{ type: "text", text: `命令被安全策略拦截: ${check.reason}\n如果你确实需要执行，请在终端中手动运行。` }],
           details: {
@@ -128,6 +140,13 @@ export function createShellExecTool(workspacePath: string): AgentTool<typeof par
           pushOutput("stderr", stderrDecoder.end());
           const durationMs = Date.now() - startTime;
           const exitCode = code ?? (killed ? -1 : 0);
+          recordShellCommand({
+            sessionId,
+            command: params.command,
+            cwd,
+            exitCode,
+            durationMs,
+          });
 
           // Truncate stdout for LLM if too long
           const MAX_LINES = 200;
@@ -165,6 +184,15 @@ export function createShellExecTool(workspacePath: string): AgentTool<typeof par
           clearTimeout(timer);
           stdoutDecoder.end();
           stderrDecoder.end();
+          const durationMs = Date.now() - startTime;
+          recordShellCommand({
+            sessionId,
+            command: params.command,
+            cwd,
+            exitCode: -1,
+            durationMs,
+          });
+
           resolve({
             content: [{ type: "text", text: `命令执行失败: ${err.message}` }],
             details: {
@@ -173,7 +201,7 @@ export function createShellExecTool(workspacePath: string): AgentTool<typeof par
               exitCode: -1,
               stdout: "",
               stderr: err.message,
-              durationMs: Date.now() - startTime,
+              durationMs,
             },
           });
         });

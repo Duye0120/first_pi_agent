@@ -1,6 +1,11 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { McpConnectionManager } from "../../mcp/client.js";
-import { getAllMcpTools, getMcpResourceTools } from "../../mcp/adapter.js";
+import {
+  getAllMcpTools,
+  getMcpBrokerTool,
+  getMcpResourceTools,
+} from "../../mcp/adapter.js";
+import { createCommandHistoryTool } from "./command-history.js";
 import { getTimeTool } from "./get-time.js";
 import { createFileEditTool } from "./file-edit.js";
 import { createFileReadTool } from "./file-read.js";
@@ -19,6 +24,8 @@ type ToolAssemblyOptions = {
   sessionId: string;
   mcpManager: McpConnectionManager;
 };
+
+const MAX_DIRECT_MCP_TOOLS = 12;
 
 type BuiltinToolOptions = Pick<ToolAssemblyOptions, "workspacePath" | "sessionId">;
 
@@ -69,7 +76,8 @@ export function getBuiltinTools(options: BuiltinToolOptions): AgentTool<any, any
     createFileWriteTool(options.workspacePath),
     globSearch,
     grepSearch,
-    createShellExecTool(options.workspacePath),
+    createShellExecTool(options.workspacePath, options.sessionId),
+    createCommandHistoryTool(options.sessionId),
     createWebFetchTool(),
     webSearch,
     aliasTool(webSearch, "WebSearch", "网页搜索"),
@@ -87,11 +95,14 @@ export async function buildToolPool(
 ): Promise<AgentTool<any, any>[]> {
   const builtinTools = getBuiltinTools(options);
   const mcpResourceTools = getMcpResourceTools(options.mcpManager);
+  const mcpBrokerTool = getMcpBrokerTool(options.mcpManager);
   const mcpTools = await getAllMcpTools(options.mcpManager.getConnections());
+  const directMcpTools = mcpTools.length <= MAX_DIRECT_MCP_TOOLS ? mcpTools : [];
 
   return dedupeTools([
     ...builtinTools,
     ...mcpResourceTools,
-    ...mcpTools,
+    mcpBrokerTool,
+    ...directMcpTools,
   ]);
 }

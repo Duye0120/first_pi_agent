@@ -91,6 +91,8 @@ function getToolIcon(toolName: string): ComponentType<{ className?: string }> {
   }
   if (name.includes("grep") || name.includes("search") || name.includes("glob")) return SearchIcon;
   if (name.includes("shell") || name.includes("exec") || name.includes("bash")) return TerminalIcon;
+  if (name.includes("command_history")) return TerminalIcon;
+  if (name === "mcp" || name.startsWith("mcp_")) return SparklesIcon;
   if (name.includes("web") || name.includes("fetch")) return GlobeIcon;
   if (name.includes("memory") || name.includes("mem")) return BookOpenIcon;
   if (name.includes("skill")) return SparklesIcon;
@@ -167,6 +169,8 @@ function extractToolName(toolName: string): string {
     file_read: "Read",
     file_write: "Write",
     file_edit: "Edit",
+    mcp: "MCP",
+    command_history: "History",
     web_fetch: "Fetch",
     web_search: "Search",
     get_time: "Time",

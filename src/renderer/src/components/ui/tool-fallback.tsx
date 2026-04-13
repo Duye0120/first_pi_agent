@@ -24,6 +24,8 @@ const TOOL_NAME_LABELS: Record<string, string> = {
   shell_exec: "Shell 命令",
   file_read: "读取文件",
   file_write: "写入文件",
+  mcp: "MCP 工具",
+  command_history: "命令历史",
   web_fetch: "网页抓取",
   get_time: "获取时间",
 };
@@ -295,6 +297,146 @@ function ToolFallbackResult({
   );
 }
 
+function stringifyToolResult(result: unknown) {
+  if (result === undefined) return null;
+  if (typeof result === "string") return result;
+  try {
+    return JSON.stringify(result, null, 2);
+  } catch {
+    return String(result);
+  }
+}
+
+function extractToolResultText(result: unknown) {
+  if (typeof result === "string") {
+    return result;
+  }
+
+  if (
+    result &&
+    typeof result === "object" &&
+    "content" in result &&
+    Array.isArray((result as { content?: unknown }).content)
+  ) {
+    const parts = (result as { content: Array<{ type?: string; text?: string }> }).content
+      .filter((item) => item.type === "text" && item.text)
+      .map((item) => item.text);
+
+    if (parts.length > 0) {
+      return parts.join("\n");
+    }
+  }
+
+  return stringifyToolResult(result);
+}
+
+function parseJsonObject(text: string | null) {
+  if (!text) return null;
+
+  try {
+    const value = JSON.parse(text);
+    return value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function getToolDetails(result: unknown) {
+  if (!result || typeof result !== "object" || !("details" in result)) {
+    return null;
+  }
+
+  const details = (result as { details?: unknown }).details;
+  return details && typeof details === "object"
+    ? (details as Record<string, unknown>)
+    : null;
+}
+
+function ToolFallbackSummary({
+  toolName,
+  result,
+}: {
+  toolName: string;
+  result?: unknown;
+}) {
+  const text = extractToolResultText(result);
+  const parsed = parseJsonObject(text);
+  const details = getToolDetails(result);
+
+  if (toolName === "command_history") {
+    const entries = Array.isArray(parsed?.entries)
+      ? parsed.entries.slice(0, 5)
+      : [];
+    if (entries.length === 0) {
+      return (
+        <div className="rounded-[10px] bg-white/70 px-2.5 py-2 text-[12px] leading-5 text-[color:var(--color-text-secondary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] dark:bg-black/20">
+          暂无命令历史。
+        </div>
+      );
+    }
+
+    return (
+      <div className="rounded-[10px] bg-white/70 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] dark:bg-black/20">
+        <p className="mb-1.5 text-[10px] font-medium text-[color:var(--color-text-muted)]">
+          最近命令
+        </p>
+        <div className="flex flex-col gap-1.5">
+          {entries.map((entry, index) => {
+            const item = entry as {
+              command?: unknown;
+              exitCode?: unknown;
+              durationMs?: unknown;
+            };
+            const command = typeof item.command === "string" ? item.command : "";
+            const exitCode = typeof item.exitCode === "number" ? item.exitCode : null;
+            const durationMs = typeof item.durationMs === "number" ? item.durationMs : null;
+            return (
+              <div key={`${command}-${index}`} className="grid grid-cols-[auto_1fr_auto] items-baseline gap-2 text-[11px] leading-5">
+                <span className={cn(
+                  "rounded-full px-1.5 py-0.5 font-medium tabular-nums",
+                  exitCode === 0
+                    ? "bg-emerald-500/10 text-emerald-600"
+                    : "bg-rose-500/10 text-rose-600",
+                )}>
+                  {exitCode ?? "—"}
+                </span>
+                <code className="truncate text-[color:var(--color-text-secondary)]">
+                  {command || "—"}
+                </code>
+                <span className="text-[color:var(--color-text-muted)] tabular-nums">
+                  {durationMs !== null ? `${durationMs}ms` : "—"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (toolName === "mcp") {
+    const action = typeof details?.action === "string" ? details.action : null;
+    const server = typeof details?.server === "string" ? details.server : null;
+    const tool = typeof details?.tool === "string" ? details.tool : null;
+    const count = typeof details?.count === "number" ? details.count : null;
+    const truncated = details?.truncated === true || parsed?.truncated === true;
+
+    return (
+      <div className="rounded-[10px] bg-white/70 px-2.5 py-2 text-[12px] leading-5 text-[color:var(--color-text-secondary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] dark:bg-black/20">
+        <span className="font-medium text-foreground">MCP {action ?? "result"}</span>
+        {server ? <span> · {server}</span> : null}
+        {tool ? <span> / {tool}</span> : null}
+        {count !== null ? <span> · {count} tools</span> : null}
+        {truncated ? <span> · 已截断</span> : null}
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function ToolFallbackError({
   status,
   className,
@@ -352,6 +494,7 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
       <ToolFallbackTrigger toolName={toolName} status={status} />
       <ToolFallbackContent>
         <ToolFallbackError status={status} />
+        {!isCancelled && <ToolFallbackSummary toolName={toolName} result={result} />}
         <ToolFallbackArgs
           argsText={argsText}
           className={cn(isCancelled && "opacity-60")}

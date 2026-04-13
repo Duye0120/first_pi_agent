@@ -105,6 +105,9 @@ function truncateText(text: string, maxLength = 120): string {
 
 function inferTurnMode(text: string): string | null {
   const normalized = text.replace(/\s+/g, "");
+  if (/^\/btw(?:\s|$)/i.test(text.trim())) {
+    return "旁路补充 / btw";
+  }
   if (/(讨论|方案|架构|设计|怎么做|思路)/.test(normalized)) {
     return "讨论 / 方案收敛";
   }
@@ -135,6 +138,9 @@ function collectTurnConstraints(text: string): string[] {
   }
   if (/(只看|只review|只检查|别动别的|限制范围)/.test(normalized)) {
     constraints.push("本轮只处理用户点名的范围，不主动扩散修改。");
+  }
+  if (/^\/btw(?:\s|$)/i.test(text.trim())) {
+    constraints.push("本轮是 /btw 旁路补充：短答优先，尽量不改变主线任务状态，不主动扩大工具调用范围。");
   }
 
   return constraints;
@@ -245,6 +251,15 @@ export function buildRuntimeCapabilitySection(
         ? `已启用 MCP Server：${activeServers.join("、")}`
         : "已启用 MCP Server：无",
       mcpToolCount > 0 ? `动态 MCP 工具数：${mcpToolCount}` : "",
+      input.toolNames.includes("mcp")
+        ? "MCP 代理：可用 mcp(action=list) 发现工具，再用 mcp(action=call, server, tool, args) 调用工具；MCP 工具很多时优先使用代理。"
+        : "",
+      input.toolNames.includes("web_search") && input.toolNames.includes("web_fetch")
+        ? "网页访问：web_search 用于搜索，web_fetch 用于抓取 URL 内容。"
+        : "",
+      input.toolNames.includes("command_history")
+        ? "命令历史：command_history 可读取当前线程最近 shell_exec 命令、退出码和耗时。"
+        : "",
       "文件路径默认相对于当前 workspace。",
       `shell_exec 使用 ${resolveShellLabel(input.shell)} 语法，不要默认写 bash 专属语法。`,
     ]

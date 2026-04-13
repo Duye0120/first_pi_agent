@@ -23,6 +23,7 @@ export const SIDE_EFFECT_FREE_TOOLS = new Set([
   "file_read",
   "glob_search",
   "grep_search",
+  "command_history",
   "get_time",
   "todo_read",
   "list_mcp_resources",

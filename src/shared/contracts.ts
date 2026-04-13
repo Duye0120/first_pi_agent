@@ -452,6 +452,9 @@ export type ContextSummary = {
   contextWindow: number | null;
   latestInputTokens: number | null;
   latestOutputTokens: number | null;
+  usageMessageCount: number;
+  usageTotalInputTokens: number;
+  usageTotalOutputTokens: number;
   estimatedUsedTokens: number | null;
   estimatedRemainingTokens: number | null;
   usedRatio: number | null;

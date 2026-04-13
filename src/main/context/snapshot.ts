@@ -662,7 +662,12 @@ async function buildSnapshotDraftWithModel(input: {
   }
 }
 
-function getLatestUsage(events: SessionTranscriptEvent[]) {
+function getUsageStats(events: SessionTranscriptEvent[]) {
+  let latest: { inputTokens: number; outputTokens: number } | null = null;
+  let messageCount = 0;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     if (
@@ -670,11 +675,21 @@ function getLatestUsage(events: SessionTranscriptEvent[]) {
       typeof event.message.usage?.inputTokens === "number" &&
       typeof event.message.usage?.outputTokens === "number"
     ) {
-      return event.message.usage;
+      if (!latest) {
+        latest = event.message.usage;
+      }
+      messageCount += 1;
+      totalInputTokens += event.message.usage.inputTokens;
+      totalOutputTokens += event.message.usage.outputTokens;
     }
   }
 
-  return null;
+  return {
+    latest,
+    messageCount,
+    totalInputTokens,
+    totalOutputTokens,
+  };
 }
 
 function resolveContextWindow(sessionId: string): number | null {
@@ -687,7 +702,8 @@ function resolveContextWindow(sessionId: string): number | null {
 }
 
 function buildContextSummaryFromUsage(sessionId: string): ContextSummary {
-  const usage = getLatestUsage(loadTranscriptEvents(sessionId));
+  const usageStats = getUsageStats(loadTranscriptEvents(sessionId));
+  const usage = usageStats.latest;
   const contextWindow = resolveContextWindow(sessionId);
   const meta = getSessionMeta(sessionId);
   const latestInputTokens = usage?.inputTokens ?? null;
@@ -730,6 +746,9 @@ function buildContextSummaryFromUsage(sessionId: string): ContextSummary {
     contextWindow,
     latestInputTokens,
     latestOutputTokens,
+    usageMessageCount: usageStats.messageCount,
+    usageTotalInputTokens: usageStats.totalInputTokens,
+    usageTotalOutputTokens: usageStats.totalOutputTokens,
     estimatedUsedTokens,
     estimatedRemainingTokens,
     usedRatio,

@@ -54,6 +54,8 @@ import {
 } from "@renderer/components/assistant-ui/model-selector";
 import {
   EMPTY_CONTEXT_USAGE_SUMMARY,
+  formatTokenCount,
+  formatUsedPercent,
   type ContextUsageSummary,
 } from "@renderer/lib/context-usage";
 import { Reasoning } from "@renderer/components/assistant-ui/reasoning";
@@ -147,6 +149,22 @@ const ThreadRunStatusContext = createContext<ThreadRunStatusContextValue>({
   runStatusLabel: "",
   isCancelling: false,
 });
+
+function formatStatusTokenCount(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "—";
+  }
+
+  if (value < 1_000) {
+    return String(Math.round(value));
+  }
+
+  return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1).replace(/\.0$/, "")}k`;
+}
+
+function isBtwCommand(text: string) {
+  return /^\/btw(?:\s|$)/i.test(text.trim());
+}
 
 function useThreadRunStatus() {
   return useContext(ThreadRunStatusContext);
@@ -513,6 +531,7 @@ const Composer: FC<ThreadResolvedProps> = ({
       <ComposerStatusBar
         branchSummary={branchSummary}
         contextSummary={contextSummary}
+        runStatusLabel={runStatusLabel}
         onCompactContext={onCompactContext}
         onBranchChanged={onBranchChanged}
         disableGlobalSideEffects={disableGlobalSideEffects}
@@ -859,18 +878,28 @@ const ComposerAction: FC<
 const ComposerStatusBar: FC<{
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
+  runStatusLabel: string;
   onCompactContext: () => void | Promise<void>;
   onBranchChanged: () => void | Promise<void>;
   disableGlobalSideEffects: boolean;
 }> = ({
   branchSummary,
   contextSummary,
+  runStatusLabel,
   onCompactContext,
   onBranchChanged,
   disableGlobalSideEffects,
 }) => {
   const isThreadRunning = useAuiState((s) => s.thread.isRunning);
+  const composerText = useAuiState((s) => s.composer.text);
   const { runStage, isCancelling } = useThreadRunStatus();
+  const usedPercent = formatUsedPercent(contextSummary);
+  const showUsage =
+    typeof contextSummary.latestInputTokens === "number" ||
+    typeof contextSummary.latestOutputTokens === "number";
+  const totalUsageTokens =
+    contextSummary.usageTotalInputTokens + contextSummary.usageTotalOutputTokens;
+  const showBtw = isBtwCommand(composerText);
   const branchInteractionDisabled =
     disableGlobalSideEffects ||
     isThreadRunning ||
@@ -884,6 +913,45 @@ const ComposerStatusBar: FC<{
         disabled={branchInteractionDisabled}
         onBranchChanged={onBranchChanged}
       />
+
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 overflow-hidden">
+        {showBtw ? (
+          <span className="shrink-0 rounded-full bg-[var(--color-accent-subtle)] px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-accent)]">
+            /btw 旁路补充
+          </span>
+        ) : null}
+
+        {runStage !== "idle" && runStatusLabel ? (
+          <span className="min-w-0 truncate rounded-full bg-shell-panel px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-text-secondary)] dark:bg-white/8">
+            {runStatusLabel}
+          </span>
+        ) : null}
+
+        {showUsage ? (
+          <span
+            className="shrink-0 rounded-full bg-shell-panel px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-text-secondary)] [font-variant-numeric:tabular-nums] dark:bg-white/8"
+            title={`最近输入 ${formatTokenCount(contextSummary.latestInputTokens)} / 最近输出 ${formatTokenCount(contextSummary.latestOutputTokens)}`}
+          >
+            in {formatStatusTokenCount(contextSummary.latestInputTokens)} · out{" "}
+            {formatStatusTokenCount(contextSummary.latestOutputTokens)}
+          </span>
+        ) : null}
+
+        {contextSummary.usageMessageCount > 0 ? (
+          <span
+            className="hidden shrink-0 rounded-full bg-shell-panel px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-text-secondary)] [font-variant-numeric:tabular-nums] dark:bg-white/8 md:inline-flex"
+            title={`累计 ${contextSummary.usageMessageCount} 轮，输入 ${formatTokenCount(contextSummary.usageTotalInputTokens)} / 输出 ${formatTokenCount(contextSummary.usageTotalOutputTokens)}`}
+          >
+            total {formatStatusTokenCount(totalUsageTokens)}
+          </span>
+        ) : null}
+
+        {usedPercent ? (
+          <span className="hidden shrink-0 rounded-full bg-shell-panel px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-text-secondary)] [font-variant-numeric:tabular-nums] dark:bg-white/8 sm:inline-flex">
+            ctx {usedPercent}
+          </span>
+        ) : null}
+      </div>
 
       <ContextSummaryTrigger summary={contextSummary} onCompact={onCompactContext} />
     </div>

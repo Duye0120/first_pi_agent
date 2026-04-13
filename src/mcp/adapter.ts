@@ -298,3 +298,303 @@ export function getMcpResourceTools(
     listMcpResourceTemplatesTool,
   ];
 }
+
+const MAX_MCP_RESULT_CHARS = 24_000;
+const MAX_MCP_LIST_ITEMS = 80;
+const MCP_NAME_PATTERN = /^[A-Za-z0-9_.:-]{1,96}$/;
+
+const mcpBrokerParameters = Type.Object({
+  action: Type.Union([
+    Type.Literal("list"),
+    Type.Literal("call"),
+  ], { description: "list 枚举 MCP 工具；call 调用 MCP 工具" }),
+  server: Type.Optional(Type.String({ description: "MCP server 名" })),
+  tool: Type.Optional(Type.String({ description: "MCP 工具名" })),
+  query: Type.Optional(Type.String({ description: "list 时按工具名或描述过滤" })),
+  includeSchema: Type.Optional(Type.Boolean({ description: "list 时是否包含压缩后的 inputSchema，默认 true" })),
+  args: Type.Optional(Type.Any({ description: "调用 MCP 工具时传入的 JSON 参数" })),
+});
+
+type McpBrokerDetails = {
+  action: "list" | "call";
+  server?: string;
+  tool?: string;
+  count?: number;
+  isError?: boolean;
+  error?: string;
+  truncated?: boolean;
+};
+
+function compactDescription(value: string | undefined, maxLength = 240): string | undefined {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized.length <= maxLength
+    ? normalized
+    : normalized.slice(0, maxLength - 1).trimEnd() + "…";
+}
+
+function normalizeMcpName(value: string | undefined): string | null {
+  const normalized = value?.trim();
+  if (!normalized || !MCP_NAME_PATTERN.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function truncateText(text: string, maxLength = MAX_MCP_RESULT_CHARS): {
+  text: string;
+  truncated: boolean;
+} {
+  if (text.length <= maxLength) {
+    return { text, truncated: false };
+  }
+
+  return {
+    text: `${text.slice(0, maxLength).trimEnd()}\n\n[内容已截断，原始长度 ${text.length} 字符]`,
+    truncated: true,
+  };
+}
+
+function safeJsonStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function compactSchema(schema: unknown): unknown {
+  if (!schema || typeof schema !== "object") {
+    return schema;
+  }
+
+  const source = schema as {
+    type?: unknown;
+    required?: unknown;
+    properties?: Record<string, { type?: unknown; description?: string }>;
+  };
+
+  if (!source.properties || typeof source.properties !== "object") {
+    return {
+      type: source.type,
+      required: Array.isArray(source.required) ? source.required : undefined,
+    };
+  }
+
+  const properties = Object.fromEntries(
+    Object.entries(source.properties).map(([name, property]) => [
+      name,
+      {
+        type: property.type,
+        description: compactDescription(property.description, 120),
+      },
+    ]),
+  );
+
+  return {
+    type: source.type,
+    required: Array.isArray(source.required) ? source.required : undefined,
+    properties,
+  };
+}
+
+async function listMcpTools(
+  manager: McpConnectionManager,
+  options: {
+    server?: string;
+    query?: string;
+    includeSchema: boolean;
+  },
+) {
+  const query = options.query?.replace(/\s+/g, " ").trim().toLowerCase();
+  const connections = getConnectionsForServer(manager, options.server);
+  const tools: Array<{
+    server: string;
+    name: string;
+    description?: string;
+    inputSchema?: unknown;
+  }> = [];
+
+  for (const connection of connections) {
+    try {
+      const result = await connection.client.listTools();
+      tools.push(
+        ...result.tools.map((tool) => ({
+          server: connection.name,
+          name: tool.name,
+          description: compactDescription(tool.description),
+          inputSchema: options.includeSchema ? compactSchema(tool.inputSchema) : undefined,
+        })).filter((tool) => {
+          if (!query) {
+            return true;
+          }
+
+          return [
+            tool.server,
+            tool.name,
+            tool.description ?? "",
+          ].join(" ").toLowerCase().includes(query);
+        }),
+      );
+    } catch {
+      tools.push({
+        server: connection.name,
+        name: "__list_failed__",
+        description: "该 MCP server 的 tools/list 调用失败。",
+      });
+    }
+  }
+
+  return {
+    tools: tools.slice(0, MAX_MCP_LIST_ITEMS),
+    total: tools.length,
+    truncated: tools.length > MAX_MCP_LIST_ITEMS,
+  };
+}
+
+function stringifyMcpResult(result: unknown): string {
+  if (
+    result &&
+    typeof result === "object" &&
+    "content" in result &&
+    Array.isArray((result as { content?: unknown }).content)
+  ) {
+    const textParts: string[] = [];
+    for (const block of (result as { content: Array<{ type?: string; text?: string }> }).content) {
+      if (block.type === "text" && block.text) {
+        textParts.push(block.text);
+      }
+    }
+
+    if (textParts.length > 0) {
+      return textParts.join("\n");
+    }
+  }
+
+  return safeJsonStringify(result);
+}
+
+export function getMcpBrokerTool(
+  manager: McpConnectionManager,
+): AgentTool<typeof mcpBrokerParameters, McpBrokerDetails> {
+  return {
+    name: "mcp",
+    label: "MCP",
+    description:
+      "单工具 MCP 代理。先用 action=list 查看已连接 server 的工具，再用 action=call 调用指定 server/tool，适合 MCP 工具很多时减少上下文占用。",
+    parameters: mcpBrokerParameters,
+    async execute(_toolCallId, params) {
+      const action = params.action;
+      const server = normalizeMcpName(params.server);
+
+      if (params.server?.trim() && !server) {
+        return {
+          content: [{ type: "text", text: "MCP server 名格式无效。" }],
+          details: { action, server: params.server, error: "invalid_server" },
+        };
+      }
+
+      if (action === "list") {
+        const result = await listMcpTools(manager, {
+          server: server ?? undefined,
+          query: params.query,
+          includeSchema: params.includeSchema ?? true,
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              tools: result.tools,
+              count: result.tools.length,
+              total: result.total,
+              truncated: result.truncated,
+            }, null, 2),
+          }],
+          details: {
+            action,
+            server: server ?? undefined,
+            count: result.tools.length,
+            truncated: result.truncated,
+          },
+        };
+      }
+
+      const requestedTool = normalizeMcpName(params.tool);
+      if (!requestedTool) {
+        return {
+          content: [{ type: "text", text: "调用 MCP 工具需要提供格式有效的 tool。" }],
+          details: { action, server: server ?? undefined, error: "missing_or_invalid_tool" },
+        };
+      }
+
+      if (!server) {
+        return {
+          content: [{ type: "text", text: "调用 MCP 工具需要显式提供 server。" }],
+          details: { action, tool: requestedTool, error: "missing_server" },
+        };
+      }
+
+      const connections = getConnectionsForServer(manager, server);
+      const matches: McpConnection[] = [];
+
+      for (const connection of connections) {
+        try {
+          const result = await connection.client.listTools();
+          if (result.tools.some((tool) => tool.name === requestedTool)) {
+            matches.push(connection);
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      if (matches.length === 0) {
+        return {
+          content: [{ type: "text", text: `未找到 MCP 工具：${requestedTool}` }],
+          details: {
+            action,
+            server: params.server,
+            tool: requestedTool,
+            error: "tool_not_found",
+          },
+        };
+      }
+
+      const connection = matches[0];
+      try {
+        const result = await connection.client.callTool({
+          name: requestedTool,
+          arguments: params.args ?? {},
+        });
+        const isError = "isError" in result ? Boolean(result.isError) : false;
+        const output = truncateText(stringifyMcpResult(result));
+
+        return {
+          content: [{ type: "text", text: output.text }],
+          details: {
+            action,
+            server: connection.name,
+            tool: requestedTool,
+            isError,
+            truncated: output.truncated,
+          },
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "MCP 调用失败";
+        return {
+          content: [{ type: "text", text: `MCP 工具调用失败: ${message}` }],
+          details: {
+            action,
+            server: connection.name,
+            tool: requestedTool,
+            error: message,
+          },
+        };
+      }
+    },
+  };
+}
