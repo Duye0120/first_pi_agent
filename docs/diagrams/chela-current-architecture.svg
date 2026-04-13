@@ -1,0 +1,161 @@
+<svg width="1600" height="980" viewBox="0 0 1600 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="980" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07111F"/>
+      <stop offset="1" stop-color="#0E1A2B"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#13243A"/>
+      <stop offset="1" stop-color="#0F1D30"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#1F3656"/>
+      <stop offset="1" stop-color="#1A2D49"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#020611" flood-opacity="0.42"/>
+    </filter>
+    <style>
+      .title { font: 700 38px 'Segoe UI', Inter, Arial, sans-serif; fill: #F3F7FF; }
+      .subtitle { font: 500 17px 'Segoe UI', Inter, Arial, sans-serif; fill: #97ADC9; }
+      .section { font: 700 20px 'Segoe UI', Inter, Arial, sans-serif; fill: #F3F7FF; }
+      .label { font: 700 16px 'Segoe UI', Inter, Arial, sans-serif; fill: #E9F1FF; }
+      .text { font: 500 14px 'Segoe UI', Inter, Arial, sans-serif; fill: #ADC2DC; }
+      .mini { font: 600 13px 'Segoe UI', Inter, Arial, sans-serif; fill: #9DB3CC; }
+      .small { font: 600 12px 'Segoe UI', Inter, Arial, sans-serif; fill: #88A0BC; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6FC6FF"/>
+    </marker>
+    <marker id="arrowSoft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#84E1BC"/>
+    </marker>
+    <marker id="arrowWarn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#F7C66B"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="980" rx="28" fill="url(#bg)"/>
+  <rect x="36" y="30" width="1528" height="920" rx="28" fill="#0A1422" fill-opacity="0.46" stroke="#1C304C"/>
+
+  <text x="72" y="96" class="title">Chela Current Architecture</text>
+  <text x="72" y="126" class="subtitle">Electron desktop shell + agent runtime + context engine + MCP tool orchestration</text>
+
+  <rect x="72" y="166" width="230" height="90" rx="24" fill="#101D31" stroke="#2B466C" filter="url(#shadow)"/>
+  <circle cx="132" cy="211" r="26" fill="#173355" stroke="#70C9FF" stroke-width="2"/>
+  <text x="118" y="216" class="label">User</text>
+  <text x="172" y="203" class="label">Workspace</text>
+  <text x="172" y="225" class="text">chat, files, branches</text>
+
+  <rect x="344" y="160" width="360" height="300" rx="28" fill="url(#panel)" stroke="#294667" filter="url(#shadow)"/>
+  <text x="374" y="200" class="section">Renderer Layer</text>
+  <text x="374" y="226" class="mini">React workbench / Codex-style desktop UI</text>
+
+  <rect x="374" y="250" width="300" height="62" rx="18" fill="url(#chip)" stroke="#355881"/>
+  <text x="398" y="286" class="label">Thread UI + Composer + Context Ring</text>
+  <rect x="374" y="326" width="300" height="62" rx="18" fill="url(#chip)" stroke="#355881"/>
+  <text x="398" y="362" class="label">Sidebar / Branch Switcher / Settings</text>
+  <rect x="374" y="402" width="300" height="42" rx="16" fill="#12243B" stroke="#2F5077"/>
+  <text x="398" y="428" class="text">attachment previews, thinking view, selection state</text>
+
+  <rect x="748" y="216" width="122" height="176" rx="24" fill="#13243B" stroke="#355A86" filter="url(#shadow)"/>
+  <text x="773" y="262" class="section">Preload</text>
+  <text x="781" y="290" class="mini">IPC bridge</text>
+  <text x="778" y="320" class="small">files</text>
+  <text x="778" y="340" class="small">sessions</text>
+  <text x="778" y="360" class="small">chat</text>
+
+  <rect x="916" y="150" width="430" height="590" rx="30" fill="url(#panel)" stroke="#2B466C" filter="url(#shadow)"/>
+  <text x="946" y="192" class="section">Main Process</text>
+  <text x="946" y="218" class="mini">Electron runtime, orchestration, persistence, tool execution</text>
+
+  <polygon points="968,258 1064,258 1090,298 1064,338 968,338 942,298" fill="#16304D" stroke="#6FC6FF" stroke-width="2"/>
+  <text x="971" y="292" class="label">Agent Core</text>
+  <text x="972" y="313" class="text">run loop + prompt dispatch</text>
+
+  <rect x="1116" y="258" width="190" height="80" rx="22" fill="#17324E" stroke="#7FE0B8" stroke-width="2"/>
+  <text x="1142" y="292" class="label">Context Engine</text>
+  <text x="1142" y="313" class="text">system prompt assembly</text>
+
+  <rect x="944" y="366" width="168" height="98" rx="20" fill="#152B45" stroke="#446F9E"/>
+  <text x="969" y="400" class="label">Harness Runtime</text>
+  <text x="969" y="422" class="text">approvals</text>
+  <text x="969" y="442" class="text">run state</text>
+
+  <rect x="1130" y="366" width="176" height="98" rx="20" fill="#152B45" stroke="#446F9E"/>
+  <text x="1158" y="400" class="label">Tool Pool</text>
+  <text x="1158" y="422" class="text">builtin + MCP tools</text>
+  <text x="1158" y="442" class="text">parallel tool exec</text>
+
+  <rect x="944" y="490" width="168" height="110" rx="20" fill="#152B45" stroke="#446F9E"/>
+  <text x="968" y="524" class="label">Session Store</text>
+  <text x="968" y="546" class="text">transcript events</text>
+  <text x="968" y="566" class="text">snapshots + todos</text>
+
+  <g>
+    <ellipse cx="1218" cy="522" rx="82" ry="18" fill="#1A3552" stroke="#85D1FF"/>
+    <rect x="1136" y="522" width="164" height="58" fill="#1A3552" stroke="#85D1FF"/>
+    <ellipse cx="1218" cy="580" rx="82" ry="18" fill="#1A3552" stroke="#85D1FF"/>
+    <text x="1172" y="553" class="label">Memory System</text>
+    <text x="1156" y="603" class="text">run / session / semantic</text>
+  </g>
+
+  <rect x="944" y="626" width="168" height="90" rx="20" fill="#152B45" stroke="#446F9E"/>
+  <text x="984" y="660" class="label">Git + Files</text>
+  <text x="976" y="682" class="text">workspace snapshot</text>
+
+  <rect x="1130" y="626" width="176" height="90" rx="20" fill="#152B45" stroke="#446F9E"/>
+  <text x="1161" y="660" class="label">Providers</text>
+  <text x="1149" y="682" class="text">model routing + compat</text>
+
+  <rect x="1388" y="160" width="148" height="290" rx="26" fill="#111F33" stroke="#355881" filter="url(#shadow)"/>
+  <text x="1420" y="196" class="section">External</text>
+  <rect x="1410" y="222" width="104" height="54" rx="16" fill="#17324E" stroke="#6FC6FF"/>
+  <text x="1430" y="254" class="label">Models</text>
+  <rect x="1410" y="290" width="104" height="54" rx="16" fill="#17324E" stroke="#84E1BC"/>
+  <text x="1433" y="322" class="label">MCP</text>
+  <rect x="1410" y="358" width="104" height="70" rx="16" fill="#17324E" stroke="#F7C66B"/>
+  <text x="1430" y="392" class="label">Shell + Web</text>
+  <text x="1433" y="412" class="small">ripgrep / fetch</text>
+
+  <rect x="1366" y="516" width="170" height="224" rx="26" fill="#111F33" stroke="#355881" filter="url(#shadow)"/>
+  <text x="1394" y="552" class="section">Persistence</text>
+  <rect x="1392" y="580" width="118" height="54" rx="16" fill="#17324E" stroke="#85D1FF"/>
+  <text x="1420" y="612" class="label">Sessions</text>
+  <rect x="1392" y="646" width="118" height="54" rx="16" fill="#17324E" stroke="#85D1FF"/>
+  <text x="1426" y="678" class="label">Memory</text>
+  <rect x="1392" y="712" width="118" height="54" rx="16" fill="#17324E" stroke="#85D1FF"/>
+  <text x="1418" y="744" class="label">Settings</text>
+
+  <rect x="72" y="774" width="1270" height="142" rx="26" fill="#0D1929" stroke="#27415F"/>
+  <text x="102" y="814" class="section">Current optimization hotspots from code-review-graph</text>
+  <text x="102" y="844" class="text">1. context-collect ↔ session-session : strongest coupling in the graph</text>
+  <text x="102" y="868" class="text">2. ipc-register / ipc-handle / main-session : dense cross-boundary traffic</text>
+  <text x="102" y="892" class="text">3. Renderer settings surfaces still fan into multiple independent sections</text>
+  <text x="868" y="844" class="text">Key flows: startBackgroundServices, registerIpcHandlers, presentConfirmationRequest</text>
+  <text x="868" y="868" class="text">Core layers: Renderer → Preload → Main Process → Providers / MCP / Persistence</text>
+  <text x="868" y="892" class="text">Main product code communities: session, context, providers, git, memory, thread UI</text>
+
+  <path d="M302 211H344" stroke="#6FC6FF" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M704 305H748" stroke="#6FC6FF" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M870 305H916" stroke="#6FC6FF" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1090 298H1116" stroke="#84E1BC" stroke-width="3" marker-end="url(#arrowSoft)"/>
+  <path d="M1028 338V366" stroke="#6FC6FF" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1211 338V366" stroke="#84E1BC" stroke-width="3" marker-end="url(#arrowSoft)"/>
+  <path d="M1028 464V490" stroke="#6FC6FF" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1218 464V504" stroke="#84E1BC" stroke-width="3" marker-end="url(#arrowSoft)"/>
+  <path d="M1028 600V626" stroke="#6FC6FF" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1218 600V626" stroke="#6FC6FF" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1306 298H1410" stroke="#84E1BC" stroke-width="3" marker-end="url(#arrowSoft)"/>
+  <path d="M1306 415H1410" stroke="#6FC6FF" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1300 551H1392" stroke="#F7C66B" stroke-width="3" marker-end="url(#arrowWarn)"/>
+  <path d="M1112 546H1136" stroke="#84E1BC" stroke-width="3" marker-end="url(#arrowSoft)"/>
+  <path d="M1112 650H1130" stroke="#6FC6FF" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M1120 548C1172 614 1328 636 1392 640" stroke="#84E1BC" stroke-width="2.5" stroke-dasharray="8 8" marker-end="url(#arrowSoft)"/>
+  <path d="M1112 548C1172 734 1328 738 1392 739" stroke="#F7C66B" stroke-width="2.5" stroke-dasharray="8 8" marker-end="url(#arrowWarn)"/>
+
+  <text x="522" y="198" class="small">React / TSX</text>
+  <text x="786" y="382" class="small">desktopApi</text>
+  <text x="1420" y="468" class="small">packy / OpenAI-compatible / MCP servers</text>
+  <text x="1378" y="790" class="small">Generated from repository structure + code-review-graph communities</text>
+</svg>

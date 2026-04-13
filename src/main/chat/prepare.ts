@@ -66,6 +66,7 @@ export async function prepareChatRun(context: ChatRunContext): Promise<void> {
     ownerId: PRIMARY_AGENT_OWNER,
     modelEntryId: resolvedModel.entry.id,
     runKind: "chat",
+    runSource: "user",
     lane: "foreground",
   });
   context.runCreated = true;

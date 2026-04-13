@@ -301,14 +301,14 @@ export function BranchSwitcher({
             <p className="px-1 text-[11px] font-medium tracking-[0.12em] text-[color:var(--color-text-muted)]">
               分支
             </p>
-            <div className="max-h-[220px] overflow-y-auto rounded-[var(--radius-shell)] bg-[color:var(--color-shell-panel-muted)] px-2 py-2">
+            <div className="max-h-[220px] overflow-y-auto">
               {loading ? (
                 <div className="flex items-center gap-2 px-3 py-3 text-[12px] text-[color:var(--color-text-secondary)]">
                   <LoaderCircleIcon className="size-3.5 animate-spin" />
                   <span>正在读取本地分支…</span>
                 </div>
               ) : filteredBranches.length > 0 ? (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                   {filteredBranches.map((branch) => (
                     <button
                       key={branch.name}
@@ -324,7 +324,7 @@ export function BranchSwitcher({
                       className={cn(
                         "group flex w-full items-center gap-3 rounded-[var(--radius-shell)] px-3 py-2.5 text-left text-[14px] transition-all duration-fast ease-standard focus-visible:outline-none",
                         branch.isCurrent
-                          ? "bg-[color:var(--color-selection-bg)] text-[color:var(--color-selection-fg)] shadow-[var(--shadow-inset-soft)]"
+                          ? "bg-[color:var(--color-selection-bg)] text-[color:var(--color-selection-fg)]"
                           : "bg-transparent hover:bg-[color:var(--color-selection-muted-bg)] focus-visible:bg-[color:var(--color-selection-muted-bg)]",
                         !submitting && "cursor-pointer",
                         submitting && "cursor-wait opacity-80",

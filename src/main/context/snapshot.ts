@@ -920,6 +920,11 @@ async function applySnapshot(
     modelEntryId,
     thinkingLevel,
     runIdPrefix: reason,
+    metadata: {
+      reason,
+      snapshotRevision: snapshot.revision,
+      compactedUntilSeq: snapshot.compactedUntilSeq,
+    },
     execute: async (runScope) => {
       writePersistedSnapshot(snapshot);
       updateSessionMeta(sessionId, (meta) => {

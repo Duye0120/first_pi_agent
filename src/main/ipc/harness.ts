@@ -1,6 +1,7 @@
 import { IPC_CHANNELS } from "../../shared/ipc.js";
 import {
   dismissInterruptedApproval,
+  listInterruptedApprovalGroups,
   listInterruptedApprovals,
   resolveApprovalResponse,
 } from "../harness/approvals.js";
@@ -14,6 +15,10 @@ export function registerHarnessIpc(): void {
   handleIpc(
     IPC_CHANNELS.agentListInterruptedApprovals,
     async (_event, sessionId?: string) => listInterruptedApprovals(sessionId),
+  );
+  handleIpc(
+    IPC_CHANNELS.agentListInterruptedApprovalGroups,
+    async (_event, sessionId?: string) => listInterruptedApprovalGroups(sessionId),
   );
   handleIpc(
     IPC_CHANNELS.agentDismissInterruptedApproval,

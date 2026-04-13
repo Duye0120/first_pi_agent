@@ -9,6 +9,7 @@ import type {
   ContextSummary,
   GitBranchSummary,
   GitDiffOverview,
+  InterruptedApprovalGroup,
   SelectedFile,
   Settings,
   SessionGroup,
@@ -206,6 +207,8 @@ export default function App() {
   const [contextSummaryBySessionId, setContextSummaryBySessionId] = useState<
     Record<string, ContextSummary>
   >({});
+  const [interruptedApprovalGroupsBySessionId, setInterruptedApprovalGroupsBySessionId] =
+    useState<Record<string, InterruptedApprovalGroup[]>>({});
   const [diffPanelOpen, setDiffPanelOpen] = useState(false);
   const [frameState, setFrameState] = useState<WindowFrameState>({
     isMaximized: false,
@@ -461,6 +464,34 @@ export default function App() {
     [desktopApi],
   );
 
+  const refreshInterruptedApprovalGroups = useCallback(
+    async (sessionId: string) => {
+      if (!desktopApi?.agent?.listInterruptedApprovalGroups) {
+        setInterruptedApprovalGroupsBySessionId((current) => ({
+          ...current,
+          [sessionId]: [],
+        }));
+        return [] as InterruptedApprovalGroup[];
+      }
+
+      try {
+        const groups = await desktopApi.agent.listInterruptedApprovalGroups(sessionId);
+        setInterruptedApprovalGroupsBySessionId((current) => ({
+          ...current,
+          [sessionId]: groups,
+        }));
+        return groups;
+      } catch {
+        setInterruptedApprovalGroupsBySessionId((current) => ({
+          ...current,
+          [sessionId]: [],
+        }));
+        return [] as InterruptedApprovalGroup[];
+      }
+    },
+    [desktopApi],
+  );
+
   const removeCachedSession = useCallback((sessionId: string) => {
     setSessionCache((current) => {
       if (!(sessionId in current)) {
@@ -523,8 +554,9 @@ export default function App() {
         );
       }
       await refreshContextSummary(sessionId);
+      await refreshInterruptedApprovalGroups(sessionId);
     },
-    [cacheSession, desktopApi, refreshContextSummary],
+    [cacheSession, desktopApi, refreshContextSummary, refreshInterruptedApprovalGroups],
   );
 
   const persistSession = useCallback(
@@ -637,6 +669,7 @@ export default function App() {
 
       hydrateSession(nextSession);
       void refreshContextSummary(nextSession.id);
+      void refreshInterruptedApprovalGroups(nextSession.id);
     } catch (error) {
       setBootError(
         error instanceof Error ? error.message : "桌面壳初始化失败。",
@@ -644,7 +677,7 @@ export default function App() {
     } finally {
       setBooting(false);
     }
-  }, [clearActiveSession, desktopApi, hydrateSession, refreshContextSummary]);
+  }, [clearActiveSession, desktopApi, hydrateSession, refreshContextSummary, refreshInterruptedApprovalGroups]);
 
   // 用 ref 持有键盘快捷键需要的动态值，避免 effect 因这些值变化而重新执行 bootApp
   const kbStateRef = useRef({
@@ -715,7 +748,8 @@ export default function App() {
     setSummaries((current) => upsertSummary(current, nextSession));
     hydrateSession(nextSession);
     void refreshContextSummary(nextSession.id);
-  }, [desktopApi, hydrateSession, refreshContextSummary]);
+    void refreshInterruptedApprovalGroups(nextSession.id);
+  }, [desktopApi, hydrateSession, refreshContextSummary, refreshInterruptedApprovalGroups]);
 
   const createSessionInGroup = useCallback(
     async (groupId: string) => {
@@ -734,8 +768,9 @@ export default function App() {
       await refreshSessionLists();
       hydrateSession(groupedSession);
       void refreshContextSummary(groupedSession.id);
+      void refreshInterruptedApprovalGroups(groupedSession.id);
     },
-    [desktopApi, hydrateSession, refreshContextSummary, refreshSessionLists],
+    [desktopApi, hydrateSession, refreshContextSummary, refreshInterruptedApprovalGroups, refreshSessionLists],
   );
 
   const selectSession = useCallback(
@@ -1108,6 +1143,18 @@ export default function App() {
     [activeSession, persistSession],
   );
 
+  const dismissInterruptedApproval = useCallback(
+    async (sessionId: string, runId: string) => {
+      if (!desktopApi?.agent?.dismissInterruptedApproval) {
+        return;
+      }
+
+      await desktopApi.agent.dismissInterruptedApproval(runId);
+      await refreshInterruptedApprovalGroups(sessionId);
+    },
+    [desktopApi, refreshInterruptedApprovalGroups],
+  );
+
   const toggleDiffPanel = useCallback(() => {
     const nextOpen = !diffPanelOpen;
     setDiffPanelOpen(nextOpen);
@@ -1323,6 +1370,12 @@ export default function App() {
                   contextSummaryBySessionId[session.id] ??
                   EMPTY_CONTEXT_USAGE_SUMMARY
                 }
+                interruptedApprovalGroups={
+                  interruptedApprovalGroupsBySessionId[session.id] ?? []
+                }
+                onDismissInterruptedApproval={(runId) => {
+                  void dismissInterruptedApproval(session.id, runId);
+                }}
                 visible={visible}
                 disableGlobalSideEffects={hasAnyRunningSessions}
               />
@@ -1338,11 +1391,13 @@ export default function App() {
       currentModelId,
       createNewSession,
       desktopApi,
+      dismissInterruptedApproval,
       handleModelChange,
       handleSessionRunStateChange,
       handleThinkingLevelChange,
       hasAnyRunningSessions,
     isPickingFiles,
+      interruptedApprovalGroupsBySessionId,
       mountedSessionIds,
       openSettingsView,
       removeAttachment,

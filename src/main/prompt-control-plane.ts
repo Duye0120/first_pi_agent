@@ -170,6 +170,28 @@ export function buildPlatformConstitutionSection(): PromptSection {
   };
 }
 
+export function buildTalkNormalSection(): PromptSection {
+  return {
+    id: "talk-normal",
+    layer: "constitution",
+    role: "instruction",
+    authority: "hard",
+    priority: 12,
+    cacheScope: "stable",
+    trimPriority: 95,
+    writableBack: false,
+    content: [
+      "## Response Style",
+      "回答要直接、資訊完整、但不要拖泥帶水。",
+      "先回答，再补充必要上下文；不要先寒暄、不要重复题目。",
+      "避免用否定式对比来立论，例如“不是 X，而是 Y”或“X，而不是 Y”；优先直接陈述你真正要表达的正向结论。",
+      "简单问题短答，复杂问题可以分点，但只保留最重要的结构。",
+      "不要写总结标签式收尾，不要用“总结一下 / 一句话说 / hope this helps / 如果你愿意我还可以”这类尾句。",
+      "不要为了显得自然而重复改写同一个意思；说清楚一次就停。",
+    ].join("\n"),
+  };
+}
+
 export function buildWorkspacePolicySection(
   content: string,
 ): PromptSection | null {

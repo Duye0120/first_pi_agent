@@ -3,6 +3,7 @@ import type {
   AgentRunScope,
   ChatSession,
   DesktopApi,
+  InterruptedApprovalGroup,
   InterruptedApprovalNotice,
   SessionGroup,
   WindowFrameState,
@@ -59,6 +60,8 @@ const desktopApi: DesktopApi = {
       ipcRenderer.invoke(IPC_CHANNELS.agentConfirmResponse, response),
     listInterruptedApprovals: (sessionId?: string): Promise<InterruptedApprovalNotice[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.agentListInterruptedApprovals, sessionId),
+    listInterruptedApprovalGroups: (sessionId?: string): Promise<InterruptedApprovalGroup[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.agentListInterruptedApprovalGroups, sessionId),
     dismissInterruptedApproval: (runId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.agentDismissInterruptedApproval, runId),
   },

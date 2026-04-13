@@ -6,6 +6,7 @@ import {
   buildRuntimeCapabilitySection,
   buildSemanticMemorySection,
   buildSessionSnapshotSection,
+  buildTalkNormalSection,
   buildTurnIntentPatchSection,
   buildWorkspacePolicySection,
   type PromptSection,
@@ -167,6 +168,7 @@ function buildPromptSections(
 
   return [
     buildPlatformConstitutionSection(),
+    buildTalkNormalSection(),
     buildWorkspacePolicySection(buildSoulPromptSection(input.workspacePath)),
     buildRuntimeCapabilitySection({
       workspacePath: input.workspacePath,

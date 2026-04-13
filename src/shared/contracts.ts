@@ -215,7 +215,9 @@ export type DiagnosticLogBundle = {
   files: DiagnosticLogSnapshot[];
 };
 
-export type RunKind = "chat" | "compact" | "system";
+export type RunSource = "user" | "renderer" | "system" | "subagent";
+
+export type RunKind = "chat" | "compact" | "memory_refresh" | "system" | "subagent";
 
 export type ChatMessage = {
   id: string;
@@ -398,6 +400,23 @@ export type InterruptedApprovalNotice = {
   sessionId: string;
   runId: string;
   ownerId: string;
+  modelEntryId: string | null;
+  runKind: RunKind | null;
+  runSource: RunSource | null;
+  lane: "foreground" | "background" | null;
+  state:
+    | "running"
+    | "awaiting_confirmation"
+    | "executing_tool"
+    | "completed"
+    | "aborted"
+    | "failed"
+    | null;
+  startedAt: number | null;
+  currentStepId: string | null;
+  canResume: false;
+  recoveryStatus: "interrupted";
+  recoveryPrompt: string;
   interruptedAt: number;
   approval: {
     requestId: string;
@@ -409,6 +428,14 @@ export type InterruptedApprovalNotice = {
     description: string;
     detail?: string;
   };
+};
+
+export type InterruptedApprovalGroup = {
+  sessionId: string;
+  ownerId: string;
+  count: number;
+  latestInterruptedAt: number;
+  approvals: InterruptedApprovalNotice[];
 };
 
 export type SendMessageInput = AgentRunScope & {
@@ -538,6 +565,9 @@ export type DesktopApi = {
     listInterruptedApprovals: (
       sessionId?: string,
     ) => Promise<InterruptedApprovalNotice[]>;
+    listInterruptedApprovalGroups: (
+      sessionId?: string,
+    ) => Promise<InterruptedApprovalGroup[]>;
     dismissInterruptedApproval: (runId: string) => Promise<boolean>;
   };
   settings: {

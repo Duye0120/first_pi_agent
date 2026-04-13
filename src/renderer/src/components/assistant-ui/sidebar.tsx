@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArchiveBoxIcon,
   ArrowUturnLeftIcon,
@@ -51,7 +51,7 @@ type SidebarProps = {
   onExitSettings?: () => void;
 };
 
-export function Sidebar({
+function SidebarImpl({
   summaries,
   activeSessionId,
   runningSessionIds,
@@ -201,13 +201,32 @@ export function Sidebar({
     setSessionRenameValue("");
   };
 
-  const pinnedSummaries = summaries.filter((s) => s.pinned);
-  const regularSummaries = summaries.filter((s) => !s.pinned);
-  const ungroupedSessions = regularSummaries.filter((s) => !s.groupId);
-  const groupedSessions = groups.map((group) => ({
-    group,
-    sessions: regularSummaries.filter((s) => s.groupId === group.id),
-  }));
+  const { pinnedSummaries, ungroupedSessions, groupedSessions } = useMemo(() => {
+    if (viewMode === "settings") {
+      return {
+        pinnedSummaries: [] as ChatSessionSummary[],
+        ungroupedSessions: [] as ChatSessionSummary[],
+        groupedSessions: [] as Array<{
+          group: SessionGroup;
+          sessions: ChatSessionSummary[];
+        }>,
+      };
+    }
+
+    const pinnedSummaries = summaries.filter((s) => s.pinned);
+    const regularSummaries = summaries.filter((s) => !s.pinned);
+    const ungroupedSessions = regularSummaries.filter((s) => !s.groupId);
+    const groupedSessions = groups.map((group) => ({
+      group,
+      sessions: regularSummaries.filter((s) => s.groupId === group.id),
+    }));
+
+    return {
+      pinnedSummaries,
+      ungroupedSessions,
+      groupedSessions,
+    };
+  }, [groups, summaries, viewMode]);
 
   const settingsSidebar = (
     <aside className="flex h-full flex-col bg-transparent text-[13px] text-[color:var(--chela-text-primary)]">
@@ -842,3 +861,5 @@ export function Sidebar({
     </div>
   );
 }
+
+export const Sidebar = memo(SidebarImpl);

@@ -1,6 +1,6 @@
 import type { AgentHandle } from "../agent.js";
 import type { ConfirmationResponse } from "../../shared/agent-events.js";
-import type { RunKind } from "../../shared/contracts.js";
+import type { RunKind, RunSource } from "../../shared/contracts.js";
 import { PRIMARY_AGENT_OWNER, buildSystemOwnerId } from "../agent-owners.js";
 import {
   loadInterruptedApprovals,
@@ -29,7 +29,9 @@ type CreateRunInput = HarnessRunScope & {
   ownerId?: string;
   modelEntryId: string;
   runKind: RunKind;
+  runSource?: RunSource;
   lane?: HarnessRunLane;
+  metadata?: Record<string, unknown>;
 };
 
 type PendingApprovalWaiter = {
@@ -107,9 +109,18 @@ export class HarnessRuntime {
           sessionId: run.sessionId,
           runId: run.runId,
           ownerId: run.ownerId,
+          modelEntryId: run.modelEntryId,
+          runKind: run.runKind,
+          runSource: run.runSource,
+          lane: run.lane,
+          state: run.state,
+          startedAt: run.startedAt,
+          currentStepId: run.currentStepId,
+          canResume: false,
+          recoveryStatus: "interrupted",
           approval: run.pendingApproval,
           interruptedAt: now,
-        };
+        } satisfies InterruptedApprovalRecord;
         this.upsertInterruptedApproval(record);
       }
 
@@ -161,10 +172,12 @@ export class HarnessRuntime {
       ownerId,
       modelEntryId: input.modelEntryId,
       runKind: input.runKind,
+      runSource: input.runSource ?? (lane === "foreground" ? "user" : "system"),
       lane,
       state: "running",
       startedAt: Date.now(),
       cancelled: false,
+      metadata: input.metadata,
       handle: null,
     };
 
@@ -184,7 +197,9 @@ export class HarnessRuntime {
         requestId: run.requestId,
         ownerId: run.ownerId,
         runKind: run.runKind,
+        runSource: run.runSource,
         lane: run.lane,
+        ...run.metadata,
       },
     });
 
@@ -468,6 +483,7 @@ export class HarnessRuntime {
       ownerId: run.ownerId,
       modelEntryId: run.modelEntryId,
       runKind: run.runKind,
+      runSource: run.runSource,
       lane: run.lane,
       state: run.state,
       startedAt: run.startedAt,
@@ -475,6 +491,7 @@ export class HarnessRuntime {
       currentStepId: run.currentStepId,
       pendingApproval: run.pendingApproval,
       cancelled: run.cancelled,
+      metadata: run.metadata,
     };
   }
 

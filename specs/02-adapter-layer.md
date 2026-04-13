@@ -2,14 +2,15 @@
 
 > 状态：`in-review`
 > 依赖：01-overview, 03-agent-core
+> 更新时间：2026-04-13 15:29:14
 
 ## 2.1 职责
 
-Adapter 层是 Agent Core 和外部世界之间的翻译官：
+Adapter 层是主进程和外部世界之间的翻译层：
 
-- **接收** — 把外部输入（UI 点击、Telegram 消息）翻译成 Agent 能理解的统一格式
-- **输出** — 把 Agent 的事件（思考中、工具执行、回复）翻译成外部能展示的格式
-- **交互** — 处理需要用户参与的操作（确认弹窗、文件选择等）
+- **接收** — 把外部输入翻译成主进程可处理的统一格式
+- **输出** — 把 Agent / Harness / Window / Terminal 事件翻译成前端可消费的格式
+- **交互** — 处理确认、文件选择、系统通知等需要用户参与的动作
 
 ## 2.2 为什么需要这一层
 
@@ -102,9 +103,9 @@ interface Notification {
 }
 ```
 
-## 2.4 Electron Adapter（v1 实现）
+## 2.4 Electron Adapter（当前实现）
 
-这是我们 v1 唯一实现的 Adapter，通过 Electron IPC 连接 React 前端和 Agent Core。
+当前唯一正式实现是 Electron Adapter，通过 `preload + IPC` 连接 React 前端和主进程。
 
 ```
 React 前端                  Preload                   Main Process
@@ -120,82 +121,41 @@ React 前端                  Preload                   Main Process
     │  更新 UI                  │                          │
 ```
 
-### 实现要点
+### 当前实现要点
 
 **接收用户消息：**
 ```typescript
-// Main Process
-ipcMain.handle('chat:send', async (_, input: UserInput) => {
-  // 透传给 Agent Core
-  await agentCore.handleUserInput(input);
-});
+Renderer -> preload -> IPC -> chat domain service
 ```
 
 **发送 Agent 事件：**
 ```typescript
-// Main Process
-agent.subscribe(event => {
-  // 把 pi-agent-core 事件转换成我们的 AgentEvent 格式
-  const agentEvent = mapToAgentEvent(event);
-  mainWindow.webContents.send('agent:event', agentEvent);
-});
+Agent Core -> ElectronAdapter -> webContents.send("agent:event", event)
 ```
 
 **用户确认：**
-```typescript
-// Main Process
-async requestConfirmation(request: ConfirmationRequest): Promise<boolean> {
-  const { response } = await dialog.showMessageBox(mainWindow, {
-    type: 'question',
-    title: request.title,
-    message: request.description,
-    buttons: ['执行', '取消'],
-    defaultId: 1,        // 默认选中"取消"，安全第一
-    cancelId: 1,
-  });
-  return response === 0;  // 0 = "执行"
-}
-```
 
-### IPC Channel 注册
+当前确认主链分两段：
 
-需要在 `src/shared/ipc.ts` 中新增的 channel：
+1. 正在运行的高风险动作：主进程原生确认框 / renderer 响应
+2. 应用重启后的中断审批：先以 `interrupted approval notice` 形式恢复给 UI
 
-```typescript
-// 现有（保留）
-'chat:send'           // 发送消息（改造：接入真实 Agent）
-'sessions:*'          // 会话管理（保留原逻辑）
-'files:*'             // 文件操作（保留原逻辑）
+当前“中断审批恢复”先恢复成可见状态和可追踪 notice，真正恢复原动作执行仍是后续阶段。
 
-// 新增
-'agent:event'         // Agent → 前端的事件流
-'agent:cancel'        // 前端 → Agent 取消执行
-'agent:confirm'       // 确认弹窗的响应
-'config:get'          // 获取配置（API Keys、模型选择等）
-'config:set'          // 更新配置
-```
+### IPC 能力面
 
-### 与现有代码的集成
+当前 Adapter 暴露的能力已经不止聊天：`files / sessions / groups / chat / context / agent / settings / providers / models / workspace / terminal / git / window / quickInvoke`。
 
-当前 `src/main/index.ts` 的 `chat:send` handler 调用 `buildMockAssistantReply()`。我们的改造就是把这一行替换成真实的 Agent 调用：
+### 当前边界
 
-```typescript
-// 现在
-ipcMain.handle(IpcChannels.CHAT_SEND, async (_, msg) => {
-  return buildMockAssistantReply(msg);  // ← 删掉这行
-});
+- Renderer 只通过 `window.desktopApi` 进入系统
+- Preload 只暴露白名单能力，不把 Electron 原语直接下放到 React
+- Main IPC 负责把请求路由到 chat / harness / settings / workspace 等领域服务
+- Adapter 只做桥接，不承担 run state machine 和 policy
 
-// 改成
-ipcMain.handle(IpcChannels.CHAT_SEND, async (_, input) => {
-  await electronAdapter.handleUserMessage(input);  // ← 换成 Adapter
-});
-```
+## 2.5 后续扩展
 
-这是整个项目最关键的一行代码替换——从 mock 到 real agent。
-
-## 2.5 Telegram Adapter（后期，仅定义接口）
-
-v1 不实现，但架构上预留。后期的实现大概长这样：
+后续阶段才实现其他入口。接口大概长这样：
 
 ```typescript
 class TelegramAdapter implements AgentAdapter {
@@ -230,7 +190,7 @@ class TelegramAdapter implements AgentAdapter {
 }
 ```
 
-**注意看**——同一个 AgentAdapter 接口，Electron 用 IPC + dialog，Telegram 用 Bot API + inline keyboard。Agent Core 完全不知道区别。这就是接口抽象的威力。
+同一个 Adapter 抽象可以支持 Electron、Telegram 或其他入口。当前阶段先把 Electron 主链收稳。
 
 ## 2.6 文件结构
 

@@ -1,4 +1,4 @@
-import type { RunKind } from "../../shared/contracts.js";
+import type { RunKind, RunSource } from "../../shared/contracts.js";
 
 export type HarnessRunState =
   | "running"
@@ -43,6 +43,7 @@ export type HarnessRunSnapshot = HarnessRunScope & {
   ownerId: string;
   modelEntryId: string;
   runKind: RunKind;
+  runSource: RunSource;
   lane: HarnessRunLane;
   state: HarnessRunState;
   startedAt: number;
@@ -50,12 +51,22 @@ export type HarnessRunSnapshot = HarnessRunScope & {
   currentStepId?: string;
   pendingApproval?: HarnessPendingApproval;
   cancelled: boolean;
+  metadata?: Record<string, unknown>;
 };
 
 export type InterruptedApprovalRecord = {
   sessionId: string;
   runId: string;
   ownerId: string;
+  modelEntryId?: string;
+  runKind?: RunKind;
+  runSource?: RunSource;
+  lane?: HarnessRunLane;
+  state?: HarnessRunState;
+  startedAt?: number;
+  currentStepId?: string;
+  canResume?: false;
+  recoveryStatus?: "interrupted";
   approval: HarnessPendingApproval;
   interruptedAt: number;
 };

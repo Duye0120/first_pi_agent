@@ -38,34 +38,34 @@ function getUsageLine(summary: ContextUsageSummary) {
     typeof summary.estimatedUsedTokens === "number" &&
     typeof summary.contextWindow === "number"
   ) {
-    return `已用 ${formatCompactTokenCount(summary.estimatedUsedTokens)} 标记，共 ${formatCompactTokenCount(summary.contextWindow)}`;
+    return `本轮约用 ${formatCompactTokenCount(summary.estimatedUsedTokens)} / ${formatCompactTokenCount(summary.contextWindow)} tokens`;
   }
 
   if (typeof summary.contextWindow === "number") {
-    return `窗口上限 ${formatCompactTokenCount(summary.contextWindow)} 标记`;
+    return `窗口上限 ${formatCompactTokenCount(summary.contextWindow)} tokens`;
   }
 
   if (typeof summary.estimatedUsedTokens === "number") {
-    return `最近一轮已用 ${formatCompactTokenCount(summary.estimatedUsedTokens)} 标记`;
+    return `本轮约用 ${formatCompactTokenCount(summary.estimatedUsedTokens)} tokens`;
   }
 
-  return "等待 usage 与窗口信息";
+  return "等待 usage 资料";
 }
 
 function getCompactStatusCopy(summary: ContextUsageSummary) {
   if (summary.isCompacting) {
-    return "正在刷新 session snapshot…";
+    return "正在整理 snapshot…";
   }
 
   if (summary.autoCompactBlocked) {
-    return `自动 compact 已暂停（连续失败 ${summary.autoCompactFailureCount} 次），可手动 compact。`;
+    return "自动 compact 已暂停，可手动整理。";
   }
 
   if (summary.canCompact) {
-    return "可手动 compact 历史上下文。";
+    return "可手动整理旧上下文。";
   }
 
-  return "当前不用再 compact。";
+  return "暂时不需要 compact。";
 }
 
 function getContinuityHeadline(summary: ContextUsageSummary) {
@@ -85,7 +85,7 @@ function getContinuityHeadline(summary: ContextUsageSummary) {
     return summary.snapshotSummary.split(/\r?\n/)[0] ?? summary.snapshotSummary;
   }
 
-  return "还没有可续接的 session snapshot";
+  return "还没有可续接的 snapshot。";
 }
 
 function getContinuityRows(summary: ContextUsageSummary) {
@@ -170,7 +170,7 @@ function ContextHoverSummary({ summary }: ContextSummaryTriggerProps) {
   return (
     <div className="flex min-w-[208px] flex-col items-start text-left">
       <p className="text-[11px] font-medium tracking-[0.12em] text-[color:var(--color-text-muted)]">
-        背景信息窗口：
+        Context 视窗
       </p>
       <p className="mt-2 text-[16px] font-semibold leading-none tracking-[-0.02em] text-foreground [font-variant-numeric:tabular-nums]">
         {getContextStatusCopy(summary)}
@@ -183,7 +183,7 @@ function ContextHoverSummary({ summary }: ContextSummaryTriggerProps) {
       </p>
       {summary.autoCompactBlocked ? (
         <p className="mt-2 text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
-          自动 compact 已暂停，等你手动收口。
+          自动 compact 已暂停，先手动执行一次即可恢复。
         </p>
       ) : null}
     </div>
@@ -205,7 +205,7 @@ function ContextExpandedSummary({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-medium tracking-[0.12em] text-[color:var(--color-text-muted)]">
-              背景信息窗口：
+          Context 视窗
             </p>
             <p className="mt-1.5 text-[18px] font-semibold leading-[1.3] text-foreground [font-variant-numeric:tabular-nums]">
               {getContextStatusCopy(summary)}
@@ -214,14 +214,12 @@ function ContextExpandedSummary({
               {getUsageLine(summary)}
             </p>
           </div>
-          <div className="rounded-[var(--radius-pill)] bg-[color:var(--color-shell-panel)] p-1 shadow-[var(--shadow-inset-soft)]">
-            <ContextUsageIndicator
-              summary={summary}
-              size={30}
-              strokeWidth={3.2}
-              className="mt-0.5"
-            />
-          </div>
+          <ContextUsageIndicator
+            summary={summary}
+            size={34}
+            strokeWidth={3}
+            className="mt-0.5 shrink-0"
+          />
         </div>
 
         {(usedPercent || remainingPercent) && (
@@ -232,7 +230,7 @@ function ContextExpandedSummary({
         )}
       </section>
 
-      <ContextSection label="窗口明细">
+      <ContextSection label="窗口详情">
         <dl className="mt-2 flex flex-col gap-1.5 text-[12px] [font-variant-numeric:tabular-nums]">
           {detailRows.map((row) => (
             <div
@@ -248,7 +246,7 @@ function ContextExpandedSummary({
         </dl>
       </ContextSection>
 
-      <ContextSection label="续接摘要">
+      <ContextSection label="续接线索">
         <p className="mt-2 text-[13px] leading-5 text-foreground">
           {getContinuityHeadline(summary)}
         </p>
@@ -276,7 +274,7 @@ function ContextExpandedSummary({
       </ContextSection>
 
       {summary.openLoops.length > 0 || summary.nextActions.length > 0 ? (
-        <ContextSection label="任务推进">
+        <ContextSection label="后续">
           {summary.nextActions.length > 0 ? (
             <div>
               <p className="mt-2 text-[11px] font-medium text-[color:var(--color-text-muted)]">
@@ -312,7 +310,7 @@ function ContextExpandedSummary({
       ) : null}
 
       {summary.risks.length > 0 || summary.importantFiles.length > 0 ? (
-        <ContextSection label="辅助信息">
+        <ContextSection label="补充">
           {summary.risks.length > 0 ? (
             <div>
               <p className="mt-2 text-[11px] font-medium text-[color:var(--color-text-muted)]">
@@ -353,29 +351,36 @@ function ContextExpandedSummary({
       {summary.autoCompactBlocked ? (
         <ContextSection label="自动 Compact">
           <p className="mt-2 text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
-            已因连续失败暂停自动 compact。手动执行一次成功 compact 后会自动恢复。
+            自动 compact 暂停，手动执行一次成功后会恢复。
           </p>
         </ContextSection>
       ) : null}
 
-      <section className="flex items-center justify-between gap-3 rounded-[var(--radius-shell)] bg-[color:var(--color-shell-panel-elevated)] px-3.5 py-3">
-        <p className="min-w-0 flex-1 text-[12px] leading-5 text-[color:var(--color-text-muted)]">
-          {getCompactStatusCopy(summary)}
-        </p>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            if (!summary.isCompacting && summary.canCompact) {
-              void onCompact?.();
-            }
-          }}
-          disabled={!summary.canCompact || summary.isCompacting}
-          className="h-8 shrink-0 rounded-[var(--radius-shell)] px-3 text-[12px]"
-        >
-          {summary.isCompacting ? "Compacting…" : "Compact"}
-        </Button>
+      <section className="rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3.5 py-3 shadow-[var(--color-control-shadow)]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-medium text-[color:var(--color-text-muted)]">
+              Compact
+            </p>
+            <p className="mt-1 text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
+              {getCompactStatusCopy(summary)}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              if (!summary.isCompacting && summary.canCompact) {
+                void onCompact?.();
+              }
+            }}
+            disabled={!summary.canCompact || summary.isCompacting}
+            className="h-8 shrink-0 rounded-[var(--radius-shell)] px-3 text-[12px]"
+          >
+            {summary.isCompacting ? "Compacting…" : "Compact"}
+          </Button>
+        </div>
       </section>
     </div>
   );

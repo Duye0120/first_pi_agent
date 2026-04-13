@@ -7,3 +7,4 @@ out
 .electron-vite
 .superpowers/
 .tmp-dev-*.log
+.omx

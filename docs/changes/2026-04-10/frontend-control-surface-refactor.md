@@ -1,6 +1,6 @@
 # 前端控件表面语言统一重构
 
-> 更新时间：2026-04-10 11:52:20
+> 更新时间：2026-04-13 14:32:16
 
 ## 这次改了什么
 
@@ -47,6 +47,15 @@
   - 目标是把“点设置”变成切壳层可见性，而不是重算整页内容
 - 修复一个本轮引入的 renderer 报错：`App.tsx` 的 `useMemo` 依赖数组误写了不存在的 `onRemoveAttachment`，运行时直接炸；现已改回 `removeAttachment`。
 - 修复另一个本轮引入的 renderer 报错：把 `useMemo` 放到了 `booting / bootError` 的 early return 后面，触发了 `Rendered more hooks than during the previous render`；现已把所有 hooks 挪回 early return 之前。
+- 继续降低切页重渲染：
+  - `SettingsView` 改成 `memo`
+  - `Sidebar` 改成 `memo`
+  - `AssistantThreadPanel` 外壳改成 `memo`
+  - 目的是避免切到设置页时，右侧大树和左侧清单因为父层 render 被整片重算
+- 继续补一刀 Sidebar：
+  - 进入设置模式时，不再先计算 pinned / grouped / ungrouped 线程数据
+  - 这些列表整理逻辑改成 `useMemo`
+  - `viewMode === "settings"` 时直接返回空集合，减少点设置时的同步计算
 
 ## 为什么要改
 

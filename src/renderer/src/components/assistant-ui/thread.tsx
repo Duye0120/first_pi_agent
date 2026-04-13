@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import type {
   GitBranchSummary,
+  InterruptedApprovalGroup,
+  InterruptedApprovalNotice,
   ModelEntry,
   ProviderSource,
   SelectedFile,
@@ -101,6 +103,8 @@ type ThreadProps = {
   isCancelling?: boolean;
   branchSummary?: GitBranchSummary | null;
   contextSummary?: ContextUsageSummary;
+  interruptedApprovalGroups?: InterruptedApprovalGroup[];
+  onDismissInterruptedApproval?: (runId: string) => void | Promise<void>;
   onCompactContext?: () => void | Promise<void>;
   onBranchChanged?: () => void | Promise<void>;
   disableGlobalSideEffects?: boolean;
@@ -125,6 +129,8 @@ type ThreadResolvedProps = {
   isCancelling: boolean;
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
+  interruptedApprovalGroups: InterruptedApprovalGroup[];
+  onDismissInterruptedApproval: (runId: string) => void | Promise<void>;
   onCompactContext: () => void | Promise<void>;
   onBranchChanged: () => void | Promise<void>;
   disableGlobalSideEffects: boolean;
@@ -220,6 +226,8 @@ export const Thread: FC<ThreadProps> = ({
   isCancelling = false,
   branchSummary = null,
   contextSummary = EMPTY_CONTEXT_USAGE_SUMMARY,
+  interruptedApprovalGroups = [],
+  onDismissInterruptedApproval = () => undefined,
   onCompactContext = () => undefined,
   onBranchChanged = () => undefined,
   disableGlobalSideEffects = false,
@@ -315,6 +323,8 @@ export const Thread: FC<ThreadProps> = ({
               visible={visible}
               branchSummary={branchSummary}
               contextSummary={contextSummary}
+              interruptedApprovalGroups={interruptedApprovalGroups}
+              onDismissInterruptedApproval={onDismissInterruptedApproval}
               onCompactContext={onCompactContext}
               onBranchChanged={onBranchChanged}
               disableGlobalSideEffects={disableGlobalSideEffects}
@@ -380,10 +390,13 @@ const Composer: FC<ThreadResolvedProps> = ({
   visible,
   branchSummary,
   contextSummary,
+  interruptedApprovalGroups,
+  onDismissInterruptedApproval,
   onCompactContext,
   onBranchChanged,
   disableGlobalSideEffects,
 }) => {
+  const aui = useAui();
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const [inputScrollable, setInputScrollable] = useState(false);
   const supportsVision =
@@ -421,6 +434,17 @@ const Composer: FC<ThreadResolvedProps> = ({
     [onPasteFiles],
   );
 
+  const useRecoveryPrompt = useCallback(
+    (approval: InterruptedApprovalNotice) => {
+      aui.composer().setText(approval.recoveryPrompt);
+      requestAnimationFrame(() => {
+        composerInputRef.current?.focus();
+        syncInputOverflow();
+      });
+    },
+    [aui, syncInputOverflow],
+  );
+
   useEffect(() => {
     syncInputOverflow();
   }, [syncInputOverflow]);
@@ -441,7 +465,7 @@ const Composer: FC<ThreadResolvedProps> = ({
         <ComposerAttachments />
 
         <ComposerPrimitive.Input
-          placeholder="向 Pi Agent 提问..."
+          placeholder="向 Chela 提问..."
           ref={composerInputRef}
           className={`min-h-0 w-full resize-none bg-transparent px-1 py-1 text-[15px] leading-6 text-foreground outline-none placeholder:text-[color:var(--color-text-secondary)]/85 ${
             inputScrollable ? "overflow-y-auto pr-2" : "overflow-y-hidden"
@@ -479,6 +503,13 @@ const Composer: FC<ThreadResolvedProps> = ({
           </p>
         ) : null}
       </div>
+      {interruptedApprovalGroups.length > 0 ? (
+        <InterruptedApprovalNoticeBar
+          groups={interruptedApprovalGroups}
+          onDismiss={onDismissInterruptedApproval}
+          onUseRecoveryPrompt={useRecoveryPrompt}
+        />
+      ) : null}
       <ComposerStatusBar
         branchSummary={branchSummary}
         contextSummary={contextSummary}
@@ -487,6 +518,154 @@ const Composer: FC<ThreadResolvedProps> = ({
         disableGlobalSideEffects={disableGlobalSideEffects}
       />
     </ComposerPrimitive.Root>
+  );
+};
+
+const InterruptedApprovalNoticeBar: FC<{
+  groups: InterruptedApprovalGroup[];
+  onDismiss: (runId: string) => void | Promise<void>;
+  onUseRecoveryPrompt: (approval: InterruptedApprovalNotice) => void;
+}> = ({ groups, onDismiss, onUseRecoveryPrompt }) => {
+  return (
+    <div className="flex flex-col gap-2 px-1">
+      {groups.map((group) => {
+        const latestApproval = group.approvals[0];
+        if (!latestApproval) {
+          return null;
+        }
+
+        return (
+          <div
+            key={`${group.sessionId}:${group.ownerId}:${latestApproval.runId}`}
+            className="flex items-start justify-between gap-3 rounded-[10px] bg-[color:var(--color-control-panel-bg)] px-3 py-2.5 text-[13px] text-[color:var(--color-text-secondary)] shadow-[var(--color-control-shadow)]"
+          >
+            <div className="min-w-0 space-y-2">
+              <InterruptedApprovalSummary
+                approval={latestApproval}
+                count={group.count}
+              />
+              <InterruptedApprovalDetails approval={latestApproval} />
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  onUseRecoveryPrompt(latestApproval);
+                }}
+              >
+                填入输入框
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  void onDismiss(latestApproval.runId);
+                }}
+              >
+                知道了
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const approvalKindLabels: Record<
+  InterruptedApprovalNotice["approval"]["kind"],
+  string
+> = {
+  shell: "Shell",
+  file_write: "文件写入",
+  mcp: "MCP",
+};
+
+function formatInterruptedApprovalTime(timestamp: number | null): string {
+  if (!timestamp) {
+    return "未知时间";
+  }
+
+  return new Date(timestamp).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatRunKind(runKind: InterruptedApprovalNotice["runKind"]): string {
+  if (!runKind) {
+    return "未知 run";
+  }
+
+  return runKind;
+}
+
+function formatShortId(value: string): string {
+  return value.length > 12 ? `${value.slice(0, 12)}…` : value;
+}
+
+const InterruptedApprovalSummary: FC<{
+  approval: InterruptedApprovalNotice;
+  count: number;
+}> = ({ approval, count }) => {
+  const kindLabel = approvalKindLabels[approval.approval.kind];
+
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="rounded-full bg-[color:var(--color-control-bg)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--color-text-secondary)]">
+          {kindLabel}
+        </span>
+        <p className="font-medium text-[color:var(--color-text-primary)]">
+          待确认操作在应用重启时中断
+        </p>
+      </div>
+      <p className="line-clamp-2 leading-5">
+        {approval.approval.title}：{approval.approval.description}
+      </p>
+      <p className="text-[12px] leading-5 text-[color:var(--color-text-secondary)]/85">
+        原 run 已标记为中断，当前保留决策上下文。{count > 1 ? `同组记录 ${count} 条。` : ""}
+      </p>
+    </div>
+  );
+};
+
+const InterruptedApprovalDetails: FC<{
+  approval: InterruptedApprovalNotice;
+}> = ({ approval }) => {
+  const metaItems = [
+    `run ${formatShortId(approval.runId)}`,
+    formatRunKind(approval.runKind),
+    `模型 ${approval.modelEntryId ? formatShortId(approval.modelEntryId) : "未知"}`,
+    `中断 ${formatInterruptedApprovalTime(approval.interruptedAt)}`,
+  ];
+
+  return (
+    <details className="group">
+      <summary className="cursor-pointer select-none text-[12px] leading-5 text-[color:var(--color-text-secondary)]/85 outline-none transition-colors hover:text-[color:var(--color-text-primary)]">
+        查看审批上下文
+      </summary>
+      <div className="mt-2 space-y-2 rounded-[8px] bg-[color:var(--color-control-bg)] px-2.5 py-2">
+        <p className="text-[12px] leading-5">
+          触发原因：{approval.approval.reason}
+        </p>
+        {approval.approval.detail ? (
+          <pre className="max-h-24 overflow-auto whitespace-pre-wrap rounded-[6px] bg-[color:var(--color-control-panel-bg)] px-2 py-1.5 text-[11px] leading-4 text-[color:var(--color-text-secondary)]">
+            {approval.approval.detail}
+          </pre>
+        ) : null}
+        <div className="flex flex-wrap gap-x-2 gap-y-1 text-[11px] leading-4 text-[color:var(--color-text-secondary)]/80">
+          {metaItems.map((item) => (
+            <span key={item}>{item}</span>
+          ))}
+        </div>
+      </div>
+    </details>
   );
 };
 

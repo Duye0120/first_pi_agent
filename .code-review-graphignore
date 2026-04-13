@@ -1,0 +1,12 @@
+node_modules/**
+dist/**
+out/**
+build/**
+coverage/**
+.agents/**
+.claude/**
+.superpowers/**
+.omx/**
+pnpm-lock.yaml
+package-lock.json
+yarn.lock

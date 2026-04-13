@@ -1,6 +1,6 @@
-# Pi Desktop Agent — Specs Index
+# Chela — Specs Index
 
-> 本地运行的桌面端 AI Agent 工作台，类似 OpenClaw 但提供原生桌面体验。
+> 本地运行的桌面端 AI Agent 工作台，提供原生桌面体验。
 
 ## 文档状态
 

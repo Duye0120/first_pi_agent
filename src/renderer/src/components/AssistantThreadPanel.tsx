@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AssistantRuntimeProvider,
   useLocalRuntime,
@@ -19,6 +19,7 @@ import type {
   ChatSession,
   DesktopApi,
   GitBranchSummary,
+  InterruptedApprovalGroup,
   ThinkingLevel,
 } from "@shared/contracts";
 import { deriveSessionTitle } from "@renderer/lib/session";
@@ -51,6 +52,8 @@ type AssistantThreadPanelProps = {
   onRunStateChange: (sessionId: string, isRunning: boolean) => void;
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
+  interruptedApprovalGroups: InterruptedApprovalGroup[];
+  onDismissInterruptedApproval: (runId: string) => void | Promise<void>;
   visible: boolean;
   disableGlobalSideEffects: boolean;
 };
@@ -368,6 +371,8 @@ function SessionRuntime({
   onRunStateChange,
   branchSummary,
   contextSummary,
+  interruptedApprovalGroups,
+  onDismissInterruptedApproval,
   visible,
   disableGlobalSideEffects,
 }: AssistantThreadPanelProps) {
@@ -796,6 +801,8 @@ function SessionRuntime({
         visible={visible}
         branchSummary={branchSummary}
         contextSummary={contextSummary}
+        interruptedApprovalGroups={interruptedApprovalGroups}
+        onDismissInterruptedApproval={onDismissInterruptedApproval}
         onCompactContext={async () => {
           try {
             await desktopApi.context.compact(session.id);
@@ -811,6 +818,8 @@ function SessionRuntime({
   );
 }
 
-export function AssistantThreadPanel(props: AssistantThreadPanelProps) {
+export const AssistantThreadPanel = memo(function AssistantThreadPanel(
+  props: AssistantThreadPanelProps,
+) {
   return <SessionRuntime key={props.session.id} {...props} />;
-}
+});

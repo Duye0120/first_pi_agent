@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { BotIcon } from "lucide-react";
 import type { ModelEntry, ProviderSource, SoulFilesStatus } from "@shared/contracts";
 import { buildSelectableModelOptions, findEntryLabel, loadProviderDirectory } from "@renderer/lib/provider-directory";
@@ -24,7 +24,7 @@ import { WorkspaceSection } from "./settings/workspace-section";
 export type { SettingsSection, SettingsViewProps } from "./settings/types";
 export { SETTINGS_SECTIONS } from "./settings/constants";
 
-export function SettingsView({
+function SettingsViewImpl({
   activeSection,
   settings,
   currentModelId,
@@ -198,3 +198,5 @@ export function SettingsView({
     </div>
   );
 }
+
+export const SettingsView = memo(SettingsViewImpl);
