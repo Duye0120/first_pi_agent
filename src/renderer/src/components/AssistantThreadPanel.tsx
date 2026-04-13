@@ -20,7 +20,6 @@ import type {
   DesktopApi,
   GitBranchSummary,
   InterruptedApprovalGroup,
-  SelectedFile,
   ThinkingLevel,
 } from "@shared/contracts";
 import { deriveSessionTitle } from "@renderer/lib/session";
@@ -64,23 +63,6 @@ const CONNECTING_STAGE_DELAY_MS = 220;
 const SLOW_CONNECTION_HINT_DELAY_MS = 4_000;
 const CANCEL_RESET_DELAY_MS = 320;
 
-type PendingMessageAction =
-  | {
-      messageId: string;
-      type: "retry" | "edit";
-    }
-  | null;
-
-type QueuedComposerAction = {
-  text: string;
-  attachments: SelectedFile[];
-  autoSend: boolean;
-};
-
-type PendingComposerAction = QueuedComposerAction & {
-  id: string;
-};
-
 function createStep(kind: AgentStep["kind"], id?: string): AgentStep {
   return {
     id: id ?? crypto.randomUUID(),
@@ -116,66 +98,6 @@ function safeArgsText(value: unknown) {
 
 function normalizeLineEndings(text: string) {
   return text.replace(/\r\n|\n\r|\r/g, "\n");
-}
-
-function isPersistedSelectedFile(value: unknown): value is SelectedFile {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Partial<SelectedFile>;
-  return (
-    typeof candidate.id === "string" &&
-    typeof candidate.name === "string" &&
-    typeof candidate.path === "string" &&
-    typeof candidate.size === "number" &&
-    typeof candidate.extension === "string" &&
-    typeof candidate.kind === "string"
-  );
-}
-
-function getMessageAttachments(message: ChatMessage): SelectedFile[] {
-  const attachments = message.meta?.attachments;
-  if (!Array.isArray(attachments)) {
-    return [];
-  }
-
-  return attachments.filter(isPersistedSelectedFile);
-}
-
-function buildSessionMessageSignature(messages: ChatMessage[]): string {
-  return messages
-    .map((message) => `${message.id}:${message.timestamp}:${message.status}`)
-    .join("|");
-}
-
-function slugifyBranchPart(text: string): string {
-  const asciiText = text.normalize("NFKD").replace(/[^\x00-\x7F]/g, "");
-  const collapsed = asciiText
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return collapsed.slice(0, 28);
-}
-
-function formatBranchTimestamp(date = new Date()): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const seconds = String(date.getSeconds()).padStart(2, "0");
-
-  return `${year}${month}${day}-${hours}${minutes}${seconds}`;
-}
-
-function buildEditBranchName(message: ChatMessage): string {
-  const contentPart = slugifyBranchPart(message.content);
-  const shortId = message.id.replace(/[^a-z0-9]/gi, "").slice(0, 6).toLowerCase();
-  const suffix = contentPart || shortId || "message";
-
-  return `chat-edit/${formatBranchTimestamp()}-${suffix}`;
 }
 
 function getToolResultText(result: unknown): string | null {
@@ -432,109 +354,6 @@ function buildRuntimeStatus(response: AgentResponse): MessageStatus {
   return { type: "running" };
 }
 
-function LocalRuntimeThread({
-  chatModel,
-  session,
-  attachments,
-  isPickingFiles,
-  terminalOpen,
-  onAttachFiles,
-  onPasteFiles,
-  onRemoveAttachment,
-  currentModelId,
-  thinkingLevel,
-  onModelChange,
-  onThinkingLevelChange,
-  onCancelRun,
-  runStage,
-  runStatusLabel,
-  isCancelling,
-  branchSummary,
-  contextSummary,
-  interruptedApprovalGroups,
-  onDismissInterruptedApproval,
-  onResumeInterruptedApproval,
-  onCompactContext,
-  onBranchChanged,
-  disableGlobalSideEffects,
-  visible,
-  pendingComposerAction,
-  onComposerActionApplied,
-  onRetryMessage,
-  onEditMessage,
-  pendingMessageAction,
-}: {
-  chatModel: ChatModelAdapter;
-  session: ChatSession;
-  attachments: SelectedFile[];
-  isPickingFiles: boolean;
-  terminalOpen: boolean;
-  onAttachFiles: () => void;
-  onPasteFiles: (files: File[]) => void;
-  onRemoveAttachment: (attachmentId: string) => void;
-  currentModelId: string;
-  thinkingLevel: ThinkingLevel;
-  onModelChange: (modelEntryId: string) => void;
-  onThinkingLevelChange: (level: ThinkingLevel) => void;
-  onCancelRun: () => void;
-  runStage: ChatRunStage;
-  runStatusLabel: string;
-  isCancelling: boolean;
-  branchSummary: GitBranchSummary | null;
-  contextSummary: ContextUsageSummary;
-  interruptedApprovalGroups: InterruptedApprovalGroup[];
-  onDismissInterruptedApproval: (runId: string) => void | Promise<void>;
-  onResumeInterruptedApproval: (runId: string) => Promise<string>;
-  onCompactContext: () => void | Promise<void>;
-  onBranchChanged: () => void | Promise<void>;
-  disableGlobalSideEffects: boolean;
-  visible: boolean;
-  pendingComposerAction: PendingComposerAction | null;
-  onComposerActionApplied: (actionId: string) => void;
-  onRetryMessage: (messageId: string) => Promise<void>;
-  onEditMessage: (messageId: string) => Promise<void>;
-  pendingMessageAction: PendingMessageAction;
-}) {
-  const runtime = useLocalRuntime(chatModel, {
-    initialMessages: session.messages.map(toThreadMessage),
-  });
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <Thread
-        attachments={attachments}
-        isPickingFiles={isPickingFiles}
-        terminalOpen={terminalOpen}
-        onAttachFiles={onAttachFiles}
-        onPasteFiles={onPasteFiles}
-        onRemoveAttachment={onRemoveAttachment}
-        currentModelId={currentModelId}
-        thinkingLevel={thinkingLevel}
-        onModelChange={onModelChange}
-        onThinkingLevelChange={onThinkingLevelChange}
-        onCancelRun={onCancelRun}
-        runStage={runStage}
-        runStatusLabel={runStatusLabel}
-        isCancelling={isCancelling}
-        visible={visible}
-        branchSummary={branchSummary}
-        contextSummary={contextSummary}
-        interruptedApprovalGroups={interruptedApprovalGroups}
-        onDismissInterruptedApproval={onDismissInterruptedApproval}
-        onResumeInterruptedApproval={onResumeInterruptedApproval}
-        onCompactContext={onCompactContext}
-        onBranchChanged={onBranchChanged}
-        disableGlobalSideEffects={disableGlobalSideEffects}
-        pendingComposerAction={pendingComposerAction}
-        onComposerActionApplied={onComposerActionApplied}
-        onRetryMessage={onRetryMessage}
-        onEditMessage={onEditMessage}
-        pendingMessageAction={pendingMessageAction}
-      />
-    </AssistantRuntimeProvider>
-  );
-}
-
 function SessionRuntime({
   session,
   desktopApi,
@@ -567,23 +386,16 @@ function SessionRuntime({
   const activeRunTokenRef = useRef<string | null>(null);
   const activeRunScopeRef = useRef<AgentRunScope | null>(null);
   const pendingRequestedRunIdRef = useRef<string | null>(null);
-  const pendingThreadResetRef = useRef(false);
-  const queuedComposerActionRef = useRef<QueuedComposerAction | null>(null);
   const stageTransitionTimerRef = useRef<number | null>(null);
   const slowConnectionTimerRef = useRef<number | null>(null);
   const resetRunStateTimerRef = useRef<number | null>(null);
   const [runStage, setRunStage] = useState<ChatRunStage>("idle");
   const [isSlowConnection, setIsSlowConnection] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [threadRuntimeKey, setThreadRuntimeKey] = useState(0);
-  const [pendingComposerAction, setPendingComposerAction] =
-    useState<PendingComposerAction | null>(null);
-  const [pendingMessageAction, setPendingMessageAction] =
-    useState<PendingMessageAction>(null);
-  const sessionMessageSignature = useMemo(
-    () => buildSessionMessageSignature(session.messages),
-    [session.messages],
+  const initialMessagesRef = useRef<ThreadMessageLike[]>(
+    session.messages.map(toThreadMessage),
   );
+  const initialMessages = initialMessagesRef.current;
 
   useEffect(() => {
     latestSessionRef.current = session;
@@ -600,25 +412,6 @@ function SessionRuntime({
   useEffect(() => {
     latestRunStateChangeRef.current = onRunStateChange;
   }, [onRunStateChange]);
-
-  useEffect(() => {
-    if (!pendingThreadResetRef.current) {
-      return;
-    }
-
-    const queuedAction = queuedComposerActionRef.current;
-    pendingThreadResetRef.current = false;
-    queuedComposerActionRef.current = null;
-    setThreadRuntimeKey((current) => current + 1);
-    setPendingComposerAction(
-      queuedAction
-        ? {
-            ...queuedAction,
-            id: crypto.randomUUID(),
-          }
-        : null,
-    );
-  }, [session.updatedAt, sessionMessageSignature]);
 
   const clearConnectionTimers = useCallback(() => {
     if (stageTransitionTimerRef.current !== null) {
@@ -754,131 +547,6 @@ function SessionRuntime({
     },
     [onResumeInterruptedApproval],
   );
-
-  const refreshTrimmedSession = useCallback(
-    async (attachments: SelectedFile[]) => {
-      const sessionId = latestSessionRef.current.id;
-
-      if (attachments.length > 0) {
-        const trimmedSession = await desktopApi.sessions.load(sessionId);
-        if (!trimmedSession) {
-          throw new Error("裁剪后的会话加载失败。");
-        }
-
-        await desktopApi.sessions.save({
-          ...trimmedSession,
-          attachments,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-
-      pendingThreadResetRef.current = true;
-      try {
-        await latestReloadSessionRef.current(sessionId);
-      } catch (error) {
-        pendingThreadResetRef.current = false;
-        queuedComposerActionRef.current = null;
-        throw error;
-      }
-    },
-    [desktopApi.sessions],
-  );
-
-  const handleRetryMessage = useCallback(
-    async (messageId: string) => {
-      if (pendingMessageAction) {
-        return;
-      }
-
-      const currentSession = latestSessionRef.current;
-      const assistantIndex = currentSession.messages.findIndex(
-        (message) => message.id === messageId && message.role === "assistant",
-      );
-      if (assistantIndex < 0) {
-        return;
-      }
-
-      const previousUserMessage = [...currentSession.messages.slice(0, assistantIndex)]
-        .reverse()
-        .find((message) => message.role === "user");
-      if (!previousUserMessage) {
-        return;
-      }
-
-      const attachments = getMessageAttachments(previousUserMessage);
-      setPendingMessageAction({ messageId, type: "retry" });
-
-      try {
-        await desktopApi.chat.trimSessionMessages({
-          sessionId: currentSession.id,
-          messageId: previousUserMessage.id,
-        });
-        queuedComposerActionRef.current = {
-          text: previousUserMessage.content,
-          attachments,
-          autoSend: true,
-        };
-        await refreshTrimmedSession(attachments);
-      } finally {
-        setPendingMessageAction((current) =>
-          current?.messageId === messageId && current.type === "retry"
-            ? null
-            : current,
-        );
-      }
-    },
-    [desktopApi.chat, pendingMessageAction, refreshTrimmedSession],
-  );
-
-  const handleEditMessage = useCallback(
-    async (messageId: string) => {
-      if (pendingMessageAction) {
-        return;
-      }
-
-      const currentSession = latestSessionRef.current;
-      const message = currentSession.messages.find(
-        (entry) => entry.id === messageId && entry.role === "user",
-      );
-      if (!message) {
-        return;
-      }
-
-      setPendingMessageAction({ messageId, type: "edit" });
-
-      try {
-        if (branchSummary?.branchName) {
-          await desktopApi.git.createAndSwitchBranch(buildEditBranchName(message));
-          await onBranchChanged();
-        }
-
-        const attachments = getMessageAttachments(message);
-        await desktopApi.chat.trimSessionMessages({
-          sessionId: currentSession.id,
-          messageId,
-        });
-        queuedComposerActionRef.current = {
-          text: message.content,
-          attachments,
-          autoSend: false,
-        };
-        await refreshTrimmedSession(attachments);
-      } finally {
-        setPendingMessageAction((current) =>
-          current?.messageId === messageId && current.type === "edit"
-            ? null
-            : current,
-        );
-      }
-    },
-    [branchSummary?.branchName, desktopApi.chat, desktopApi.git, onBranchChanged, pendingMessageAction, refreshTrimmedSession],
-  );
-
-  const handleComposerActionApplied = useCallback((actionId: string) => {
-    setPendingComposerAction((current) =>
-      current?.id === actionId ? null : current,
-    );
-  }, []);
 
   const chatModel = useMemo<ChatModelAdapter>(() => ({
     run: async function* ({ messages, abortSignal }) {
@@ -1122,47 +790,45 @@ function SessionRuntime({
     finishRunFeedback,
   ]);
 
+  const runtime = useLocalRuntime(chatModel, {
+    initialMessages,
+  });
+
   return (
-    <LocalRuntimeThread
-      key={`${session.id}:${threadRuntimeKey}`}
-      chatModel={chatModel}
-      session={session}
-      attachments={session.attachments}
-      isPickingFiles={isPickingFiles}
-      terminalOpen={terminalOpen}
-      onAttachFiles={onAttachFiles}
-      onPasteFiles={onPasteFiles}
-      onRemoveAttachment={onRemoveAttachment}
-      currentModelId={currentModelId}
-      thinkingLevel={thinkingLevel}
-      onModelChange={onModelChange}
-      onThinkingLevelChange={onThinkingLevelChange}
-      onCancelRun={handleCancelRun}
-      runStage={runStage}
-      runStatusLabel={runStatusLabel}
-      isCancelling={isCancelling}
-      visible={visible}
-      branchSummary={branchSummary}
-      contextSummary={contextSummary}
-      interruptedApprovalGroups={interruptedApprovalGroups}
-      onDismissInterruptedApproval={onDismissInterruptedApproval}
-      onResumeInterruptedApproval={handleResumeInterruptedApproval}
-      onCompactContext={async () => {
-        try {
-          await desktopApi.context.compact(session.id);
-          await latestReloadSessionRef.current(session.id);
-        } catch {
-          // Compact 失败时保留当前线程 UI，不额外打断聊天流。
-        }
-      }}
-      onBranchChanged={onBranchChanged}
-      disableGlobalSideEffects={disableGlobalSideEffects}
-      pendingComposerAction={pendingComposerAction}
-      onComposerActionApplied={handleComposerActionApplied}
-      onRetryMessage={handleRetryMessage}
-      onEditMessage={handleEditMessage}
-      pendingMessageAction={pendingMessageAction}
-    />
+    <AssistantRuntimeProvider runtime={runtime}>
+        <Thread
+        attachments={session.attachments}
+        isPickingFiles={isPickingFiles}
+        terminalOpen={terminalOpen}
+        onAttachFiles={onAttachFiles}
+        onPasteFiles={onPasteFiles}
+        onRemoveAttachment={onRemoveAttachment}
+        currentModelId={currentModelId}
+        thinkingLevel={thinkingLevel}
+        onModelChange={onModelChange}
+        onThinkingLevelChange={onThinkingLevelChange}
+        onCancelRun={handleCancelRun}
+        runStage={runStage}
+        runStatusLabel={runStatusLabel}
+        isCancelling={isCancelling}
+        visible={visible}
+        branchSummary={branchSummary}
+        contextSummary={contextSummary}
+        interruptedApprovalGroups={interruptedApprovalGroups}
+        onDismissInterruptedApproval={onDismissInterruptedApproval}
+        onResumeInterruptedApproval={handleResumeInterruptedApproval}
+        onCompactContext={async () => {
+          try {
+            await desktopApi.context.compact(session.id);
+            await latestReloadSessionRef.current(session.id);
+          } catch {
+            // Compact 失败时保留当前线程 UI，不额外打断聊天流。
+          }
+        }}
+        onBranchChanged={onBranchChanged}
+        disableGlobalSideEffects={disableGlobalSideEffects}
+      />
+    </AssistantRuntimeProvider>
   );
 }
 

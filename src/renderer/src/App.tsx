@@ -24,8 +24,6 @@ import {
   type SettingsSection,
 } from "@renderer/components/assistant-ui/settings-view";
 import { Sidebar } from "@renderer/components/assistant-ui/sidebar";
-import { IconSidebar } from "@renderer/components/layout/IconSidebar";
-import { ChatView } from "@renderer/components/chat/ChatView";
 import { TerminalDrawer } from "@renderer/components/assistant-ui/terminal-drawer";
 import { TitleBar } from "@renderer/components/assistant-ui/title-bar";
 import {
@@ -235,12 +233,6 @@ export default function App() {
 
     return localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "1";
   });
-  const [iconSidebarCollapsed, setIconSidebarCollapsed] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    return localStorage.getItem("chela.icon-sidebar-collapsed") === "1";
-  });
   const [diffPanelSize, setDiffPanelSize] = useState(() =>
     readStoredPanelSize(
       DIFF_PANEL_SIZE_STORAGE_KEY,
@@ -305,13 +297,6 @@ export default function App() {
       sidebarCollapsed ? "1" : "0",
     );
   }, [sidebarCollapsed]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "chela.icon-sidebar-collapsed",
-      iconSidebarCollapsed ? "1" : "0",
-    );
-  }, [iconSidebarCollapsed]);
 
   useEffect(() => {
     const panel = sidebarPanelRef.current;
@@ -701,7 +686,6 @@ export default function App() {
     closeSettingsView: (() => {}) as () => void,
     openSettingsView: (() => {}) as (section?: SettingsSection) => void,
     toggleSidebarCollapsed: (() => {}) as () => void,
-    toggleIconSidebarCollapsed: (() => {}) as () => void,
   });
 
   // Boot 只执行一次
@@ -1213,10 +1197,6 @@ export default function App() {
     setSidebarCollapsed((current) => !current);
   }, []);
 
-  const toggleIconSidebarCollapsed = useCallback(() => {
-    setIconSidebarCollapsed((current) => !current);
-  }, []);
-
   const handleDiffOnlyLayoutChanged = useCallback((layout: Record<string, number>) => {
     const nextDiffPanelSize = layout["thread-diff"];
     if (typeof nextDiffPanelSize === "number" && Number.isFinite(nextDiffPanelSize)) {
@@ -1246,7 +1226,6 @@ export default function App() {
   kbStateRef.current = {
     mainView, terminalOpen, createNewSession,
     closeSettingsView, openSettingsView, toggleSidebarCollapsed,
-    toggleIconSidebarCollapsed,
   };
 
   const openArchivedSessionFromSettings = useCallback(
@@ -1570,7 +1549,7 @@ export default function App() {
   }
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden rounded-[var(--radius-shell)] bg-[color:var(--chela-bg-primary)] text-foreground">
+    <main className="flex h-screen flex-col overflow-hidden rounded-[var(--radius-shell)] bg-[color:var(--chela-bg-primary)] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
       <TitleBar
         isMaximized={frameState.isMaximized}
         onMinimize={() => desktopApi?.window.minimize()}
@@ -1579,90 +1558,113 @@ export default function App() {
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebarCollapsed}
       />
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Icon Navigation Sidebar */}
-        <IconSidebar
-          activeView={mainView === "settings" ? "settings" : "chat"}
-          onViewChange={(view) => {
-            if (view === "settings") openSettingsView("general");
-            else closeSettingsView();
-          }}
-          collapsed={iconSidebarCollapsed}
-          onToggleCollapsed={toggleIconSidebarCollapsed}
-          connected={summaries.length > 0 || activeSessionId !== null}
-          version="0.1.0"
-          terminalOpen={terminalOpen}
-          onToggleTerminal={() => setTerminalOpen((prev) => !prev)}
-          diffPanelOpen={diffPanelOpen}
-          onToggleDiffPanel={toggleDiffPanel}
-        />
-
-        {/* Main content area */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {mainView === "settings" ? (
-            <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[color:var(--chela-bg-surface)]">
-              {settingsContent}
-            </div>
-          ) : (
-            <ChatView
-              summaries={summaries}
-              activeSessionId={activeSessionId}
-              activeSessionTitle={activeSession?.title || "新会话"}
-              activeSessionSource={undefined /* Chela is desktop-only, no source field */}
-              runningSessionIds={runningSessionIds}
-              groups={groups}
-              onSelectSession={selectSession}
-              onNewSession={createNewSession}
-              onCreateSessionInGroup={createSessionInGroup}
-              onArchiveSession={archiveSession}
-              onRenameSession={renameSession}
-              onSetSessionGroup={setSessionGroup}
-              onCopySessionId={() => {
-                if (activeSessionId) {
-                  void navigator.clipboard.writeText(activeSessionId);
-                }
-              }}
+      <div
+        className="relative min-h-0 flex-1"
+        data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
+        {...(sidebarAnimating ? { "data-sidebar-animating": "" } : {})}
+      >
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="min-h-0 h-full overflow-hidden bg-transparent"
+          onLayoutChanged={handleShellLayoutChanged}
+          resizeTargetMinimumSize={{ fine: 6, coarse: 24 }}
+        >
+          <ResizablePanel
+            id="shell-sidebar"
+            panelRef={sidebarPanelRef}
+            collapsible
+            collapsedSize="0%"
+            defaultSize={toSidebarPercentageSize(sidebarSize)}
+            minSize={`${MIN_SIDEBAR_SIZE}%`}
+            maxSize={`${MAX_SIDEBAR_SIZE}%`}
+          >
+            <aside className="chela-sidebar-content relative h-full min-h-0 overflow-hidden bg-transparent" data-collapsed={sidebarCollapsed ? "true" : undefined}>
+              <Sidebar
+                summaries={summaries}
+                activeSessionId={activeSessionId}
+                runningSessionIds={runningSessionIds}
+                onSelectSession={selectSession}
+                onNewSession={createNewSession}
+                onOpenSettings={() => openSettingsView("general")}
+                onArchiveSession={archiveSession}
+                onUnarchiveSession={unarchiveSession}
+                onDeleteSession={deleteSessionPermanently}
+                onRenameSession={renameSession}
+                onToggleSessionPinned={setSessionPinned}
+                onCreateSessionInGroup={createSessionInGroup}
+                archivedSummaries={archivedSummaries}
+                groups={groups}
+                onCreateGroup={createGroup}
+                onRenameGroup={renameGroup}
+                onDeleteGroup={deleteGroup}
+                onSetSessionGroup={setSessionGroup}
+                viewMode={mainView === "settings" ? "settings" : "threads"}
+                activeSettingsSection={settingsSection}
+                onSelectSettingsSection={openSettingsView}
+                onExitSettings={closeSettingsView}
+              />
+            </aside>
+          </ResizablePanel>
+          <ResizableHandle className="-mx-px w-px" />
+        <ResizablePanel id="shell-main">
+            <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
+          <div className="chela-main-content-surface flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)]">
+            <div
+              className={`flex items-center justify-end gap-2 px-5 transition-[min-height,padding,opacity] duration-200 ease-out ${
+                mainView === "thread"
+                  ? "min-h-[52px] pb-3 pt-4 opacity-100"
+                  : "pointer-events-none min-h-0 overflow-hidden py-0 opacity-0"
+              }`}
+              aria-hidden={mainView !== "thread"}
             >
-              <div className="flex h-full min-h-0 flex-col">
-                {/* Toolbar */}
-                <div className="flex items-center justify-end gap-2 px-5 pt-3 pb-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setTerminalOpen((prev) => !prev)}
-                    className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
-                    aria-label={terminalOpen ? "收起终端" : "展开终端"}
-                  >
-                    <CommandLineIcon className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={toggleDiffPanel}
-                    className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
-                    aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
-                  >
-                    <RectangleGroupIcon className="h-4 w-4" />
-                  </Button>
-                </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setTerminalOpen((prev) => !prev)}
+                className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
+                aria-label={terminalOpen ? "收起终端" : "展开终端"}
+              >
+                <CommandLineIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={toggleDiffPanel}
+                className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
+                aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
+              >
+                <RectangleGroupIcon className="h-4 w-4" />
+              </Button>
+            </div>
 
-                {/* Thread panels with diff */}
-                <div className="relative min-h-0 flex-1 bg-[color:var(--chela-bg-surface)]">
-                  {threadPanels}
-                </div>
-
-                {/* Terminal drawer */}
-                <TerminalDrawer
-                  open={terminalOpen}
-                  onToggle={() => setTerminalOpen((prev) => !prev)}
-                  settings={settings}
-                />
+            <div className="relative min-h-0 flex-1 bg-[color:var(--chela-bg-surface)]">
+              <div
+                className={mainView === "thread" ? "h-full min-h-0" : "hidden"}
+                aria-hidden={mainView !== "thread"}
+              >
+                {threadPanels}
               </div>
-            </ChatView>
-          )}
-        </div>
+              <div
+                className={mainView === "settings" ? "h-full min-h-0" : "hidden"}
+                aria-hidden={mainView !== "settings"}
+              >
+                {settingsContent}
+              </div>
+            </div>
+
+            <div className={mainView === "thread" ? "" : "hidden"}>
+              <TerminalDrawer
+                open={terminalOpen}
+                onToggle={() => setTerminalOpen((prev) => !prev)}
+                settings={settings}
+              />
+            </div>
+          </div>
+        </section>
+        </ResizablePanel>
+      </ResizablePanelGroup>
       </div>
     </main>
   );

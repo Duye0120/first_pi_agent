@@ -107,7 +107,7 @@ function getStatusMeta(status?: ToolCallMessagePartStatus) {
   if (status.type === "running") {
     return {
       label: "进行中",
-      tone: "text-[color:var(--chela-accent)] bg-[color:var(--chela-accent-subtle)]",
+      tone: "text-[var(--color-accent)] bg-[var(--color-accent-subtle)]",
     };
   }
 
