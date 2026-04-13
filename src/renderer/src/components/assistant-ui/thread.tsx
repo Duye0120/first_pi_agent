@@ -27,6 +27,8 @@ import {
   CheckIcon,
   CopyIcon,
   LoaderCircleIcon,
+  PencilIcon,
+  RotateCcwIcon,
   SquareIcon,
 } from "lucide-react";
 import type {
@@ -1127,6 +1129,11 @@ const AssistantActionBar: FC = () => {
       autohide="not-last"
       className="-ml-1 flex gap-1 text-muted-foreground"
     >
+      <ActionBarPrimitive.Reload asChild>
+        <TooltipIconButton tooltip="重新生成">
+          <RotateCcwIcon className="size-4" />
+        </TooltipIconButton>
+      </ActionBarPrimitive.Reload>
       <ActionBarPrimitive.Copy asChild>
         <TooltipIconButton tooltip="复制">
           <AuiIf condition={(s) => s.message.isCopied}>
@@ -1151,6 +1158,19 @@ const UserMessage: FC = () => {
       <div className="relative col-start-2 min-w-0">
         <div className="wrap-break-word peer rounded-[var(--radius-shell)] bg-slate-900 px-4 py-3 text-white shadow-sm empty:hidden">
           <MessagePrimitive.Parts />
+        </div>
+        <div className="mt-1 flex min-h-6 justify-end">
+          <ActionBarPrimitive.Root
+            hideWhenRunning
+            autohide="not-last"
+            className="flex gap-1 text-muted-foreground"
+          >
+            <ActionBarPrimitive.Edit asChild>
+              <TooltipIconButton tooltip="编辑">
+                <PencilIcon className="size-4" />
+              </TooltipIconButton>
+            </ActionBarPrimitive.Edit>
+          </ActionBarPrimitive.Root>
         </div>
       </div>
     </MessagePrimitive.Root>
