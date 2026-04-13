@@ -136,6 +136,64 @@ function materializeSession(meta: PersistedSessionMeta): ChatSession {
   };
 }
 
+function resolveLastRunFields(
+  events: SessionTranscriptEvent[],
+): Pick<PersistedSessionMeta, "lastModelEntryId" | "lastRunId" | "lastRunState"> {
+  let lastModelEntryId: string | null = null;
+  let lastRunId: string | null = null;
+  let lastRunState: PersistedSessionMeta["lastRunState"] = undefined;
+
+  for (const event of events) {
+    switch (event.type) {
+      case "run_started":
+        lastModelEntryId = event.modelEntryId;
+        lastRunId = event.runId;
+        lastRunState = "running";
+        break;
+      case "run_state_changed":
+        lastRunId = event.runId;
+        lastRunState =
+          event.state === "awaiting_confirmation" ? "awaiting_confirmation" : "running";
+        break;
+      case "run_finished":
+        lastRunId = event.runId;
+        lastRunState =
+          event.finalState === "completed"
+            ? "completed"
+            : event.finalState === "aborted"
+              ? "cancelled"
+              : "error";
+        break;
+      default:
+        break;
+    }
+  }
+
+  return {
+    lastModelEntryId,
+    lastRunId,
+    lastRunState,
+  };
+}
+
+function createTrimmedSnapshot(
+  sessionId: string,
+  currentSnapshot: SessionMemorySnapshot,
+  modelEntryId: string | null,
+  updatedAt: string,
+): SessionMemorySnapshot {
+  return {
+    ...createEmptySnapshot(sessionId),
+    revision: currentSnapshot.revision + 1,
+    updatedAt,
+    workspace: {
+      branchName: currentSnapshot.workspace.branchName,
+      modelEntryId,
+      thinkingLevel: currentSnapshot.workspace.thinkingLevel,
+    },
+  };
+}
+
 function migrateLegacyDesktopShellState(): void {
   const legacyPath = getLegacyStorePath();
   if (!existsSync(legacyPath)) {
@@ -342,6 +400,77 @@ export function deletePersistedSession(sessionId: string): void {
     rmSync(sessionDir, { recursive: true, force: true });
   }
   removeFromIndex(sessionId);
+}
+
+export function trimPersistedSessionMessages(
+  sessionId: string,
+  messageId: string,
+): ChatSession {
+  ensureSessionStorageReady();
+
+  const meta = readMeta(sessionId);
+  if (!meta) {
+    throw new Error(`会话不存在：${sessionId}`);
+  }
+
+  const transcript = loadTranscript(sessionId);
+  const targetEvent = transcript.find(
+    (event) =>
+      (event.type === "user_message" || event.type === "assistant_message") &&
+      event.message.id === messageId,
+  );
+
+  if (!targetEvent) {
+    throw new Error(`未找到要裁剪的消息：${messageId}`);
+  }
+
+  const removedRunIds = new Set<string>();
+  if (targetEvent.type === "assistant_message") {
+    removedRunIds.add(targetEvent.runId);
+  }
+
+  const nextEvents = transcript.filter((event) => {
+    if (event.seq >= targetEvent.seq) {
+      return false;
+    }
+
+    return !("runId" in event && removedRunIds.has(event.runId));
+  });
+
+  const nextTranscript = nextEvents
+    .map((event) => JSON.stringify(event))
+    .join(nextEvents.length > 0 ? "\n" : "");
+  atomicWrite(
+    getTranscriptPath(sessionId),
+    nextTranscript ? `${nextTranscript}\n` : "",
+  );
+
+  const updatedAt = new Date().toISOString();
+  const currentSnapshot = readSnapshot(sessionId);
+  const { lastModelEntryId, lastRunId, lastRunState } =
+    resolveLastRunFields(nextEvents);
+
+  meta.attachments = [];
+  meta.draft = "";
+  meta.transcriptSeq = nextEvents.at(-1)?.seq ?? 0;
+  meta.lastModelEntryId = lastModelEntryId;
+  meta.lastRunId = lastRunId;
+  meta.lastRunState = lastRunState;
+  meta.snapshotRevision = currentSnapshot.revision + 1;
+  meta.updatedAt = updatedAt;
+  writeMeta(meta);
+  updateIndexWithMeta(meta);
+
+  writeSnapshot(
+    createTrimmedSnapshot(
+      sessionId,
+      currentSnapshot,
+      lastModelEntryId,
+      updatedAt,
+    ),
+  );
+
+  return materializeSession(meta);
 }
 
 export function archivePersistedSession(sessionId: string): void {

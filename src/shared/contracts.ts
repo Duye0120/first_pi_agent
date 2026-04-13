@@ -443,6 +443,11 @@ export type SendMessageInput = AgentRunScope & {
   attachments: SelectedFile[];
 };
 
+export type TrimSessionMessagesInput = {
+  sessionId: string;
+  messageId: string;
+};
+
 export type WindowUiState = {
   diffPanelOpen: boolean;
 };
@@ -556,6 +561,7 @@ export type DesktopApi = {
   chat: {
     /** Phase 0: returns mock reply. Phase 1+: returns void, response comes via agent.onEvent */
     send: (input: SendMessageInput) => Promise<AssistantMessage | void>;
+    trimSessionMessages: (input: TrimSessionMessagesInput) => Promise<void>;
   };
   context: {
     getSummary: (sessionId: string) => Promise<ContextSummary>;

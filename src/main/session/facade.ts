@@ -10,6 +10,7 @@ import {
   saveSessionProjection,
   setPersistedSessionGroup,
   setPersistedSessionPinned,
+  trimPersistedSessionMessages,
   unarchivePersistedSession,
 } from "./service.js";
 
@@ -31,6 +32,10 @@ export function createSession(): ChatSession {
 
 export function deleteSession(sessionId: string): void {
   deletePersistedSession(sessionId);
+}
+
+export function trimSessionMessages(sessionId: string, messageId: string): ChatSession {
+  return trimPersistedSessionMessages(sessionId, messageId);
 }
 
 export function listArchivedSessions(): ChatSessionSummary[] {

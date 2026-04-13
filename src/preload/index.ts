@@ -8,6 +8,7 @@ import type {
   SessionGroup,
   WindowFrameState,
   SendMessageInput,
+  TrimSessionMessagesInput,
 } from "../shared/contracts.js";
 import type { AgentEvent, ConfirmationResponse } from "../shared/agent-events.js";
 import { IPC_CHANNELS } from "../shared/ipc.js";
@@ -40,6 +41,8 @@ const desktopApi: DesktopApi = {
   },
   chat: {
     send: (input: SendMessageInput) => ipcRenderer.invoke(IPC_CHANNELS.chatSend, input),
+    trimSessionMessages: (input: TrimSessionMessagesInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.chatTrimSessionMessages, input),
   },
   context: {
     getSummary: (sessionId: string) =>

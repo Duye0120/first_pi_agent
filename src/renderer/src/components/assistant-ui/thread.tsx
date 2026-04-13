@@ -8,6 +8,7 @@ import {
   useState,
   type ClipboardEvent,
   type FC,
+  type RefObject,
 } from "react";
 import {
   ActionBarPrimitive,
@@ -25,7 +26,6 @@ import {
   BotIcon,
   BrainCircuitIcon,
   CheckIcon,
-  CopyIcon,
   LoaderCircleIcon,
   SquareIcon,
 } from "lucide-react";
@@ -111,7 +111,26 @@ type ThreadProps = {
   onCompactContext?: () => void | Promise<void>;
   onBranchChanged?: () => void | Promise<void>;
   disableGlobalSideEffects?: boolean;
+  pendingComposerAction?: PendingComposerAction | null;
+  onComposerActionApplied?: (actionId: string) => void;
+  onRetryMessage?: (messageId: string) => Promise<void>;
+  onEditMessage?: (messageId: string) => Promise<void>;
+  pendingMessageAction?: PendingMessageAction;
 };
+
+type PendingComposerAction = {
+  id: string;
+  text: string;
+  attachments: SelectedFile[];
+  autoSend: boolean;
+};
+
+type PendingMessageAction =
+  | {
+      messageId: string;
+      type: "retry" | "edit";
+    }
+  | null;
 
 type ThreadResolvedProps = {
   attachments: SelectedFile[];
@@ -254,7 +273,14 @@ export const Thread: FC<ThreadProps> = ({
   onCompactContext = () => undefined,
   onBranchChanged = () => undefined,
   disableGlobalSideEffects = false,
+  pendingComposerAction = null,
+  onComposerActionApplied = () => undefined,
+  onRetryMessage = async () => undefined,
+  onEditMessage = async () => undefined,
+  pendingMessageAction = null,
 }) => {
+  const aui = useAui();
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const [sources, setSources] = useState<ProviderSource[]>([]);
   const [entries, setEntries] = useState<ModelEntry[]>([]);
 
@@ -290,6 +316,64 @@ export const Thread: FC<ThreadProps> = ({
     [currentModelId, entries],
   );
 
+  useEffect(() => {
+    if (!pendingComposerAction) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      await aui.composer().clearAttachments();
+
+      for (const attachment of pendingComposerAction.attachments) {
+        if (cancelled) {
+          return;
+        }
+
+        await aui
+          .composer()
+          .addAttachment(
+            selectedFileToCreateAttachment(
+              toPersistedMessageAttachment(attachment),
+            ),
+          );
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      aui.composer().setText(pendingComposerAction.text);
+
+      requestAnimationFrame(() => {
+        if (!cancelled) {
+          composerInputRef.current?.focus();
+        }
+      });
+
+      if (pendingComposerAction.autoSend) {
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        });
+        if (cancelled) {
+          return;
+        }
+        await aui.composer().send();
+      }
+    })()
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) {
+          onComposerActionApplied(pendingComposerAction.id);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [aui, onComposerActionApplied, pendingComposerAction]);
+
   return (
     <ThreadRunStatusContext.Provider
       value={{ runStage, runStatusLabel, isCancelling }}
@@ -315,7 +399,13 @@ export const Thread: FC<ThreadProps> = ({
             </AuiIf>
 
             <ThreadPrimitive.Messages>
-              {() => <ThreadMessage />}
+              {() => (
+                <ThreadMessage
+                  onRetryMessage={onRetryMessage}
+                  onEditMessage={onEditMessage}
+                  pendingMessageAction={pendingMessageAction}
+                />
+              )}
             </ThreadPrimitive.Messages>
           </ThreadPrimitive.Viewport>
 
@@ -352,6 +442,8 @@ export const Thread: FC<ThreadProps> = ({
               onCompactContext={onCompactContext}
               onBranchChanged={onBranchChanged}
               disableGlobalSideEffects={disableGlobalSideEffects}
+              composerInputRef={composerInputRef}
+              suspendAttachmentSync={pendingComposerAction !== null}
             />
           </div>
         </div>
@@ -360,9 +452,23 @@ export const Thread: FC<ThreadProps> = ({
   );
 };
 
-const ThreadMessage: FC = () => {
+const ThreadMessage: FC<{
+  onRetryMessage: (messageId: string) => Promise<void>;
+  onEditMessage: (messageId: string) => Promise<void>;
+  pendingMessageAction: PendingMessageAction;
+}> = ({ onRetryMessage, onEditMessage, pendingMessageAction }) => {
   const role = useAuiState((s) => s.message.role);
-  return role === "user" ? <UserMessage /> : <AssistantMessage />;
+  return role === "user" ? (
+    <UserMessage
+      onEditMessage={onEditMessage}
+      pendingMessageAction={pendingMessageAction}
+    />
+  ) : (
+    <AssistantMessage
+      onRetryMessage={onRetryMessage}
+      pendingMessageAction={pendingMessageAction}
+    />
+  );
 };
 
 const ThreadScrollToBottom: FC = () => {
@@ -396,7 +502,12 @@ const ThreadWelcome: FC = () => {
   );
 };
 
-const Composer: FC<ThreadResolvedProps> = ({
+const Composer: FC<
+  ThreadResolvedProps & {
+    composerInputRef: RefObject<HTMLTextAreaElement | null>;
+    suspendAttachmentSync: boolean;
+  }
+> = ({
   attachments,
   isPickingFiles,
   modelOptions,
@@ -420,9 +531,10 @@ const Composer: FC<ThreadResolvedProps> = ({
   onCompactContext,
   onBranchChanged,
   disableGlobalSideEffects,
+  composerInputRef,
+  suspendAttachmentSync,
 }) => {
   const aui = useAui();
-  const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const [inputScrollable, setInputScrollable] = useState(false);
   const supportsVision =
     currentModelEntry?.capabilities.vision ??
@@ -495,6 +607,7 @@ const Composer: FC<ThreadResolvedProps> = ({
       <ComposerAttachmentSync
         attachments={attachments}
         onRemoveAttachment={onRemoveAttachment}
+        suspendExternalSync={suspendAttachmentSync}
       />
       <div className="flex w-full flex-col gap-2 rounded-[12px] bg-[color:var(--color-composer-surface)] p-(--composer-padding) shadow-[0_12px_32px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] transition-shadow focus-within:ring-2 focus-within:ring-ring/12">
         <ComposerAttachments />
@@ -1093,7 +1206,38 @@ const MessageError: FC = () => {
   );
 };
 
-const AssistantMessage: FC = () => {
+const ActionLabelButton: FC<{
+  label: string;
+  activeLabel?: string;
+  isActive?: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
+}> = ({ label, activeLabel, isActive = false, onClick, disabled = false }) => {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={onClick}
+      disabled={disabled}
+      className="h-7 rounded-full px-2.5 text-[12px] font-medium text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-control-bg-hover)] hover:text-foreground"
+    >
+      {isActive ? (
+        <>
+          <CheckIcon className="size-3.5" />
+          <span>{activeLabel ?? label}</span>
+        </>
+      ) : (
+        <span>{label}</span>
+      )}
+    </Button>
+  );
+};
+
+const AssistantMessage: FC<{
+  onRetryMessage: (messageId: string) => Promise<void>;
+  pendingMessageAction: PendingMessageAction;
+}> = ({ onRetryMessage, pendingMessageAction }) => {
   return (
     <MessagePrimitive.Root
       className="fade-in slide-in-from-bottom-1 relative mx-auto w-full max-w-(--thread-max-width) animate-in py-4 duration-150"
@@ -1114,34 +1258,57 @@ const AssistantMessage: FC = () => {
       </div>
 
       <div className="mt-2 ml-3 flex min-h-6 items-center">
-        <AssistantActionBar />
+        <AssistantActionBar
+          onRetryMessage={onRetryMessage}
+          pendingMessageAction={pendingMessageAction}
+        />
       </div>
     </MessagePrimitive.Root>
   );
 };
 
-const AssistantActionBar: FC = () => {
+const AssistantActionBar: FC<{
+  onRetryMessage: (messageId: string) => Promise<void>;
+  pendingMessageAction: PendingMessageAction;
+}> = ({ onRetryMessage, pendingMessageAction }) => {
+  const messageId = useAuiState((s) => s.message.id);
+  const isCopied = useAuiState((s) => s.message.isCopied);
+  const isRetryPending =
+    pendingMessageAction?.type === "retry" &&
+    pendingMessageAction.messageId === messageId;
+
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
       autohide="not-last"
       className="-ml-1 flex gap-1 text-muted-foreground"
     >
+      <ActionLabelButton
+        label="重试"
+        onClick={() => {
+          if (messageId) {
+            void onRetryMessage(messageId).catch((error) => {
+              console.error("retry message failed", error);
+            });
+          }
+        }}
+        disabled={!messageId || isRetryPending}
+      />
       <ActionBarPrimitive.Copy asChild>
-        <TooltipIconButton tooltip="复制">
-          <AuiIf condition={(s) => s.message.isCopied}>
-            <CheckIcon />
-          </AuiIf>
-          <AuiIf condition={(s) => !s.message.isCopied}>
-            <CopyIcon />
-          </AuiIf>
-        </TooltipIconButton>
+        <ActionLabelButton
+          label="复制"
+          activeLabel="已复制"
+          isActive={isCopied}
+        />
       </ActionBarPrimitive.Copy>
     </ActionBarPrimitive.Root>
   );
 };
 
-const UserMessage: FC = () => {
+const UserMessage: FC<{
+  onEditMessage: (messageId: string) => Promise<void>;
+  pendingMessageAction: PendingMessageAction;
+}> = ({ onEditMessage, pendingMessageAction }) => {
   return (
     <MessagePrimitive.Root
       className="fade-in slide-in-from-bottom-1 mx-auto grid w-full max-w-(--thread-max-width) animate-in auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 py-3 duration-150 [&:where(>*)]:col-start-2"
@@ -1149,18 +1316,63 @@ const UserMessage: FC = () => {
     >
       <UserMessageAttachments />
       <div className="relative col-start-2 min-w-0">
-        <div className="wrap-break-word peer rounded-[var(--radius-shell)] bg-slate-900 px-4 py-3 text-white shadow-sm empty:hidden">
+        <div className="wrap-break-word peer rounded-[var(--radius-shell)] bg-[color:var(--chela-message-user-bg)] px-4 py-3 text-[color:var(--chela-message-user-text)] shadow-sm empty:hidden">
           <MessagePrimitive.Parts />
+        </div>
+        <div className="mt-1 flex min-h-6 justify-end">
+          <UserActionBar
+            onEditMessage={onEditMessage}
+            pendingMessageAction={pendingMessageAction}
+          />
         </div>
       </div>
     </MessagePrimitive.Root>
   );
 };
 
+const UserActionBar: FC<{
+  onEditMessage: (messageId: string) => Promise<void>;
+  pendingMessageAction: PendingMessageAction;
+}> = ({ onEditMessage, pendingMessageAction }) => {
+  const messageId = useAuiState((s) => s.message.id);
+  const isCopied = useAuiState((s) => s.message.isCopied);
+  const isEditPending =
+    pendingMessageAction?.type === "edit" &&
+    pendingMessageAction.messageId === messageId;
+
+  return (
+    <ActionBarPrimitive.Root
+      hideWhenRunning
+      autohide="not-last"
+      className="flex justify-end gap-1 text-muted-foreground"
+    >
+      <ActionLabelButton
+        label="编辑"
+        onClick={() => {
+          if (messageId) {
+            void onEditMessage(messageId).catch((error) => {
+              console.error("edit message failed", error);
+            });
+          }
+        }}
+        disabled={!messageId || isEditPending}
+      />
+      <ActionBarPrimitive.Copy asChild>
+        <ActionLabelButton
+          label="复制"
+          activeLabel="已复制"
+          isActive={isCopied}
+        />
+      </ActionBarPrimitive.Copy>
+    </ActionBarPrimitive.Root>
+  );
+};
+
 const ComposerAttachmentSync: FC<{
   attachments: SelectedFile[];
   onRemoveAttachment: (attachmentId: string) => void;
-}> = ({ attachments, onRemoveAttachment }) => {
+  suspendExternalSync: boolean;
+}> = ({ attachments, onRemoveAttachment, suspendExternalSync }) => {
   const aui = useAui();
   const runtimeAttachments = useAuiState((s) => s.composer.attachments);
   const isApplyingExternalSync = useRef(false);
@@ -1170,6 +1382,11 @@ const ComposerAttachmentSync: FC<{
     .join("|");
 
   useEffect(() => {
+    if (suspendExternalSync) {
+      lastAppliedExternalSignatureRef.current = externalSignature;
+      return;
+    }
+
     if (lastAppliedExternalSignatureRef.current === externalSignature) return;
 
     let cancelled = false;
@@ -1198,7 +1415,7 @@ const ComposerAttachmentSync: FC<{
     return () => {
       cancelled = true;
     };
-  }, [attachments, aui, externalSignature]);
+  }, [attachments, aui, externalSignature, suspendExternalSync]);
 
   useEffect(() => {
     if (isApplyingExternalSync.current) return;

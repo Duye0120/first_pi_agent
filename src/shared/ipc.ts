@@ -26,6 +26,7 @@ export const IPC_CHANNELS = {
 
   // Chat
   chatSend: "chat:send",
+  chatTrimSessionMessages: "chat:trim-session-messages",
   contextGetSummary: "context:get-summary",
   contextCompact: "context:compact",
 

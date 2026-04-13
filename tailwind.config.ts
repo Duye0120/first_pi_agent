@@ -6,17 +6,17 @@ export default {
     extend: {
       colors: {
         chela: {
-          50: "var(--chela-50)",
-          100: "var(--chela-100)",
-          200: "var(--chela-200)",
-          300: "var(--chela-300)",
-          400: "var(--chela-400)",
-          500: "var(--chela-500)",
-          600: "var(--chela-600)",
-          700: "var(--chela-700)",
-          800: "var(--chela-800)",
-          900: "var(--chela-900)",
-          950: "var(--chela-950)",
+          50: "var(--chela-gray-50)",
+          100: "var(--chela-gray-100)",
+          200: "var(--chela-gray-200)",
+          300: "var(--chela-gray-300)",
+          400: "var(--chela-gray-400)",
+          500: "var(--chela-gray-500)",
+          600: "var(--chela-gray-600)",
+          700: "var(--chela-gray-700)",
+          800: "var(--chela-gray-800)",
+          900: "var(--chela-gray-900)",
+          950: "var(--chela-gray-950)",
         },
         // Semantic tokens — resolve to CSS variables from theme.css
         "bg-primary": "var(--color-bg-primary)",
@@ -59,6 +59,9 @@ export default {
         "selection-fg": "var(--color-selection-fg)",
         "selection-muted-bg": "var(--color-selection-muted-bg)",
         "focus-ring": "var(--color-focus-ring)",
+        // New Pure Ink semantic tokens
+        "iconbar": "var(--chela-bg-iconbar)",
+        "sessionlist": "var(--chela-bg-sessionlist)",
       },
       borderRadius: {
         xs: "var(--radius-xs)",
@@ -71,10 +74,17 @@ export default {
       },
       fontFamily: {
         sans: [
+          "Inter",
           '"Segoe UI Variable"',
           '"PingFang SC"',
           '"Microsoft YaHei UI"',
           "sans-serif",
+        ],
+        mono: [
+          "JetBrains Mono",
+          '"Fira Code"',
+          "Consolas",
+          "monospace",
         ],
       },
       boxShadow: {
