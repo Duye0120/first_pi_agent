@@ -37,7 +37,7 @@ export function loadInterruptedApprovals(): InterruptedApprovalRecord[] {
     return Array.isArray(parsed.approvals)
       ? parsed.approvals.map((approval) => ({
           ...approval,
-          canResume: false,
+          canResume: approval?.canResume ?? true,
           recoveryStatus: approval?.recoveryStatus ?? "interrupted",
           ownerId:
             typeof approval?.ownerId === "string" && approval.ownerId.trim()

@@ -3,21 +3,23 @@ import type { ChatSession } from "../../shared/contracts.js";
 import { compactSession, getContextSummary } from "../context/service.js";
 import {
   archiveSession,
-  createGroup,
   createSession,
-  deleteGroup,
   deleteSession,
   listArchivedSessions,
-  listGroups,
   listSessions,
   loadSession,
-  renameGroup,
   renameSession,
   saveSession,
   setSessionGroup,
   setSessionPinned,
   unarchiveSession,
-} from "../store.js";
+} from "../session/facade.js";
+import {
+  createGroup,
+  deleteGroup,
+  listGroups,
+  renameGroup,
+} from "../ui-state.js";
 import { handleIpc } from "./handle.js";
 
 export function registerSessionsIpc(): void {

@@ -13,7 +13,7 @@ import {
   resizeTerminal,
   writeTerminal,
 } from "../terminal.js";
-import { getUiState, setDiffPanelOpen } from "../store.js";
+import { getUiState, setDiffPanelOpen } from "../ui-state.js";
 import { handleIpc } from "./handle.js";
 
 export function registerWorkbenchIpc(): void {

@@ -46,6 +46,11 @@ type FinishRunOptions = {
   metadata?: Record<string, unknown>;
 };
 
+type PendingResumedRun = {
+  sessionId: string;
+  metadata: Record<string, unknown>;
+};
+
 export class HarnessRunCancelledError extends Error {
   constructor() {
     super("Harness run cancelled.");
@@ -58,6 +63,7 @@ export class HarnessRuntime {
   private readonly activeRunsById = new Map<string, ActiveHarnessRun>();
   private readonly approvalWaitersByRequestId = new Map<string, PendingApprovalWaiter>();
   private readonly interruptedApprovals: InterruptedApprovalRecord[] = [];
+  private readonly pendingResumedRunsById = new Map<string, PendingResumedRun>();
   private hydrated = false;
 
   /** 返回因应用重启而中断的待确认记录。 */
@@ -77,6 +83,40 @@ export class HarnessRuntime {
       return true;
     }
     return false;
+  }
+
+  resumeInterruptedRun(interruptedRunId: string): string {
+    const interruptedApproval = this.interruptedApprovals.find(
+      (record) => record.runId === interruptedRunId,
+    );
+    if (!interruptedApproval) {
+      throw new Error("找不到对应的中断审批记录。");
+    }
+    if (!interruptedApproval.canResume) {
+      throw new Error("当前中断审批不支持恢复执行。");
+    }
+
+    const resumedRunId = crypto.randomUUID();
+    this.pendingResumedRunsById.set(resumedRunId, {
+      sessionId: interruptedApproval.sessionId,
+      metadata: {
+        resumedFromRunId: interruptedApproval.runId,
+        resumedFromOwnerId: interruptedApproval.ownerId,
+        resumedFromModelEntryId: interruptedApproval.modelEntryId ?? null,
+        resumedFromRunKind: interruptedApproval.runKind ?? null,
+        resumedFromRunSource: interruptedApproval.runSource ?? null,
+        resumedFromLane: interruptedApproval.lane ?? null,
+        resumedFromState: interruptedApproval.state ?? null,
+        resumedFromStartedAt: interruptedApproval.startedAt ?? null,
+        resumedFromCurrentStepId: interruptedApproval.currentStepId ?? null,
+        resumedFromApprovalRequestId: interruptedApproval.approval.requestId,
+        resumedFromInterruptedAt: interruptedApproval.interruptedAt,
+        resumedFromRecoveryStatus:
+          interruptedApproval.recoveryStatus ?? "interrupted",
+      },
+    });
+
+    return resumedRunId;
   }
 
   hydrateFromDisk(): HarnessRunSnapshot[] {
@@ -116,7 +156,7 @@ export class HarnessRuntime {
           state: run.state,
           startedAt: run.startedAt,
           currentStepId: run.currentStepId,
-          canResume: false,
+          canResume: true,
           recoveryStatus: "interrupted",
           approval: run.pendingApproval,
           interruptedAt: now,
@@ -151,6 +191,15 @@ export class HarnessRuntime {
   }
 
   createRun(input: CreateRunInput): HarnessRunSnapshot {
+    const pendingResumedRun = this.pendingResumedRunsById.get(input.runId);
+    if (
+      pendingResumedRun &&
+      pendingResumedRun.sessionId !== input.sessionId
+    ) {
+      this.pendingResumedRunsById.delete(input.runId);
+      throw new Error("恢复 run 的 session 不匹配。");
+    }
+
     const lane = input.lane ?? "foreground";
     const ownerId =
       input.ownerId ??
@@ -177,9 +226,17 @@ export class HarnessRuntime {
       state: "running",
       startedAt: Date.now(),
       cancelled: false,
-      metadata: input.metadata,
+      metadata: pendingResumedRun
+        ? {
+            ...pendingResumedRun.metadata,
+            ...(input.metadata ?? {}),
+          }
+        : input.metadata,
       handle: null,
     };
+    if (pendingResumedRun) {
+      this.pendingResumedRunsById.delete(input.runId);
+    }
 
     if (run.lane === "foreground") {
       this.activeForegroundRunsBySession.set(run.sessionId, run);

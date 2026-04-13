@@ -65,7 +65,7 @@ export type InterruptedApprovalRecord = {
   state?: HarnessRunState;
   startedAt?: number;
   currentStepId?: string;
-  canResume?: false;
+  canResume?: boolean;
   recoveryStatus?: "interrupted";
   approval: HarnessPendingApproval;
   interruptedAt: number;

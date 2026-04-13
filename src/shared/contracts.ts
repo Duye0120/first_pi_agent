@@ -414,7 +414,7 @@ export type InterruptedApprovalNotice = {
     | null;
   startedAt: number | null;
   currentStepId: string | null;
-  canResume: false;
+  canResume: boolean;
   recoveryStatus: "interrupted";
   recoveryPrompt: string;
   interruptedAt: number;
@@ -572,6 +572,7 @@ export type DesktopApi = {
       sessionId?: string,
     ) => Promise<InterruptedApprovalGroup[]>;
     dismissInterruptedApproval: (runId: string) => Promise<boolean>;
+    resumeInterruptedApproval: (runId: string) => Promise<string>;
   };
   settings: {
     get: () => Promise<Settings>;

@@ -4,7 +4,7 @@ import type { ElectronAdapter } from "../adapter.js";
 import type { HarnessRunScope } from "../harness/types.js";
 import { getSettings } from "../settings.js";
 import type { ResolvedRuntimeModel } from "../model-resolution.js";
-import { loadSession } from "../store.js";
+import { loadSession } from "../session/facade.js";
 
 export type ChatRuntimeSettings = ReturnType<typeof getSettings>;
 export type ExistingChatSession = NonNullable<ReturnType<typeof loadSession>>;

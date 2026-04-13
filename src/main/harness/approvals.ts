@@ -23,7 +23,7 @@ export function listInterruptedApprovals(
         state: record.state ?? null,
         startedAt: record.startedAt ?? null,
         currentStepId: record.currentStepId ?? null,
-        canResume: false,
+        canResume: record.canResume ?? true,
         recoveryStatus: record.recoveryStatus ?? "interrupted",
         interruptedAt: record.interruptedAt,
         approval: record.approval,
@@ -77,6 +77,10 @@ export function listInterruptedApprovalGroups(
 
 export function dismissInterruptedApproval(runId: string): boolean {
   return harnessRuntime.dismissInterruptedApproval(runId);
+}
+
+export function resumeInterruptedApproval(runId: string): string {
+  return harnessRuntime.resumeInterruptedRun(runId);
 }
 
 export function resolveApprovalResponse(

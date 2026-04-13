@@ -107,6 +107,7 @@ type ThreadProps = {
   contextSummary?: ContextUsageSummary;
   interruptedApprovalGroups?: InterruptedApprovalGroup[];
   onDismissInterruptedApproval?: (runId: string) => void | Promise<void>;
+  onResumeInterruptedApproval?: (runId: string) => Promise<string>;
   onCompactContext?: () => void | Promise<void>;
   onBranchChanged?: () => void | Promise<void>;
   disableGlobalSideEffects?: boolean;
@@ -133,6 +134,7 @@ type ThreadResolvedProps = {
   contextSummary: ContextUsageSummary;
   interruptedApprovalGroups: InterruptedApprovalGroup[];
   onDismissInterruptedApproval: (runId: string) => void | Promise<void>;
+  onResumeInterruptedApproval: (runId: string) => Promise<string>;
   onCompactContext: () => void | Promise<void>;
   onBranchChanged: () => void | Promise<void>;
   disableGlobalSideEffects: boolean;
@@ -246,6 +248,9 @@ export const Thread: FC<ThreadProps> = ({
   contextSummary = EMPTY_CONTEXT_USAGE_SUMMARY,
   interruptedApprovalGroups = [],
   onDismissInterruptedApproval = () => undefined,
+  onResumeInterruptedApproval = async () => {
+    throw new Error("恢复执行当前不可用。");
+  },
   onCompactContext = () => undefined,
   onBranchChanged = () => undefined,
   disableGlobalSideEffects = false,
@@ -343,6 +348,7 @@ export const Thread: FC<ThreadProps> = ({
               contextSummary={contextSummary}
               interruptedApprovalGroups={interruptedApprovalGroups}
               onDismissInterruptedApproval={onDismissInterruptedApproval}
+              onResumeInterruptedApproval={onResumeInterruptedApproval}
               onCompactContext={onCompactContext}
               onBranchChanged={onBranchChanged}
               disableGlobalSideEffects={disableGlobalSideEffects}
@@ -410,6 +416,7 @@ const Composer: FC<ThreadResolvedProps> = ({
   contextSummary,
   interruptedApprovalGroups,
   onDismissInterruptedApproval,
+  onResumeInterruptedApproval,
   onCompactContext,
   onBranchChanged,
   disableGlobalSideEffects,
@@ -461,6 +468,16 @@ const Composer: FC<ThreadResolvedProps> = ({
       });
     },
     [aui, syncInputOverflow],
+  );
+
+  const resumeInterruptedApproval = useCallback(
+    async (approval: InterruptedApprovalNotice) => {
+      await onResumeInterruptedApproval(approval.runId);
+      useRecoveryPrompt(approval);
+      await aui.composer().send();
+      await onDismissInterruptedApproval(approval.runId);
+    },
+    [aui, onDismissInterruptedApproval, onResumeInterruptedApproval, useRecoveryPrompt],
   );
 
   useEffect(() => {
@@ -526,6 +543,7 @@ const Composer: FC<ThreadResolvedProps> = ({
           groups={interruptedApprovalGroups}
           onDismiss={onDismissInterruptedApproval}
           onUseRecoveryPrompt={useRecoveryPrompt}
+          onResume={resumeInterruptedApproval}
         />
       ) : null}
       <ComposerStatusBar
@@ -544,7 +562,10 @@ const InterruptedApprovalNoticeBar: FC<{
   groups: InterruptedApprovalGroup[];
   onDismiss: (runId: string) => void | Promise<void>;
   onUseRecoveryPrompt: (approval: InterruptedApprovalNotice) => void;
-}> = ({ groups, onDismiss, onUseRecoveryPrompt }) => {
+  onResume: (approval: InterruptedApprovalNotice) => Promise<void>;
+}> = ({ groups, onDismiss, onUseRecoveryPrompt, onResume }) => {
+  const [resumingRunId, setResumingRunId] = useState<string | null>(null);
+
   return (
     <div className="flex flex-col gap-2 px-1">
       {groups.map((group) => {
@@ -552,6 +573,8 @@ const InterruptedApprovalNoticeBar: FC<{
         if (!latestApproval) {
           return null;
         }
+
+        const isResuming = resumingRunId === latestApproval.runId;
 
         return (
           <div
@@ -566,10 +589,31 @@ const InterruptedApprovalNoticeBar: FC<{
               <InterruptedApprovalDetails approval={latestApproval} />
             </div>
             <div className="flex shrink-0 items-center gap-1">
+              {latestApproval.canResume ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={isResuming}
+                  onClick={() => {
+                    setResumingRunId(latestApproval.runId);
+                    void onResume(latestApproval)
+                      .catch(() => undefined)
+                      .finally(() => {
+                        setResumingRunId((current) =>
+                          current === latestApproval.runId ? null : current,
+                        );
+                      });
+                  }}
+                >
+                  恢复执行
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
+                disabled={isResuming}
                 onClick={() => {
                   onUseRecoveryPrompt(latestApproval);
                 }}
@@ -580,6 +624,7 @@ const InterruptedApprovalNoticeBar: FC<{
                 type="button"
                 variant="ghost"
                 size="sm"
+                disabled={isResuming}
                 onClick={() => {
                   void onDismiss(latestApproval.runId);
                 }}

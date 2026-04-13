@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { bus } from "../event-bus.js";
 import { appLogger } from "../logger.js";
 import { scheduler } from "../scheduler.js";
-import { listSessions, loadSession } from "../store.js";
+import { listSessions, loadSession } from "../session/facade.js";
 import { getMemdirStore } from "../memory/service.js";
 import { processPersonalityDrift, buildPersonalityDriftPromptText } from "./personality-drift.js";
 import { getSettings } from "../settings.js";

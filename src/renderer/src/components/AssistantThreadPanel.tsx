@@ -54,6 +54,7 @@ type AssistantThreadPanelProps = {
   contextSummary: ContextUsageSummary;
   interruptedApprovalGroups: InterruptedApprovalGroup[];
   onDismissInterruptedApproval: (runId: string) => void | Promise<void>;
+  onResumeInterruptedApproval: (runId: string) => Promise<string>;
   visible: boolean;
   disableGlobalSideEffects: boolean;
 };
@@ -373,6 +374,7 @@ function SessionRuntime({
   contextSummary,
   interruptedApprovalGroups,
   onDismissInterruptedApproval,
+  onResumeInterruptedApproval,
   visible,
   disableGlobalSideEffects,
 }: AssistantThreadPanelProps) {
@@ -383,6 +385,7 @@ function SessionRuntime({
   const cancelRunRef = useRef<(() => void) | null>(null);
   const activeRunTokenRef = useRef<string | null>(null);
   const activeRunScopeRef = useRef<AgentRunScope | null>(null);
+  const pendingRequestedRunIdRef = useRef<string | null>(null);
   const stageTransitionTimerRef = useRef<number | null>(null);
   const slowConnectionTimerRef = useRef<number | null>(null);
   const resetRunStateTimerRef = useRef<number | null>(null);
@@ -536,10 +539,20 @@ function SessionRuntime({
     cancelRunRef.current?.();
   }, []);
 
+  const handleResumeInterruptedApproval = useCallback(
+    async (interruptedRunId: string) => {
+      const nextRunId = await onResumeInterruptedApproval(interruptedRunId);
+      pendingRequestedRunIdRef.current = nextRunId;
+      return nextRunId;
+    },
+    [onResumeInterruptedApproval],
+  );
+
   const chatModel = useMemo<ChatModelAdapter>(() => ({
     run: async function* ({ messages, abortSignal }) {
       const currentSession = latestSessionRef.current;
-      const runId = crypto.randomUUID();
+      const runId = pendingRequestedRunIdRef.current ?? crypto.randomUUID();
+      pendingRequestedRunIdRef.current = null;
       const runScope: AgentRunScope = {
         sessionId: currentSession.id,
         runId,
@@ -803,6 +816,7 @@ function SessionRuntime({
         contextSummary={contextSummary}
         interruptedApprovalGroups={interruptedApprovalGroups}
         onDismissInterruptedApproval={onDismissInterruptedApproval}
+        onResumeInterruptedApproval={handleResumeInterruptedApproval}
         onCompactContext={async () => {
           try {
             await desktopApi.context.compact(session.id);

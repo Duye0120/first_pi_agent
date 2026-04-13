@@ -64,6 +64,8 @@ const desktopApi: DesktopApi = {
       ipcRenderer.invoke(IPC_CHANNELS.agentListInterruptedApprovalGroups, sessionId),
     dismissInterruptedApproval: (runId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.agentDismissInterruptedApproval, runId),
+    resumeInterruptedApproval: (runId: string): Promise<string> =>
+      ipcRenderer.invoke(IPC_CHANNELS.agentResumeInterruptedApproval, runId),
   },
 
   // ── Settings (wired in Phase 1) ───────────────────────────

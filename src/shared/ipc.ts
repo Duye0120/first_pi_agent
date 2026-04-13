@@ -37,6 +37,7 @@ export const IPC_CHANNELS = {
   agentListInterruptedApprovals: "agent:list-interrupted-approvals",
   agentListInterruptedApprovalGroups: "agent:list-interrupted-approval-groups",
   agentDismissInterruptedApproval: "agent:dismiss-interrupted-approval",
+  agentResumeInterruptedApproval: "agent:resume-interrupted-approval",
 
   // Settings
   settingsGet: "settings:get",

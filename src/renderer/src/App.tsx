@@ -1155,6 +1155,17 @@ export default function App() {
     [desktopApi, refreshInterruptedApprovalGroups],
   );
 
+  const resumeInterruptedApproval = useCallback(
+    async (runId: string) => {
+      if (!desktopApi?.agent?.resumeInterruptedApproval) {
+        throw new Error("恢复执行当前不可用。");
+      }
+
+      return desktopApi.agent.resumeInterruptedApproval(runId);
+    },
+    [desktopApi],
+  );
+
   const toggleDiffPanel = useCallback(() => {
     const nextOpen = !diffPanelOpen;
     setDiffPanelOpen(nextOpen);
@@ -1376,6 +1387,7 @@ export default function App() {
                 onDismissInterruptedApproval={(runId) => {
                   void dismissInterruptedApproval(session.id, runId);
                 }}
+                onResumeInterruptedApproval={resumeInterruptedApproval}
                 visible={visible}
                 disableGlobalSideEffects={hasAnyRunningSessions}
               />
@@ -1392,6 +1404,7 @@ export default function App() {
       createNewSession,
       desktopApi,
       dismissInterruptedApproval,
+      resumeInterruptedApproval,
       handleModelChange,
       handleSessionRunStateChange,
       handleThinkingLevelChange,

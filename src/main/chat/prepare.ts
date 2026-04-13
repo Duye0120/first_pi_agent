@@ -9,7 +9,7 @@ import {
   appendRunStartedEvent,
   appendUserMessageEvent,
 } from "../session/service.js";
-import { loadSession } from "../store.js";
+import { loadSession } from "../session/facade.js";
 import { requireMainWindow } from "../window.js";
 import { bus } from "../event-bus.js";
 import type { ChatRunContext } from "./types.js";
