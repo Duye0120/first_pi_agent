@@ -240,8 +240,8 @@
   --color-code-text: var(--chela-text-primary);
   --color-code-border: var(--chela-border);
 
-  --color-terminal-bg: #1a1a1a;
-  --color-terminal-text: #f5f5f5;
+  --color-terminal-bg: var(--color-shell-terminal);
+  --color-terminal-text: var(--chela-text-primary);
 
   --terminal-ansi-black: #333333;
   --terminal-ansi-red: #c62828;
