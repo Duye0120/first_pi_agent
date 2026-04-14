@@ -5,6 +5,8 @@ import {
   ImageIcon,
   RefreshCwIcon,
   XIcon,
+  LayoutGridIcon,
+  ListIcon,
 } from "lucide-react";
 import type {
   GitDiffFile,
@@ -68,7 +70,7 @@ function EmptyPanelState({
   description: string;
 }) {
   return (
-    <div className="grid min-h-[220px] place-items-center rounded-[22px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] px-6 py-7 text-center shadow-[var(--color-control-shadow)]">
+    <div className="grid min-h-[220px] place-items-center rounded-[6px] border border-border bg-[color:var(--color-control-panel-bg)] px-6 py-7 text-center shadow-sm">
       <div className="max-w-[260px]">
         <p className="text-sm font-medium text-foreground">{title}</p>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
@@ -87,7 +89,7 @@ function SectionSurface({
   return (
     <section
       className={cn(
-        "rounded-[22px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] p-5 shadow-[var(--color-control-shadow)]",
+        "rounded-[6px] border border-border bg-[color:var(--color-control-panel-bg)] p-3 shadow-sm",
         className,
       )}
     >
@@ -147,19 +149,15 @@ function DiffSourceSelect({
   return (
     <SelectRoot value={selectedSource} onValueChange={(value) => onChange(value as GitDiffSource)}>
       <SelectTrigger
-        variant="outline"
-        size="sm"
-        className="h-auto w-full rounded-[16px] px-3 py-2.5 text-left"
+        variant="ghost"
+        className="h-7 w-full rounded-[6px] px-2.5 text-[12px] border-0 bg-secondary/50 hover:bg-secondary/80 justify-between items-center"
       >
-        <div className="min-w-0">
-          <p className="truncate text-[12px] font-medium text-foreground">{selectedMeta.label}</p>
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-            {selectedSnapshot.totalFiles} 文件 · {formatSignedCount(selectedSnapshot.totalAdditions, "+")} · {formatSignedCount(selectedSnapshot.totalDeletions, "-")}
-          </p>
-        </div>
+        <span className="truncate font-medium text-foreground">
+          {selectedMeta.label} <span className="text-muted-foreground font-normal ml-1">({selectedSnapshot.totalFiles})</span>
+        </span>
       </SelectTrigger>
 
-      <SelectContent className="min-w-[240px]">
+      <SelectContent className="min-w-[240px] rounded-[6px]">
         {DIFF_SOURCES.map((source) => {
           const meta = DIFF_SOURCE_META[source];
           const snapshot = overview?.sources[source] ?? EMPTY_SOURCE_SNAPSHOT;
@@ -194,7 +192,7 @@ function DiffSummaryCard({
   tone?: "default" | "positive" | "negative";
 }) {
   return (
-    <div className="rounded-[18px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3.5 py-3 shadow-[var(--color-control-shadow)]">
+    <div className="rounded-[6px] bg-[color:var(--color-control-bg)] px-3 py-2 shadow-none">
       <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">{label}</p>
       <p
         className={cn(
@@ -237,11 +235,11 @@ function DiffFileCard({
     <Collapsible
       open={expanded}
       onOpenChange={onExpandedChange}
-      className="overflow-hidden rounded-[20px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] shadow-[var(--color-control-shadow)]"
+      className="overflow-hidden rounded-[6px] border border-border bg-[color:var(--color-control-panel-bg)] shadow-sm"
     >
       <CollapsibleTrigger
         className={cn(
-          "flex w-full items-start gap-3 px-3.5 py-3.5 text-left transition-colors",
+          "flex w-full items-start gap-3 px-3 py-2 text-left transition-colors",
           expanded ? "bg-[color:var(--color-control-bg-hover)]" : "hover:bg-[color:var(--color-control-bg-hover)]/80",
         )}
       >
@@ -339,6 +337,7 @@ function DiffPanelInner({
   onRefresh,
 }: DiffPanelProps) {
   const [selectedDiffSource, setSelectedDiffSource] = useState<GitDiffSource>("all");
+  const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
   const [expandedDiffPaths, setExpandedDiffPaths] = useState<ExpandedDiffState>({});
   const diffCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -463,7 +462,7 @@ function DiffPanelInner({
           variant="ghost"
           size="icon"
           onClick={onClose}
-          className="size-7 shrink-0 rounded-[10px] text-muted-foreground hover:bg-[color:var(--color-control-bg-hover)]"
+          className="h-7 w-7 shrink-0 rounded-[6px] text-muted-foreground hover:bg-[color:var(--color-control-bg-hover)]"
           aria-label="关闭 Diff 面板"
         >
           <XIcon className="size-4" />
@@ -528,26 +527,36 @@ function DiffPanelInner({
           </p>
         </div>
       </DrawerHeader>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 mb-4">
         <Button
           type="button"
           variant="outline"
-          size="icon"
           onClick={onRefresh}
-          className="size-7 shrink-0 rounded-[12px] px-0 text-muted-foreground"
+          className="h-7 rounded-[6px] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
           aria-label="刷新 diff"
         >
           <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
+          <span>刷新</span>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setLayout((prev) => (prev === "vertical" ? "horizontal" : "vertical"))}
+          className="h-7 rounded-[6px] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
+          aria-label="切换布局"
+        >
+          {layout === "vertical" ? <LayoutGridIcon className="size-3.5" /> : <ListIcon className="size-3.5" />}
+          <span>{layout === "vertical" ? "网格" : "列表"}</span>
         </Button>
       </div>
 
-      <div className="mt-5 min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <SectionSurface className="flex h-full min-h-0 flex-col">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-1.5 text-[11px] text-foreground shadow-[var(--color-control-shadow)]">
+            <span className="inline-flex items-center rounded-[6px] bg-[color:var(--color-control-bg)] px-2 py-1 text-[11px] text-foreground shadow-none">
               {formatBranchLabel(overview)}
             </span>
-            <span className="inline-flex items-center rounded-full border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)]/82 px-3 py-1.5 text-[11px] text-muted-foreground shadow-[var(--color-control-shadow)]">
+            <span className="inline-flex items-center rounded-[6px] bg-secondary/50 px-2 py-1 text-[11px] text-muted-foreground shadow-none">
               {overview.branch.hasChanges ? "有未提交改动" : "工作区干净"}
             </span>
           </div>
@@ -596,10 +605,10 @@ function DiffPanelInner({
                       type="button"
                       onClick={() => handleJumpToFile(file.path)}
                       className={cn(
-                        "cursor-pointer rounded-[14px] px-3 py-2.5 text-left transition-colors",
+                        "cursor-pointer rounded-[6px] px-2.5 py-1 text-left transition-colors h-7 flex items-center text-[12px]",
                         expandedPathSet.has(file.path)
                           ? "bg-[color:var(--color-control-selected-bg)] text-[color:var(--color-control-selected-text)]"
-                          : "bg-[color:var(--color-control-bg)] text-muted-foreground hover:bg-[color:var(--color-control-bg-hover)] hover:text-foreground",
+                          : "bg-secondary/50 text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
                       )}
                       title={file.path}
                     >
@@ -612,7 +621,7 @@ function DiffPanelInner({
               </div>
 
               <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
-                <div className="flex flex-col gap-3">
+                <div className={layout === "vertical" ? "flex flex-col gap-3" : "grid grid-cols-2 gap-3"}>
                   {currentSourceSnapshot.files.map((file) => (
                     <div
                       key={file.path}
