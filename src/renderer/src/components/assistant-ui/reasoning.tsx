@@ -28,42 +28,46 @@ export const AssistantUIReasoning: FC = () => {
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="mb-1.5 overflow-hidden rounded-[14px] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] shadow-[var(--color-control-shadow)]"
+      className="mb-2"
     >
       <CollapsibleTrigger
         className={cn(
-          "group/trigger flex w-full items-center gap-2 px-3 py-1.5 text-left transition",
-          open
-            ? "bg-white/52 dark:bg-black/20"
-            : "hover:bg-white/42 dark:hover:bg-black/20",
+          "group/trigger flex w-auto items-center gap-2.5 py-1 px-1 text-left transition-all duration-200 select-none",
         )}
       >
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-subtle)]/72 text-[var(--color-accent)]">
+        <span
+          className={cn(
+            "flex size-5 shrink-0 items-center justify-center rounded-full transition-colors",
+            isRunning
+              ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
+              : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
+          )}
+        >
           {isRunning ? (
-            <LoaderCircleIcon className="size-3.5 animate-spin" />
+            <LoaderCircleIcon className="size-3 animate-spin" />
           ) : (
-            <BrainCircuitIcon className="size-3.5" />
+            <BrainCircuitIcon className="size-3" />
           )}
         </span>
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+        <span className="text-[13px] font-medium text-foreground/80 transition-colors group-hover/trigger:text-foreground">
           {title}
         </span>
         {!isRunning ? (
-          <span className="shrink-0 text-[11px] font-medium text-[color:var(--color-text-muted)]">
+          <span className="text-[11px] font-medium text-muted-foreground/60 transition-colors">
             已完成
           </span>
         ) : null}
         <ChevronDownIcon
           className={cn(
-            "size-4 shrink-0 text-[color:var(--color-text-secondary)] transition-transform duration-200",
+            "size-3.5 shrink-0 text-muted-foreground/50 transition-transform duration-200",
             "group-data-[state=closed]/trigger:-rotate-90",
             "group-data-[state=open]/trigger:rotate-0",
           )}
         />
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-        <div className="px-3 pb-2.5">
-          <div className="rounded-[10px] bg-white/70 dark:bg-black/20 px-2.5 py-2 text-[11px] leading-5 whitespace-pre-wrap text-[color:var(--color-text-secondary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+        <div className="pl-[1.625rem] pr-2 pb-2 pt-1">
+          <div className="border-l-2 border-slate-200/60 dark:border-slate-800/60 pl-4 py-0.5 text-[12px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
             {reasoning.text}
           </div>
         </div>

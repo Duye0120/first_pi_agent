@@ -12,6 +12,7 @@ import {
 import {
   ActionBarPrimitive,
   AuiIf,
+  BranchPickerPrimitive,
   ComposerPrimitive,
   ErrorPrimitive,
   MessagePrimitive,
@@ -25,6 +26,8 @@ import {
   BotIcon,
   BrainCircuitIcon,
   CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   CopyIcon,
   LoaderCircleIcon,
   PencilIcon,
@@ -1135,7 +1138,7 @@ const AssistantActionBar: FC = () => {
     <ActionBarPrimitive.Root
       hideWhenRunning
       autohide="not-last"
-      className="-ml-1 flex gap-1 text-muted-foreground"
+      className="-ml-1 flex gap-1 text-muted-foreground items-center"
     >
       <ActionBarPrimitive.Reload asChild>
         <TooltipIconButton tooltip="重新生成">
@@ -1152,7 +1155,34 @@ const AssistantActionBar: FC = () => {
           </AuiIf>
         </TooltipIconButton>
       </ActionBarPrimitive.Copy>
+      <MessageBranchPicker />
     </ActionBarPrimitive.Root>
+  );
+};
+
+const MessageBranchPicker: FC<{ className?: string }> = ({ className }) => {
+  return (
+    <BranchPickerPrimitive.Root
+      hideWhenSingleBranch
+      className={cn(
+        "inline-flex items-center text-xs text-muted-foreground ml-1 gap-1",
+        className
+      )}
+    >
+      <BranchPickerPrimitive.Previous asChild>
+        <TooltipIconButton tooltip="上一项" variant="ghost" className="size-6 p-0 hover:bg-slate-200 dark:hover:bg-slate-700">
+          <ChevronLeftIcon className="size-3.5" />
+        </TooltipIconButton>
+      </BranchPickerPrimitive.Previous>
+      <span className="font-medium text-[11px] text-foreground/70 select-none">
+        <BranchPickerPrimitive.Number /> / <BranchPickerPrimitive.Count />
+      </span>
+      <BranchPickerPrimitive.Next asChild>
+        <TooltipIconButton tooltip="下一项" variant="ghost" className="size-6 p-0 hover:bg-slate-200 dark:hover:bg-slate-700">
+          <ChevronRightIcon className="size-3.5" />
+        </TooltipIconButton>
+      </BranchPickerPrimitive.Next>
+    </BranchPickerPrimitive.Root>
   );
 };
 
@@ -1196,7 +1226,7 @@ const UserMessage: FC = () => {
             <ActionBarPrimitive.Root
               hideWhenRunning
               autohide="not-last"
-              className="flex gap-1 text-muted-foreground"
+              className="flex gap-1 text-muted-foreground items-center"
             >
               <ActionBarPrimitive.Edit asChild>
                 <TooltipIconButton tooltip="编辑">
@@ -1213,6 +1243,7 @@ const UserMessage: FC = () => {
                   </AuiIf>
                 </TooltipIconButton>
               </ActionBarPrimitive.Copy>
+              <MessageBranchPicker />
             </ActionBarPrimitive.Root>
           </div>
         </div>

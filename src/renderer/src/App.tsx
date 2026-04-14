@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CommandLineIcon,
-  RectangleGroupIcon,
 } from "@heroicons/react/24/outline";
+import { GitCompareArrows } from "lucide-react";
 import type {
   ChatSession,
   ChatSessionSummary,
@@ -1619,23 +1619,23 @@ export default function App() {
             >
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="icon"
                 onClick={() => setTerminalOpen((prev) => !prev)}
-                className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
+                className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "text-muted-foreground"}`}
                 aria-label={terminalOpen ? "收起终端" : "展开终端"}
               >
                 <CommandLineIcon className="h-4 w-4" />
               </Button>
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="icon"
                 onClick={toggleDiffPanel}
-                className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none shadow-none hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "bg-transparent text-muted-foreground"}`}
+                className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "text-muted-foreground"}`}
                 aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
               >
-                <RectangleGroupIcon className="h-4 w-4" />
+                <GitCompareArrows className="h-4 w-4" />
               </Button>
             </div>
 
