@@ -597,32 +597,6 @@ function DiffPanelInner({
             </div>
           ) : (
             <>
-              <div className="mt-5">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
-                  文件索引
-                </p>
-                <div className="mt-2.5 flex gap-2 overflow-x-auto pb-1">
-                  {currentSourceSnapshot.files.map((file) => (
-                    <button
-                      key={file.path}
-                      type="button"
-                      onClick={() => handleJumpToFile(file.path)}
-                      className={cn(
-                        "cursor-pointer rounded-[6px] px-2.5 py-1 text-left transition-colors h-7 flex items-center text-[12px]",
-                        expandedPathSet.has(file.path)
-                          ? "bg-[color:var(--color-control-selected-bg)] text-[color:var(--color-control-selected-text)]"
-                          : "bg-secondary/50 text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                      )}
-                      title={file.path}
-                    >
-                      <span className="block max-w-[180px] truncate text-xs font-medium">
-                        {file.path}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
                 <div className="flex flex-col gap-3">
                   {currentSourceSnapshot.files.map((file) => (
