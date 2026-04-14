@@ -437,7 +437,7 @@ function DiffPanelInner({
 
   // Drawer shell — fixed overlay that slides in/out via translate-x
   const drawerBase =
-    "fixed right-0 top-0 bottom-0 z-50 flex h-full min-h-0 flex-col bg-background border-l shadow-xl px-4 py-4 transform transition-transform duration-300 ease-in-out";
+    "fixed right-0 top-0 bottom-0 z-50 flex h-full min-h-0 flex-col bg-background shadow-2xl px-4 py-4 transform transition-transform duration-300 ease-in-out";
   const drawerClosed = `${drawerBase} translate-x-full`;
   const drawerOpen = `${drawerBase} translate-x-0`;
 
