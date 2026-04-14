@@ -5,7 +5,7 @@ import {
   ImageIcon,
   RefreshCwIcon,
   XIcon,
-  LayoutGridIcon,
+  ColumnsIcon,
   ListIcon,
 } from "lucide-react";
 import type {
@@ -546,10 +546,10 @@ function DiffPanelInner({
           variant="outline"
           onClick={() => setLayout((prev) => (prev === "vertical" ? "horizontal" : "vertical"))}
           className="h-7 rounded-[6px] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
-          aria-label="切换布局"
+          aria-label="切换视图布局"
         >
-          {layout === "vertical" ? <LayoutGridIcon className="size-3.5" /> : <ListIcon className="size-3.5" />}
-          <span>{layout === "vertical" ? "分栏" : "统一"}</span>
+          {layout === "vertical" ? <ColumnsIcon className="size-3.5" /> : <ListIcon className="size-3.5" />}
+          <span>{layout === "vertical" ? "横向对比" : "垂直对比"}</span>
         </Button>
       </div>
 
