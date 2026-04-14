@@ -110,11 +110,11 @@ function SidebarImpl({
     label: string;
     icon: typeof Cog6ToothIcon;
   }[] = [
-    { id: "ai_model", label: "AI & 模型", icon: SparklesIcon },
-    { id: "workspace", label: "工作区", icon: FolderIcon },
-    { id: "interface", label: "界面与终端", icon: SwatchIcon },
-    { id: "system", label: "数据与系统", icon: Cog6ToothIcon },
-  ];
+      { id: "ai_model", label: "AI & 模型", icon: SparklesIcon },
+      { id: "workspace", label: "工作区", icon: FolderIcon },
+      { id: "interface", label: "界面与终端", icon: SwatchIcon },
+      { id: "system", label: "数据与系统", icon: Cog6ToothIcon },
+    ];
 
   const SidebarFooterAction = ({
     icon: Icon,
@@ -242,11 +242,10 @@ function SidebarImpl({
                 key={id}
                 type="button"
                 onClick={() => onSelectSettingsSection?.(id)}
-                className={`chela-list-item flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left text-[12px] transition ${
-                  active
+                className={`chela-list-item flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left text-[12px] transition ${active
                     ? "chela-list-item-active font-medium"
                     : "text-[color:var(--chela-text-secondary)] hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
-                }`}
+                  }`}
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{label}</span>
@@ -310,9 +309,8 @@ function SidebarImpl({
             setThreadMenuOpenFor(null);
             setArchiveConfirmFor(null);
           }}
-          className={`chela-list-item group flex cursor-pointer items-center gap-1.5 py-2.5 transition ${
-            indented ? "pl-6 pr-2.5" : "px-3.5"
-          } ${active ? "chela-list-item-active font-medium" : ""}`}
+          className={`chela-list-item group flex cursor-pointer items-center gap-1.5 py-2.5 transition ${indented ? "pl-6 pr-2.5" : "px-3.5"
+            } ${active ? "chela-list-item-active font-medium" : ""}`}
         >
           <div
             className={`flex h-5 shrink-0 items-center overflow-visible transition-[width,opacity] duration-150 ${showPinAction}`}
@@ -473,11 +471,10 @@ function SidebarImpl({
                   onSetSessionGroup(summary.id, g.id);
                   setMovingSessionId(null);
                 }}
-                className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-[color:var(--color-control-bg-hover)] ${
-                  summary.groupId === g.id
+                className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-[color:var(--color-control-bg-hover)] ${summary.groupId === g.id
                     ? "text-[color:var(--color-control-selected-text)]"
                     : "text-[color:var(--chela-text-secondary)] hover:text-[color:var(--chela-text-primary)]"
-                }`}
+                  }`}
               >
                 <FolderIcon className="h-3 w-3 shrink-0 text-[color:var(--chela-text-secondary)]" />
                 <span className="truncate">{g.name}</span>
@@ -499,361 +496,359 @@ function SidebarImpl({
   return (
     <div className="relative h-full overflow-hidden">
       <div
-        className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${
-          isSettings
+        className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${isSettings
             ? "pointer-events-auto translate-x-0 opacity-100"
             : "pointer-events-none -translate-x-2 opacity-0"
-        }`}
+          }`}
       >
         {settingsSidebar}
       </div>
       <div
-        className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${
-          !isSettings
+        className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${!isSettings
             ? "pointer-events-auto translate-x-0 opacity-100"
             : "pointer-events-none translate-x-2 opacity-0"
-        }`}
+          }`}
       >
-    <aside className="flex h-full bg-transparent flex-col text-[13px] text-[color:var(--chela-text-primary)]">
-      {/* Top: New thread */}
-      <div className="px-3 pb-2 pt-3">
-        <button
-          type="button"
-          onClick={onNewSession}
-          className="chela-list-item flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-[12px] font-medium text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
-        >
-          <SquarePen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
-          <span>新线程</span>
-        </button>
-      </div>
-
-      {pinnedSummaries.length > 0 ? (
-        <div className="px-3 pb-3 pt-1">
-          <div className="space-y-1">
-            {pinnedSummaries.map((summary) => renderThreadItem(summary, false))}
+        <aside className="flex h-full bg-transparent flex-col text-[13px] text-[color:var(--chela-text-primary)]">
+          {/* Top: New thread */}
+          <div className="px-3 pb-2 pt-3">
+            <button
+              type="button"
+              onClick={onNewSession}
+              className="chela-list-item flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-[12px] font-medium text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
+            >
+              <SquarePen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+              <span>新线程</span>
+            </button>
           </div>
-        </div>
-      ) : null}
 
-      {/* Threads header */}
-      <div className="flex items-center px-4 pb-2 pt-1.5">
-        {showArchived ? (
-          <button
-            type="button"
-            onClick={() => setShowArchived(false)}
-            className="flex cursor-pointer items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-accent-text)]"
-          >
-            <ArrowUturnLeftIcon className="h-3 w-3" />
-            <span>返回</span>
-          </button>
-        ) : (
-          <>
-            <span className="flex-1 text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--chela-text-tertiary)]">
-              线程
-            </span>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCreatingGroup(true);
-                    setGroupMenuOpenFor(null);
-                    setMovingSessionId(null);
-                  }}
-                  className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
-                  aria-label="新建分组"
-                >
-                  <FolderPlusIcon className="h-3.5 w-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">新建分组</TooltipContent>
-            </Tooltip>
-          </>
-        )}
-      </div>
-
-      {/* Thread list */}
-      <div className="flex-1 overflow-y-auto pb-2">
-        {showArchived ? (
-          <div className="space-y-1 px-3">
-            {archivedSummaries.length === 0 ? (
-              <p className="px-2 py-4 text-center text-[11px] text-[color:var(--chela-text-tertiary)]">
-                没有已归档的线程
-              </p>
-            ) : (
-              archivedSummaries.map((summary) => (
-                <div
-                  key={summary.id}
-                  className="group flex cursor-pointer items-center justify-between rounded-[var(--radius-shell)] px-3 py-2 transition hover:bg-[color:var(--color-control-bg-hover)]"
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSelectSession(summary.id);
-                      setShowArchived(false);
-                    }}
-                    className="min-w-0 flex-1 cursor-pointer text-left"
-                  >
-                    <span className="block truncate text-[12px] text-[color:var(--chela-text-primary)]">
-                      {summary.title}
-                    </span>
-                  </button>
-                  <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={() => onUnarchiveSession(summary.id)}
-                      className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
-                      title="恢复"
-                    >
-                      <ArrowUturnLeftIcon className="h-3 w-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteSession(summary.id)}
-                      className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                      title="永久删除"
-                    >
-                      <TrashIcon className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        ) : (
-          <div
-            className={`px-3 transition-colors ${dragOverUngrouped ? "rounded-2xl bg-[color:var(--color-control-selected-bg)]" : ""}`}
-            onDragOver={(e) => {
-              if (dragSessionIdRef.current) {
-                const sid = dragSessionIdRef.current;
-                const s = summaries.find((x) => x.id === sid);
-                if (s?.groupId) {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  setDragOverUngrouped(true);
-                  setDragOverGroupId(null);
-                }
-              }
-            }}
-            onDragLeave={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                setDragOverUngrouped(false);
-              }
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              const sid = dragSessionIdRef.current;
-              if (sid) onSetSessionGroup(sid, null);
-              setDragOverUngrouped(false);
-              setDragOverGroupId(null);
-              dragSessionIdRef.current = null;
-            }}
-          >
-            {/* Create group input */}
-            {creatingGroup && (
-              <div className="chela-panel-surface mb-2 flex items-center rounded-[calc(var(--radius-shell)+2px)] px-2.5 py-2">
-                <span className="shrink-0 text-transparent">
-                  <ChevronRightIcon className="h-3 w-3" />
-                </span>
-                <FolderIcon className="ml-1.5 h-3.5 w-3.5 shrink-0 text-[color:var(--chela-text-tertiary)]" />
-                <input
-                  ref={newGroupInputRef}
-                  type="text"
-                  value={newGroupName}
-                  onChange={(e) => setNewGroupName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") submitCreateGroup();
-                    else if (e.key === "Escape") {
-                      setCreatingGroup(false);
-                      setNewGroupName("");
-                    }
-                  }}
-                  onBlur={submitCreateGroup}
-                  placeholder="分组名称..."
-                  className="ml-1.5 min-w-0 flex-1 border-none bg-transparent p-0 text-[12px] text-[color:var(--chela-text-primary)] outline-none placeholder:text-[color:var(--chela-text-tertiary)]"
-                />
+          {pinnedSummaries.length > 0 ? (
+            <div className="px-3 pb-3 pt-1">
+              <div className="space-y-1">
+                {pinnedSummaries.map((summary) => renderThreadItem(summary, false))}
               </div>
+            </div>
+          ) : null}
+
+          {/* Threads header */}
+          <div className="flex items-center px-4 pb-2 pt-1.5">
+            {showArchived ? (
+              <button
+                type="button"
+                onClick={() => setShowArchived(false)}
+                className="flex cursor-pointer items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-accent-text)]"
+              >
+                <ArrowUturnLeftIcon className="h-3 w-3" />
+                <span>返回</span>
+              </button>
+            ) : (
+              <>
+                <span className="flex-1 text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--chela-text-tertiary)]">
+                  线程
+                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCreatingGroup(true);
+                        setGroupMenuOpenFor(null);
+                        setMovingSessionId(null);
+                      }}
+                      className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
+                      aria-label="新建分组"
+                    >
+                      <FolderPlusIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">新建分组</TooltipContent>
+                </Tooltip>
+              </>
             )}
+          </div>
 
-            {/* Groups — each is a drop target */}
-            {groupedSessions.map(({ group, sessions }) => {
-              const collapsed = collapsedGroups.has(group.id);
-              const isGroupMenuOpen = groupMenuOpenFor === group.id;
-              const isRenaming = renamingGroupId === group.id;
-              const isDragOver = dragOverGroupId === group.id;
-
-              return (
-                <div
-                  key={group.id}
-                  className={`mb-2 rounded-[var(--radius-shell)] transition-colors ${isDragOver ? "bg-[color:var(--color-control-selected-bg)]" : "bg-transparent"}`}
-                  onDragOver={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                    setDragOverGroupId(group.id);
-                    setDragOverUngrouped(false);
-                  }}
-                  onDragLeave={(e) => {
-                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          {/* Thread list */}
+          <div className="flex-1 overflow-y-auto pb-2">
+            {showArchived ? (
+              <div className="space-y-1 px-3">
+                {archivedSummaries.length === 0 ? (
+                  <p className="px-2 py-4 text-center text-[11px] text-[color:var(--chela-text-tertiary)]">
+                    没有已归档的线程
+                  </p>
+                ) : (
+                  archivedSummaries.map((summary) => (
+                    <div
+                      key={summary.id}
+                      className="group flex cursor-pointer items-center justify-between rounded-[var(--radius-shell)] px-3 py-2 transition hover:bg-[color:var(--color-control-bg-hover)]"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectSession(summary.id);
+                          setShowArchived(false);
+                        }}
+                        className="min-w-0 flex-1 cursor-pointer text-left"
+                      >
+                        <span className="block truncate text-[12px] text-[color:var(--chela-text-primary)]">
+                          {summary.title}
+                        </span>
+                      </button>
+                      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                        <button
+                          type="button"
+                          onClick={() => onUnarchiveSession(summary.id)}
+                          className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
+                          title="恢复"
+                        >
+                          <ArrowUturnLeftIcon className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteSession(summary.id)}
+                          className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          title="永久删除"
+                        >
+                          <TrashIcon className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
+              <div
+                className={`px-3 transition-colors ${dragOverUngrouped ? "rounded-2xl bg-[color:var(--color-control-selected-bg)]" : ""}`}
+                onDragOver={(e) => {
+                  if (dragSessionIdRef.current) {
+                    const sid = dragSessionIdRef.current;
+                    const s = summaries.find((x) => x.id === sid);
+                    if (s?.groupId) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setDragOverUngrouped(true);
                       setDragOverGroupId(null);
                     }
-                  }}
-                  onDrop={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    const sid = dragSessionIdRef.current;
-                    if (sid) onSetSessionGroup(sid, group.id);
-                    setDragOverGroupId(null);
-                    dragSessionIdRef.current = null;
-                  }}
-                >
-                  {/* Group header */}
-                  <div className="chela-list-item group flex items-center px-2.5 py-2.5 transition">
-                    <button
-                      type="button"
-                      onClick={() => toggleGroupCollapse(group.id)}
-                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5"
-                    >
-                      <span className="shrink-0 text-[color:var(--chela-text-secondary)]">
-                        {collapsed ? (
-                          <ChevronRightIcon className="h-3 w-3" />
-                        ) : (
-                          <ChevronDownIcon className="h-3 w-3" />
-                        )}
-                      </span>
-                      <FolderIcon
-                        className={`h-3.5 w-3.5 shrink-0 transition-colors ${isDragOver ? "text-[color:var(--chela-text-primary)]" : "text-[color:var(--chela-text-secondary)]"}`}
-                      />
-                      {isRenaming ? (
-                        <input
-                          ref={renameInputRef}
-                          type="text"
-                          value={renameValue}
-                          onChange={(e) => setRenameValue(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") submitRenameGroup();
-                            else if (e.key === "Escape")
-                              setRenamingGroupId(null);
-                          }}
-                          onBlur={submitRenameGroup}
-                          className="min-w-0 flex-1 border-none bg-transparent p-0 text-[12px] font-medium text-foreground outline-none"
-                        />
-                      ) : (
-                        <span className="truncate text-[12px] font-medium text-[color:var(--chela-text-primary)]">
-                          {group.name}
-                        </span>
-                      )}
-                    </button>
+                  }
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setDragOverUngrouped(false);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const sid = dragSessionIdRef.current;
+                  if (sid) onSetSessionGroup(sid, null);
+                  setDragOverUngrouped(false);
+                  setDragOverGroupId(null);
+                  dragSessionIdRef.current = null;
+                }}
+              >
+                {/* Create group input */}
+                {creatingGroup && (
+                  <div className="chela-panel-surface mb-2 flex items-center rounded-[calc(var(--radius-shell)+2px)] px-2.5 py-2">
+                    <span className="shrink-0 text-transparent">
+                      <ChevronRightIcon className="h-3 w-3" />
+                    </span>
+                    <FolderIcon className="ml-1.5 h-3.5 w-3.5 shrink-0 text-[color:var(--chela-text-tertiary)]" />
+                    <input
+                      ref={newGroupInputRef}
+                      type="text"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") submitCreateGroup();
+                        else if (e.key === "Escape") {
+                          setCreatingGroup(false);
+                          setNewGroupName("");
+                        }
+                      }}
+                      onBlur={submitCreateGroup}
+                      placeholder="分组名称..."
+                      className="ml-1.5 min-w-0 flex-1 border-none bg-transparent p-0 text-[12px] text-[color:var(--chela-text-primary)] outline-none placeholder:text-[color:var(--chela-text-tertiary)]"
+                    />
+                  </div>
+                )}
 
-                    <div className="relative ml-1 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setGroupMenuOpenFor(
-                                isGroupMenuOpen ? null : group.id,
-                              );
-                              setMovingSessionId(null);
-                            }}
-                            className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
-                            aria-label="分组操作"
-                          >
-                            <EllipsisHorizontalIcon className="h-3.5 w-3.5" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">分组操作</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onCreateSessionInGroup(group.id);
-                            }}
-                            className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
-                            aria-label={`在 ${group.name} 中开始新线程`}
-                          >
-                            <SquarePen className="h-3.5 w-3.5" strokeWidth={1.8} />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">
-                          {`在 ${group.name} 中开始新线程`}
-                        </TooltipContent>
-                      </Tooltip>
-                      {isGroupMenuOpen && (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className="chela-panel-elevated absolute right-0 top-full z-20 mt-1 min-w-[88px] rounded-[calc(var(--radius-shell)+2px)] py-1.5"
+                {/* Groups — each is a drop target */}
+                {groupedSessions.map(({ group, sessions }) => {
+                  const collapsed = collapsedGroups.has(group.id);
+                  const isGroupMenuOpen = groupMenuOpenFor === group.id;
+                  const isRenaming = renamingGroupId === group.id;
+                  const isDragOver = dragOverGroupId === group.id;
+
+                  return (
+                    <div
+                      key={group.id}
+                      className={`mb-2 rounded-[var(--radius-shell)] transition-colors ${isDragOver ? "bg-[color:var(--color-control-selected-bg)]" : "bg-transparent"}`}
+                      onDragOver={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        setDragOverGroupId(group.id);
+                        setDragOverUngrouped(false);
+                      }}
+                      onDragLeave={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                          setDragOverGroupId(null);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const sid = dragSessionIdRef.current;
+                        if (sid) onSetSessionGroup(sid, group.id);
+                        setDragOverGroupId(null);
+                        dragSessionIdRef.current = null;
+                      }}
+                    >
+                      {/* Group header */}
+                      <div className="chela-list-item group flex items-center px-2.5 py-2.5 transition">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroupCollapse(group.id)}
+                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5"
                         >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRenamingGroupId(group.id);
-                              setRenameValue(group.name);
-                              setGroupMenuOpenFor(null);
-                            }}
-                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-[color:var(--chela-text-primary)] hover:bg-[color:var(--color-control-bg-hover)]"
-                          >
-                            重命名
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onDeleteGroup(group.id);
-                              setGroupMenuOpenFor(null);
-                            }}
-                            className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-destructive hover:bg-destructive/10"
-                          >
-                            删除分组
-                          </button>
+                          <span className="shrink-0 text-[color:var(--chela-text-secondary)]">
+                            {collapsed ? (
+                              <ChevronRightIcon className="h-3 w-3" />
+                            ) : (
+                              <ChevronDownIcon className="h-3 w-3" />
+                            )}
+                          </span>
+                          <FolderIcon
+                            className={`h-3.5 w-3.5 shrink-0 transition-colors ${isDragOver ? "text-[color:var(--chela-text-primary)]" : "text-[color:var(--chela-text-secondary)]"}`}
+                          />
+                          {isRenaming ? (
+                            <input
+                              ref={renameInputRef}
+                              type="text"
+                              value={renameValue}
+                              onChange={(e) => setRenameValue(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") submitRenameGroup();
+                                else if (e.key === "Escape")
+                                  setRenamingGroupId(null);
+                              }}
+                              onBlur={submitRenameGroup}
+                              className="min-w-0 flex-1 border-none bg-transparent p-0 text-[12px] font-medium text-foreground outline-none"
+                            />
+                          ) : (
+                            <span className="truncate text-[12px] font-medium text-[color:var(--chela-text-primary)]">
+                              {group.name}
+                            </span>
+                          )}
+                        </button>
+
+                        <div className="relative ml-1 flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setGroupMenuOpenFor(
+                                    isGroupMenuOpen ? null : group.id,
+                                  );
+                                  setMovingSessionId(null);
+                                }}
+                                className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
+                                aria-label="分组操作"
+                              >
+                                <EllipsisHorizontalIcon className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">分组操作</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onCreateSessionInGroup(group.id);
+                                }}
+                                className="cursor-pointer rounded-md p-1 text-[color:var(--chela-text-tertiary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
+                                aria-label={`在 ${group.name} 中开始新线程`}
+                              >
+                                <SquarePen className="h-3.5 w-3.5" strokeWidth={1.8} />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              {`在 ${group.name} 中开始新线程`}
+                            </TooltipContent>
+                          </Tooltip>
+                          {isGroupMenuOpen && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="chela-panel-elevated absolute right-0 top-full z-20 mt-1 min-w-[88px] rounded-[calc(var(--radius-shell)+2px)] py-1.5"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRenamingGroupId(group.id);
+                                  setRenameValue(group.name);
+                                  setGroupMenuOpenFor(null);
+                                }}
+                                className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-[color:var(--chela-text-primary)] hover:bg-[color:var(--color-control-bg-hover)]"
+                              >
+                                重命名
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onDeleteGroup(group.id);
+                                  setGroupMenuOpenFor(null);
+                                }}
+                                className="flex w-full cursor-pointer items-center px-3 py-1.5 text-[11px] text-destructive hover:bg-destructive/10"
+                              >
+                                删除分组
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Sessions in group */}
+                      {!collapsed && (
+                        <div className="space-y-px">
+                          {sessions.length === 0 ? (
+                            <p
+                              className={`py-1 pl-7 text-[11px] ${isDragOver ? "text-[color:var(--chela-text-secondary)]" : "text-[color:var(--chela-text-tertiary)]"}`}
+                            >
+                              {isDragOver ? "松开鼠标放入分组" : "暂无线程"}
+                            </p>
+                          ) : (
+                            sessions.map((s) => renderThreadItem(s, true))
+                          )}
                         </div>
                       )}
                     </div>
+                  );
+                })}
+
+                {ungroupedSessions.length > 0 ? (
+                  <div
+                    className={`space-y-1 ${groupedSessions.length > 0 ? "mt-3 pt-2" : ""}`}
+                  >
+                    {ungroupedSessions.map((s) => renderThreadItem(s, false))}
                   </div>
-
-                  {/* Sessions in group */}
-                  {!collapsed && (
-                    <div className="space-y-px">
-                      {sessions.length === 0 ? (
-                        <p
-                          className={`py-1 pl-7 text-[11px] ${isDragOver ? "text-[color:var(--chela-text-secondary)]" : "text-[color:var(--chela-text-tertiary)]"}`}
-                        >
-                          {isDragOver ? "松开鼠标放入分组" : "暂无线程"}
-                        </p>
-                      ) : (
-                        sessions.map((s) => renderThreadItem(s, true))
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {ungroupedSessions.length > 0 ? (
-              <div
-                className={`space-y-1 ${groupedSessions.length > 0 ? "mt-3 pt-2" : ""}`}
-              >
-                {ungroupedSessions.map((s) => renderThreadItem(s, false))}
+                ) : null}
               </div>
-            ) : null}
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Bottom: Archive entry + Settings */}
-      <div className="px-3 pb-3 pt-2">
-        <SidebarFooterAction
-          icon={Cog6ToothIcon}
-          label="设置"
-          onClick={onOpenSettings}
-        />
-      </div>
-    </aside>
+          {/* Bottom: Archive entry + Settings */}
+          <div className="px-3 pb-3 pt-2">
+            <SidebarFooterAction
+              icon={Cog6ToothIcon}
+              label="设置"
+              onClick={onOpenSettings}
+            />
+          </div>
+        </aside>
       </div>
     </div>
   );

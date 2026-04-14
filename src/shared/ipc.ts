@@ -79,6 +79,10 @@ export const IPC_CHANNELS = {
 
   // Git (for diff panel)
   gitStageFile: "git:stage-file",
+  gitStageFiles: "git:stage-files",
+  gitUnstageFiles: "git:unstage-files",
+  gitCommit: "git:commit",
+  gitPush: "git:push",
   gitStageHunk: "git:stage-hunk",
   gitRevertFile: "git:revert-file",
   gitRevertHunk: "git:revert-hunk",

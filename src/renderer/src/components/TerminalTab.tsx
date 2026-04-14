@@ -47,7 +47,7 @@ function getTerminalTheme() {
 
 function parseFontFamily(fontFamily: string | undefined): string {
   if (!fontFamily) return "'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace";
-  
+
   const fonts = fontFamily.split(',').map((f) => {
     const trimmed = f.trim();
     if (trimmed.includes(' ') && !trimmed.startsWith("'") && !trimmed.startsWith('"')) {
@@ -55,11 +55,11 @@ function parseFontFamily(fontFamily: string | undefined): string {
     }
     return trimmed;
   });
-  
+
   if (!fonts.some(f => f.toLowerCase() === 'monospace')) {
     fonts.push('monospace');
   }
-  
+
   return fonts.join(', ');
 }
 

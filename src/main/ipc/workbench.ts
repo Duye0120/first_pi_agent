@@ -5,6 +5,10 @@ import {
   getGitDiffSnapshot,
   listGitBranches,
   switchGitBranch,
+  stageGitFiles,
+  unstageGitFiles,
+  commitGitChanges,
+  pushGitChanges,
 } from "../git.js";
 import { getSettings } from "../settings.js";
 import {
@@ -51,6 +55,25 @@ export function registerWorkbenchIpc(): void {
     IPC_CHANNELS.gitCreateBranch,
     async (_event, branchName: string) =>
       createAndSwitchGitBranch(getSettings().workspace, branchName),
+  );
+  handleIpc(
+    IPC_CHANNELS.gitStageFiles,
+    async (_event, paths: string[]) =>
+      stageGitFiles(getSettings().workspace, paths),
+  );
+  handleIpc(
+    IPC_CHANNELS.gitUnstageFiles,
+    async (_event, paths: string[]) =>
+      unstageGitFiles(getSettings().workspace, paths),
+  );
+  handleIpc(
+    IPC_CHANNELS.gitCommit,
+    async (_event, message: string) =>
+      commitGitChanges(getSettings().workspace, message),
+  );
+  handleIpc(
+    IPC_CHANNELS.gitPush,
+    async () => pushGitChanges(getSettings().workspace),
   );
   handleIpc(IPC_CHANNELS.uiGetState, async () => getUiState());
   handleIpc(

@@ -663,6 +663,10 @@ export type DesktopApi = {
     listBranches: () => Promise<GitBranchEntry[]>;
     switchBranch: (branchName: string) => Promise<void>;
     createAndSwitchBranch: (branchName: string) => Promise<void>;
+    stageFiles: (paths: string[]) => Promise<void>;
+    unstageFiles: (paths: string[]) => Promise<void>;
+    commit: (message: string) => Promise<void>;
+    push: () => Promise<void>;
   };
   ui: {
     getState: () => Promise<WindowUiState>;

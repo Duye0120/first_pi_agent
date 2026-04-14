@@ -7,6 +7,11 @@ import {
   XIcon,
   ColumnsIcon,
   ListIcon,
+  UploadIcon,
+  CheckIcon,
+  PlusIcon,
+  MinusIcon,
+  SendIcon,
 } from "lucide-react";
 import type {
   GitDiffFile,
@@ -340,8 +345,76 @@ function DiffPanelInner({
   isLoading,
   onRefresh,
 }: DiffPanelProps) {
+  
+
   const [selectedDiffSource, setSelectedDiffSource] = useState<GitDiffSource>("all");
-  const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
+
+const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const [commitMessage, setCommitMessage] = useState("");
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
+  const [isStaging, setIsStaging] = useState(false);
+
+  useEffect(() => {
+    setSelectedPaths(new Set());
+  }, [selectedDiffSource, overview]);
+
+  const handleToggleSelection = useCallback((paths: string[], isSelected: boolean) => {
+    setSelectedPaths(current => {
+      const next = new Set(current);
+      for (const p of paths) {
+        if (isSelected) next.add(p);
+        else next.delete(p);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (!overview) return;
+    const files = overview.sources[selectedDiffSource].files;
+    if (selectedPaths.size === files.length) {
+      setSelectedPaths(new Set());
+    } else {
+      setSelectedPaths(new Set(files.map(f => f.path)));
+    }
+  }, [overview, selectedDiffSource, selectedPaths]);
+
+  const handleStageSelected = useCallback(async () => {
+    if (selectedPaths.size === 0) return;
+    setIsStaging(true);
+    try {
+      await window.desktopApi.git.stageFiles(Array.from(selectedPaths));
+      await onRefresh();
+    } finally { setIsStaging(false); }
+  }, [selectedPaths, onRefresh]);
+
+  const handleUnstageSelected = useCallback(async () => {
+    if (selectedPaths.size === 0) return;
+    setIsStaging(true);
+    try {
+      await window.desktopApi.git.unstageFiles(Array.from(selectedPaths));
+      await onRefresh();
+    } finally { setIsStaging(false); }
+  }, [selectedPaths, onRefresh]);
+
+  const handleCommit = useCallback(async () => {
+    if (!commitMessage.trim()) return;
+    setIsCommitting(true);
+    try {
+      await window.desktopApi.git.commit(commitMessage);
+      setCommitMessage("");
+      await onRefresh();
+    } finally { setIsCommitting(false); }
+  }, [commitMessage, onRefresh]);
+
+  const handlePush = useCallback(async () => {
+    setIsPushing(true);
+    try {
+      await window.desktopApi.git.push();
+      // Optional refresh
+    } finally { setIsPushing(false); }
+  }, []);  const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
   const [expandedDiffPaths, setExpandedDiffPaths] = useState<ExpandedDiffState>({});
   const diffCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -631,10 +704,80 @@ function DiffPanelInner({
             <>
               <div className="relative mt-4 flex min-h-0 flex-1 overflow-hidden border-t border-border pt-4">
                 <div 
-                  className="shrink-0 overflow-y-auto pr-3"
+                  className="shrink-0 flex flex-col min-h-0 pr-3"
                   style={{ width: treeWidth }}
                 >
-                  <FileTreeView files={currentSourceSnapshot.files} onSelectFile={(path) => handleJumpToFile(path)} />
+                  <div className="flex items-center justify-between mb-2">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 px-2 text-[11px] text-muted-foreground hover:bg-secondary/80 bg-secondary/50 rounded-[4px]"
+                      onClick={handleSelectAll}
+                    >
+                      {selectedPaths.size > 0 && selectedPaths.size === currentSourceSnapshot.files.length ? "取消全选" : "全选"}
+                    </Button>
+                    
+                    {selectedDiffSource === "unstaged" || selectedDiffSource === "all" ? (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 px-2 text-[11px] text-foreground bg-[color:var(--color-diff-add-text)]/20 hover:bg-[color:var(--color-diff-add-text)]/30 rounded-[4px]"
+                        onClick={handleStageSelected}
+                        disabled={selectedPaths.size === 0 || isStaging}
+                      >
+                        <PlusIcon className="w-3 h-3 mr-1" />
+                        暂存
+                      </Button>
+                    ) : selectedDiffSource === "staged" ? (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 px-2 text-[11px] text-foreground bg-[color:var(--color-diff-del-text)]/20 hover:bg-[color:var(--color-diff-del-text)]/30 rounded-[4px]"
+                        onClick={handleUnstageSelected}
+                        disabled={selectedPaths.size === 0 || isStaging}
+                      >
+                        <MinusIcon className="w-3 h-3 mr-1" />
+                        取消暂存
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="flex-1 overflow-y-auto mb-3">
+                    <FileTreeView 
+                    files={currentSourceSnapshot.files} 
+                    onSelectFile={(path) => handleJumpToFile(path)} 
+                    selectedPaths={selectedPaths}
+                    onToggleSelection={handleToggleSelection}
+                  />
+                  </div>
+                  
+                  {/* 提交面板 (Bottom of side panel) */}
+                  <div className="flex flex-col gap-2 shrink-0 border-t border-border pt-3">
+                    <textarea 
+                      placeholder="Commit message..."
+                      value={commitMessage}
+                      onChange={e => setCommitMessage(e.target.value)}
+                      className="w-full min-h-[60px] max-h-[120px] resize-y rounded-[6px] border border-border bg-background p-2 text-[12px] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        className="flex-1 h-7 text-[12px] bg-primary text-primary-foreground hover:bg-primary/90 rounded-[6px]"
+                        onClick={handleCommit}
+                        disabled={!commitMessage.trim() || isCommitting}
+                      >
+                        <SendIcon className="size-3 mr-1.5" />
+                        {isCommitting ? "提交中..." : "提交"}
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        className="h-7 px-3 text-[12px] rounded-[6px] hover:bg-secondary/80 bg-secondary/50 border-0"
+                        onClick={handlePush}
+                        disabled={isPushing}
+                        title="推送到远程"
+                      >
+                        <UploadIcon className="size-3" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
                 
                 {/* 侧边栏拖拽把手 (Tree Resizer) */}

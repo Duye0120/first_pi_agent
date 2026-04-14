@@ -582,3 +582,21 @@ export async function createAndSwitchGitBranch(
     throw new Error(getGitErrorMessage(error, "创建并切换分支失败。"));
   }
 }
+
+export async function stageGitFiles(workspacePath: string, paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  await runGit(["add", ...paths], workspacePath);
+}
+
+export async function unstageGitFiles(workspacePath: string, paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  await runGit(["reset", "HEAD", ...paths], workspacePath);
+}
+
+export async function commitGitChanges(workspacePath: string, message: string): Promise<void> {
+  await runGit(["commit", "-m", message], workspacePath);
+}
+
+export async function pushGitChanges(workspacePath: string): Promise<void> {
+  await runGit(["push"], workspacePath);
+}

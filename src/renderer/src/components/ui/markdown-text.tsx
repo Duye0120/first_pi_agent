@@ -232,7 +232,7 @@ const defaultComponents = memoizeMarkdownComponents({
       <code
         className={cn(
           !isCodeBlock &&
-            "aui-md-inline-code rounded-md bg-muted/50 px-1.5 py-0.5 font-mono text-[0.85em] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
+          "aui-md-inline-code rounded-md bg-muted/50 px-1.5 py-0.5 font-mono text-[0.85em] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
           className,
         )}
         {...props}

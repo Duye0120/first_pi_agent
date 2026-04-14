@@ -205,7 +205,7 @@ function ContextExpandedSummary({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-medium tracking-[0.12em] text-[color:var(--color-text-muted)]">
-          Context 视窗
+              Context 视窗
             </p>
             <p className="mt-1.5 text-[18px] font-semibold leading-[1.3] text-foreground [font-variant-numeric:tabular-nums] break-words">
               {getContextStatusCopy(summary)}
@@ -251,7 +251,7 @@ function ContextExpandedSummary({
           {getContinuityHeadline(summary)}
         </p>
         {summary.snapshotSummary &&
-        summary.snapshotSummary !== getContinuityHeadline(summary) ? (
+          summary.snapshotSummary !== getContinuityHeadline(summary) ? (
           <p className="mt-2 whitespace-pre-line text-[12px] leading-5 text-[color:var(--color-text-secondary)]">
             {summary.snapshotSummary}
           </p>

@@ -650,10 +650,10 @@ export default function App() {
   // 用 ref 持有键盘快捷键需要的动态值，避免 effect 因这些值变化而重新执行 bootApp
   const kbStateRef = useRef({
     mainView, terminalOpen,
-    createNewSession: (() => {}) as () => unknown,
-    closeSettingsView: (() => {}) as () => void,
-    openSettingsView: (() => {}) as (section?: SettingsSection) => void,
-    toggleSidebarCollapsed: (() => {}) as () => void,
+    createNewSession: (() => { }) as () => unknown,
+    closeSettingsView: (() => { }) as () => void,
+    openSettingsView: (() => { }) as (section?: SettingsSection) => void,
+    toggleSidebarCollapsed: (() => { }) as () => void,
   });
 
   // Boot 只执行一次
@@ -870,10 +870,10 @@ export default function App() {
         prev.map((summary) =>
           summary.id === sessionId
             ? {
-                ...summary,
-                title: nextTitle,
-                updatedAt,
-              }
+              ...summary,
+              title: nextTitle,
+              updatedAt,
+            }
             : summary,
         ),
       );
@@ -882,10 +882,10 @@ export default function App() {
         prev.map((summary) =>
           summary.id === sessionId
             ? {
-                ...summary,
-                title: nextTitle,
-                updatedAt,
-              }
+              ...summary,
+              title: nextTitle,
+              updatedAt,
+            }
             : summary,
         ),
       );
@@ -909,10 +909,10 @@ export default function App() {
       setActiveSession((current) =>
         current && current.id === sessionId
           ? {
-              ...current,
-              title: nextTitle,
-              updatedAt,
-            }
+            ...current,
+            title: nextTitle,
+            updatedAt,
+          }
           : current,
       );
     },
@@ -1359,32 +1359,32 @@ export default function App() {
   }, [
     activeSessionId,
     attachFiles,
-      contextSummaryBySessionId,
-      currentModelId,
-      createNewSession,
-      desktopApi,
-      dismissInterruptedApproval,
-      resumeInterruptedApproval,
-      handleModelChange,
-      handleSessionRunStateChange,
-      handleThinkingLevelChange,
-      hasAnyRunningSessions,
+    contextSummaryBySessionId,
+    currentModelId,
+    createNewSession,
+    desktopApi,
+    dismissInterruptedApproval,
+    resumeInterruptedApproval,
+    handleModelChange,
+    handleSessionRunStateChange,
+    handleThinkingLevelChange,
+    hasAnyRunningSessions,
     isPickingFiles,
-      interruptedApprovalGroupsBySessionId,
-      mountedSessionIds,
-      openSettingsView,
-      removeAttachment,
-      pasteFiles,
-      persistSession,
-      gitBranchSummary,
-      handleGitStateChanged,
-      reloadSession,
-      sessionCache,
-      summaries,
-      archivedSummaries,
-      terminalOpen,
-      thinkingLevel,
-    ]);
+    interruptedApprovalGroupsBySessionId,
+    mountedSessionIds,
+    openSettingsView,
+    removeAttachment,
+    pasteFiles,
+    persistSession,
+    gitBranchSummary,
+    handleGitStateChanged,
+    reloadSession,
+    sessionCache,
+    summaries,
+    archivedSummaries,
+    terminalOpen,
+    thinkingLevel,
+  ]);
 
   const settingsContent = useMemo(
     () => (
@@ -1527,68 +1527,67 @@ export default function App() {
             </aside>
           </ResizablePanel>
           <ResizableHandle className="-mx-px w-px" />
-        <ResizablePanel id="shell-main">
+          <ResizablePanel id="shell-main">
             <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
-          <div className="chela-main-content-surface flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)]">
-            <div
-              className={`flex items-center justify-end gap-2 px-5 transition-[min-height,padding,opacity] duration-200 ease-out ${
-                mainView === "thread"
-                  ? "min-h-[52px] pb-3 pt-4 opacity-100"
-                  : "pointer-events-none min-h-0 overflow-hidden py-0 opacity-0"
-              }`}
-              aria-hidden={mainView !== "thread"}
-            >
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => setTerminalOpen((prev) => !prev)}
-                className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "text-muted-foreground"}`}
-                aria-label={terminalOpen ? "收起终端" : "展开终端"}
-              >
-                <CommandLineIcon className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={toggleDiffPanel}
-                className={`relative h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "text-muted-foreground"}`}
-                aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
-              >
-                <GitCompareArrows className="h-4 w-4" />
-                {gitBranchSummary?.hasChanges && !diffPanelOpen && (
-                  <span className="absolute right-1 top-1 size-1.5 rounded-full bg-red-500" />
-                )}
-              </Button>
-            </div>
+              <div className="chela-main-content-surface flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)]">
+                <div
+                  className={`flex items-center justify-end gap-2 px-5 transition-[min-height,padding,opacity] duration-200 ease-out ${mainView === "thread"
+                      ? "min-h-[52px] pb-3 pt-4 opacity-100"
+                      : "pointer-events-none min-h-0 overflow-hidden py-0 opacity-0"
+                    }`}
+                  aria-hidden={mainView !== "thread"}
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setTerminalOpen((prev) => !prev)}
+                    className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "text-muted-foreground"}`}
+                    aria-label={terminalOpen ? "收起终端" : "展开终端"}
+                  >
+                    <CommandLineIcon className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleDiffPanel}
+                    className={`relative h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "text-muted-foreground"}`}
+                    aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
+                  >
+                    <GitCompareArrows className="h-4 w-4" />
+                    {gitBranchSummary?.hasChanges && !diffPanelOpen && (
+                      <span className="absolute right-1 top-1 size-1.5 rounded-full bg-red-500" />
+                    )}
+                  </Button>
+                </div>
 
-            <div className="relative min-h-0 flex-1 bg-[color:var(--chela-bg-surface)]">
-              <div
-                className={mainView === "thread" ? "h-full min-h-0" : "hidden"}
-                aria-hidden={mainView !== "thread"}
-              >
-                {threadPanels}
-              </div>
-              <div
-                className={mainView === "settings" ? "h-full min-h-0" : "hidden"}
-                aria-hidden={mainView !== "settings"}
-              >
-                {settingsContent}
-              </div>
-            </div>
+                <div className="relative min-h-0 flex-1 bg-[color:var(--chela-bg-surface)]">
+                  <div
+                    className={mainView === "thread" ? "h-full min-h-0" : "hidden"}
+                    aria-hidden={mainView !== "thread"}
+                  >
+                    {threadPanels}
+                  </div>
+                  <div
+                    className={mainView === "settings" ? "h-full min-h-0" : "hidden"}
+                    aria-hidden={mainView !== "settings"}
+                  >
+                    {settingsContent}
+                  </div>
+                </div>
 
-            <div className={mainView === "thread" ? "" : "hidden"}>
-              <TerminalDrawer
-                open={terminalOpen}
-                onToggle={() => setTerminalOpen((prev) => !prev)}
-                settings={settings}
-              />
-            </div>
-          </div>
-        </section>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+                <div className={mainView === "thread" ? "" : "hidden"}>
+                  <TerminalDrawer
+                    open={terminalOpen}
+                    onToggle={() => setTerminalOpen((prev) => !prev)}
+                    settings={settings}
+                  />
+                </div>
+              </div>
+            </section>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
 
       {/* Diff slide-out drawer */}
