@@ -17,6 +17,7 @@ import type {
 import { Badge } from "@renderer/components/assistant-ui/badge";
 import { Button } from "@renderer/components/assistant-ui/button";
 import { DiffView } from "@renderer/components/DiffView";
+import { FileTreeView } from "@renderer/components/assistant-ui/diff-tree";
 import {
   SelectContent,
   SelectItem,
@@ -368,7 +369,7 @@ function DiffPanelInner({
   const currentSourceSnapshot = overview?.sources[selectedDiffSource] ?? EMPTY_SOURCE_SNAPSHOT;
   const currentExpandedPaths = expandedDiffPaths[selectedDiffSource] ?? [];
 
-  const [width, setWidth] = useState(384);
+  const [width, setWidth] = useState(640);
   const draggingRef = useRef(false);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -476,7 +477,7 @@ function DiffPanelInner({
 
   if (!overview) {
     return (
-      <aside className={drawerClass} style={{ width: open ? width : 384 }}>
+      <aside className={drawerClass} style={{ width: open ? width : 640 }}>
         {open && <ResizeHandle />}
         <DrawerHeader>
           <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">Diff</p>
@@ -493,7 +494,7 @@ function DiffPanelInner({
 
   if (!overview.isGitRepo) {
     return (
-      <aside className={drawerClass} style={{ width: open ? width : 384 }}>
+      <aside className={drawerClass} style={{ width: open ? width : 640 }}>
         {open && <ResizeHandle />}
         <DrawerHeader>
           <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">Diff</p>
@@ -519,7 +520,7 @@ function DiffPanelInner({
   const expandedPathSet = new Set(currentExpandedPaths);
 
   return (
-    <aside className={drawerClass} style={{ width: open ? width : 384 }}>
+    <aside className={drawerClass} style={{ width: open ? width : 640 }}>
       {open && <ResizeHandle />}
       <DrawerHeader>
         <div>
@@ -562,9 +563,15 @@ function DiffPanelInner({
             <span className="inline-flex items-center rounded-[6px] bg-secondary/50 px-2 py-1 text-[11px] text-muted-foreground shadow-none">
               {overview.branch.hasChanges ? "有未提交改动" : "工作区干净"}
             </span>
+            {currentSourceSnapshot.files.length > 0 && (
+              <div className="ml-1 flex items-center gap-2 text-[11px] font-medium">
+                <span className="text-[color:var(--color-diff-add-text)]">{formatSignedCount(currentSourceSnapshot.totalAdditions, "+")}</span>
+                <span className="text-[color:var(--color-diff-del-text)]">{formatSignedCount(currentSourceSnapshot.totalDeletions, "-")}</span>
+              </div>
+            )}
           </div>
 
-          <div className="mt-5 flex items-center gap-3">
+          <div className="mt-4 flex items-center gap-2">
             <div className="min-w-0 flex-1">
               <DiffSourceSelect
                 selectedSource={selectedDiffSource}
@@ -572,13 +579,9 @@ function DiffPanelInner({
                 onChange={setSelectedDiffSource}
               />
             </div>
-            <Badge variant="secondary">{currentSourceSnapshot.totalFiles}</Badge>
-          </div>
-
-          <div className="mt-5 grid grid-cols-3 gap-2.5">
-            <DiffSummaryCard label="文件" value={String(currentSourceSnapshot.totalFiles)} />
-            <DiffSummaryCard label="新增" value={formatSignedCount(currentSourceSnapshot.totalAdditions, "+")} tone="positive" />
-            <DiffSummaryCard label="删除" value={formatSignedCount(currentSourceSnapshot.totalDeletions, "-")} tone="negative" />
+            <div className="flex h-7 min-w-[28px] items-center justify-center rounded-[6px] bg-secondary/50 px-2.5 text-[11px] font-medium text-muted-foreground">
+              {currentSourceSnapshot.totalFiles}
+            </div>
           </div>
 
           {!hasAnyChanges ? (
@@ -597,21 +600,26 @@ function DiffPanelInner({
             </div>
           ) : (
             <>
-              <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
-                <div className="flex flex-col gap-3">
-                  {currentSourceSnapshot.files.map((file) => (
-                    <div
-                      key={file.path}
-                      ref={(element) => bindCardRef(file.path, element)}
-                    >
-                      <DiffFileCard
-                        file={file}
-                        layout={layout}
-                        expanded={expandedPathSet.has(file.path)}
-                        onExpandedChange={(open) => handleToggleFile(file.path, open)}
-                      />
-                    </div>
-                  ))}
+              <div className="mt-4 flex min-h-0 flex-1 overflow-hidden border-t border-border pt-4">
+                <div className="w-[180px] shrink-0 overflow-y-auto pr-3">
+                  <FileTreeView files={currentSourceSnapshot.files} onSelectFile={(path) => handleJumpToFile(path)} />
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1 pl-4 border-l border-border/50">
+                  <div className="flex flex-col gap-3">
+                    {currentSourceSnapshot.files.map((file) => (
+                      <div
+                        key={file.path}
+                        ref={(element) => bindCardRef(file.path, element)}
+                      >
+                        <DiffFileCard
+                          file={file}
+                          layout={layout}
+                          expanded={expandedPathSet.has(file.path)}
+                          onExpandedChange={(open) => handleToggleFile(file.path, open)}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </>
