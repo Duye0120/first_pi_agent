@@ -299,7 +299,7 @@ export const Thread: FC<ThreadProps> = ({
       <ThreadPrimitive.Root
         className="@container flex h-full min-h-0 flex-col bg-shell-panel"
         style={{
-          ["--thread-max-width" as string]: "56rem",
+          ["--thread-max-width" as string]: "100%",
           ["--composer-radius" as string]: "8px",
           ["--composer-padding" as string]: "12px",
         }}
@@ -1012,12 +1012,16 @@ const AssistantRunningNotice: FC<{ label: string; compact?: boolean }> = ({
   return (
     <div
       className={cn(
-        "inline-flex w-fit items-center gap-2 rounded-full border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-[var(--color-control-shadow)]",
-        compact && "mb-3 text-[13px]",
+        "flex w-fit items-center gap-2.5 py-1 px-1 text-left select-none transition-all",
+        compact && "mb-2",
       )}
     >
-      <LoaderCircleIcon className="size-3.5 shrink-0 animate-spin" />
-      <span>{label}</span>
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400">
+        <LoaderCircleIcon className="size-3 animate-spin" />
+      </span>
+      <span className="text-[13px] font-medium text-foreground/80">
+        {label}
+      </span>
     </div>
   );
 };
@@ -1028,12 +1032,16 @@ const AssistantCancelledNotice: FC<{ compact?: boolean }> = ({
   return (
     <div
       className={cn(
-        "inline-flex w-fit items-center gap-2 rounded-full border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-[var(--color-control-shadow)]",
-        compact && "mb-3 text-[13px]",
+        "flex w-fit items-center gap-2.5 py-1 px-1 text-left select-none transition-all",
+        compact && "mb-2",
       )}
     >
-      <SquareIcon className="size-3 shrink-0 fill-current" />
-      <span>已停止</span>
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+        <SquareIcon className="size-3 fill-current" />
+      </span>
+      <span className="text-[13px] font-medium text-foreground/80">
+        已停止
+      </span>
     </div>
   );
 };
@@ -1148,6 +1156,26 @@ const AssistantActionBar: FC = () => {
   );
 };
 
+const EditComposer: FC = () => {
+  const aui = useAui();
+  const text = useAuiState((s) => s.composer.text);
+  
+  return (
+    <ComposerPrimitive.Root className="relative col-start-2 min-w-0">
+      <div className="wrap-break-word peer grid rounded-[var(--radius-shell)] bg-slate-100/80 px-4 py-3 text-slate-900 shadow-sm dark:bg-slate-800/80 dark:text-slate-100">
+        <div className="pointer-events-none col-start-1 row-start-1 invisible break-words whitespace-pre-wrap">
+          {text + "\u200b"}
+        </div>
+        <ComposerPrimitive.Input
+          autoFocus
+          onBlur={() => aui.composer().cancel()}
+          className="col-start-1 row-start-1 m-0 flex max-h-[80vh] w-full resize-none border-0 bg-transparent p-0 shadow-none outline-none ring-0 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+        />
+      </div>
+    </ComposerPrimitive.Root>
+  );
+};
+
 const UserMessage: FC = () => {
   return (
     <MessagePrimitive.Root
@@ -1155,24 +1183,40 @@ const UserMessage: FC = () => {
       data-role="user"
     >
       <UserMessageAttachments />
-      <div className="relative col-start-2 min-w-0">
-        <div className="wrap-break-word peer rounded-[var(--radius-shell)] bg-slate-900 px-4 py-3 text-white shadow-sm empty:hidden">
-          <MessagePrimitive.Parts />
+      <ComposerPrimitive.If editing>
+        <EditComposer />
+      </ComposerPrimitive.If>
+
+      <ComposerPrimitive.If editing={false}>
+        <div className="relative col-start-2 min-w-0">
+          <div className="wrap-break-word peer rounded-[var(--radius-shell)] bg-slate-100/80 dark:bg-slate-800/80 px-4 py-3 text-slate-900 dark:text-slate-100 shadow-sm empty:hidden">
+            <MessagePrimitive.Parts />
+          </div>
+          <div className="mt-1 flex min-h-6 justify-end">
+            <ActionBarPrimitive.Root
+              hideWhenRunning
+              autohide="not-last"
+              className="flex gap-1 text-muted-foreground"
+            >
+              <ActionBarPrimitive.Edit asChild>
+                <TooltipIconButton tooltip="编辑">
+                  <PencilIcon className="size-4" />
+                </TooltipIconButton>
+              </ActionBarPrimitive.Edit>
+              <ActionBarPrimitive.Copy asChild>
+                <TooltipIconButton tooltip="复制">
+                  <AuiIf condition={(s) => s.message.isCopied}>
+                    <CheckIcon />
+                  </AuiIf>
+                  <AuiIf condition={(s) => !s.message.isCopied}>
+                    <CopyIcon />
+                  </AuiIf>
+                </TooltipIconButton>
+              </ActionBarPrimitive.Copy>
+            </ActionBarPrimitive.Root>
+          </div>
         </div>
-        <div className="mt-1 flex min-h-6 justify-end">
-          <ActionBarPrimitive.Root
-            hideWhenRunning
-            autohide="not-last"
-            className="flex gap-1 text-muted-foreground"
-          >
-            <ActionBarPrimitive.Edit asChild>
-              <TooltipIconButton tooltip="编辑">
-                <PencilIcon className="size-4" />
-              </TooltipIconButton>
-            </ActionBarPrimitive.Edit>
-          </ActionBarPrimitive.Root>
-        </div>
-      </div>
+      </ComposerPrimitive.If>
     </MessagePrimitive.Root>
   );
 };
