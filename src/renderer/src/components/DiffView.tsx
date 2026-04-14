@@ -127,7 +127,7 @@ function DiffImagePreview({
   }, [previewPath]);
 
   return (
-    <div className="rounded-[16px] bg-shell-panel px-4 py-4">
+    <div className="bg-shell-panel px-4 py-4">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <FileImageIcon className="size-4" />
         <span>{status === "deleted" ? "图片已删除，无法按当前工作区预览。" : "图片文件预览"}</span>
@@ -155,7 +155,7 @@ function DiffImagePreview({
 
 function DiffBinaryPreview({ status }: { status?: GitDiffFile["status"] }) {
   return (
-    <div className="rounded-[16px] bg-shell-panel px-4 py-4">
+    <div className="bg-shell-panel px-4 py-4">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <FileWarningIcon className="size-4" />
         <span>{status === "deleted" ? "二进制文件已删除" : "二进制文件"}</span>
@@ -236,7 +236,7 @@ function TextDiffView({ diffState, maxHunks, maxLines, layout = "vertical" }: {
   if (lines.length === 0) {
     if (diffState.rawPatch) {
       return (
-        <div className="overflow-hidden rounded-[16px] bg-code-bg">
+        <div className="overflow-hidden bg-code-bg">
           <pre className="diff-view-code max-h-[420px] overflow-auto px-4 py-3 text-xs leading-6 text-code-text">
             {diffState.rawPatch}
           </pre>
@@ -245,7 +245,7 @@ function TextDiffView({ diffState, maxHunks, maxLines, layout = "vertical" }: {
     }
 
     return (
-      <div className="rounded-[16px] bg-shell-panel px-4 py-3 text-xs text-text-muted">
+      <div className="bg-shell-panel px-4 py-3 text-xs text-text-muted">
         内容无变化
       </div>
     );
@@ -401,7 +401,7 @@ function TextDiffView({ diffState, maxHunks, maxLines, layout = "vertical" }: {
   };
 
   return (
-    <div className="overflow-hidden rounded-[16px] bg-code-bg">
+    <div className="overflow-hidden bg-code-bg">
       <div className="max-h-[420px] overflow-auto">
         {layout === "horizontal" ? renderHorizontal() : renderVertical()}
       </div>

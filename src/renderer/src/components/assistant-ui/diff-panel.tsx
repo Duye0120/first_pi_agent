@@ -269,7 +269,7 @@ function DiffFileCard({
       </CollapsibleTrigger>
 
       <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-        <div className="px-3 pb-3">
+        <div className="border-t border-border">
           <DiffView
             patch={file.patch}
             fileName={file.path}
