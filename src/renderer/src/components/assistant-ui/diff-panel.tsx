@@ -366,6 +366,32 @@ function DiffPanelInner({
   const currentSourceSnapshot = overview?.sources[selectedDiffSource] ?? EMPTY_SOURCE_SNAPSHOT;
   const currentExpandedPaths = expandedDiffPaths[selectedDiffSource] ?? [];
 
+  const [width, setWidth] = useState(384);
+  const draggingRef = useRef(false);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    document.body.style.cursor = 'col-resize';
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const newWidth = window.innerWidth - ev.clientX;
+      setWidth(Math.max(240, Math.min(newWidth, window.innerWidth - 100)));
+    };
+
+    const handleMouseUp = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.style.cursor = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, []);
+
   const handleToggleFile = useCallback((path: string, open: boolean) => {
     setExpandedDiffPaths((current) => {
       const sourcePaths = current[selectedDiffSource] ?? [];
@@ -413,9 +439,18 @@ function DiffPanelInner({
   const drawerBase =
     "fixed right-0 top-0 bottom-0 z-50 flex h-full min-h-0 flex-col bg-background border-l shadow-xl px-4 py-4 transform transition-transform duration-300 ease-in-out";
   const drawerClosed = `${drawerBase} translate-x-full`;
-  const drawerOpen = `${drawerBase} translate-x-0 w-[24rem]`;
+  const drawerOpen = `${drawerBase} translate-x-0`;
 
   const drawerClass = open ? drawerOpen : drawerClosed;
+
+  function ResizeHandle() {
+    return (
+      <div 
+        className="absolute left-[-2px] top-0 bottom-0 w-[6px] cursor-col-resize hover:bg-[color:var(--color-control-bg-hover)] active:bg-[color:var(--color-border-focus)] transition-colors z-50 opacity-0 hover:opacity-100 active:opacity-100"
+        onMouseDown={handleMouseDown}
+      />
+    );
+  }
 
   function DrawerHeader({ children }: { children: React.ReactNode }) {
     return (
@@ -437,7 +472,8 @@ function DiffPanelInner({
 
   if (!overview) {
     return (
-      <aside className={drawerClass}>
+      <aside className={drawerClass} style={{ width: open ? width : 384 }}>
+        {open && <ResizeHandle />}
         <DrawerHeader>
           <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">Diff</p>
         </DrawerHeader>
@@ -453,7 +489,8 @@ function DiffPanelInner({
 
   if (!overview.isGitRepo) {
     return (
-      <aside className={drawerClass}>
+      <aside className={drawerClass} style={{ width: open ? width : 384 }}>
+        {open && <ResizeHandle />}
         <DrawerHeader>
           <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">Diff</p>
         </DrawerHeader>
@@ -478,7 +515,8 @@ function DiffPanelInner({
   const expandedPathSet = new Set(currentExpandedPaths);
 
   return (
-    <aside className={drawerClass}>
+    <aside className={drawerClass} style={{ width: open ? width : 384 }}>
+      {open && <ResizeHandle />}
       <DrawerHeader>
         <div>
           <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">Diff</p>
