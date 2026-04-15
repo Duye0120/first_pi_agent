@@ -4,8 +4,20 @@ import type {
   DiagnosticLogId,
   DiagnosticLogSnapshot,
 } from "@shared/contracts";
+import { formatDateTimeInTimeZone } from "@shared/timezone";
 import { Button } from "@renderer/components/assistant-ui/button";
 import { cn } from "@renderer/lib/utils";
+
+const LOG_DATE_KEYS = new Set([
+  "timestamp",
+  "generatedAt",
+  "createdAt",
+  "updatedAt",
+  "startedAt",
+  "endedAt",
+  "respondedAt",
+  "interruptedAt",
+]);
 
 function formatBytes(sizeBytes: number): string {
   if (sizeBytes < 1024) {
@@ -17,19 +29,55 @@ function formatBytes(sizeBytes: number): string {
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatTimestamp(value: string | null): string {
+function formatTimestamp(value: string | null, timeZone: string): string {
   if (!value) {
     return "—";
   }
 
   try {
-    return new Date(value).toLocaleString("zh-CN");
+    return formatDateTimeInTimeZone(value, timeZone);
   } catch {
     return value;
   }
 }
 
-function formatLogTail(tail: string): string {
+function normalizeLogTimestamp(
+  value: string | number,
+  timeZone: string,
+): string | number {
+  const parsed = typeof value === "number" ? new Date(value) : new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return formatDateTimeInTimeZone(parsed, timeZone);
+}
+
+function normalizeLogValue(value: unknown, timeZone: string, key?: string): unknown {
+  if (key && LOG_DATE_KEYS.has(key)) {
+    if (typeof value === "string" || typeof value === "number") {
+      return normalizeLogTimestamp(value, timeZone);
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeLogValue(item, timeZone));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([entryKey, entryValue]) => [
+      entryKey,
+      normalizeLogValue(entryValue, timeZone, entryKey),
+    ]),
+  );
+}
+
+function formatLogTail(tail: string, timeZone: string): string {
   const lines = tail
     .replace(/\r\n/g, "\n")
     .split("\n")
@@ -43,7 +91,8 @@ function formatLogTail(tail: string): string {
   return lines
     .map((line) => {
       try {
-        return JSON.stringify(JSON.parse(line), null, 2);
+        const parsed = JSON.parse(line);
+        return JSON.stringify(normalizeLogValue(parsed, timeZone), null, 2);
       } catch {
         return line;
       }
@@ -66,7 +115,7 @@ function MetaItem({
   );
 }
 
-export function LogsSection() {
+export function LogsSection({ timeZone }: { timeZone: string }) {
   const desktopApi = window.desktopApi;
   const [bundle, setBundle] = useState<DiagnosticLogBundle | null>(null);
   const [selectedLogId, setSelectedLogId] = useState<DiagnosticLogId>("app");
@@ -112,8 +161,8 @@ export function LogsSection() {
   }, [bundle, selectedLogId]);
 
   const formattedTail = useMemo(
-    () => formatLogTail(currentFile?.tail ?? ""),
-    [currentFile?.tail],
+    () => formatLogTail(currentFile?.tail ?? "", timeZone),
+    [currentFile?.tail, timeZone],
   );
 
   const handleOpenFolder = useCallback(async () => {
@@ -185,7 +234,7 @@ export function LogsSection() {
         />
         <MetaItem
           label="更新时间"
-          value={formatTimestamp(currentFile?.updatedAt ?? null)}
+          value={formatTimestamp(currentFile?.updatedAt ?? null, timeZone)}
         />
         <MetaItem
           label="尾部行数"

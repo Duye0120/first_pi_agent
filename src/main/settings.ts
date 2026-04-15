@@ -31,6 +31,7 @@ function getDefaultWorkspacePath(): string {
 
 const DEFAULT_SETTINGS: Settings = {
   defaultModelId: DEFAULT_MODEL_ENTRY_ID,
+  workerModelId: null,
   thinkingLevel: "off",
   timeZone: SYSTEM_TIME_ZONE,
   theme: "light",
@@ -108,6 +109,10 @@ function mergeSettings(source?: Partial<Settings> | null): Settings {
         ? source.workspace
         : getDefaultWorkspacePath(),
     defaultModelId,
+    workerModelId:
+      typeof source?.workerModelId === "string" && source.workerModelId.trim()
+        ? source.workerModelId.trim()
+        : null,
     thinkingLevel: normalizeThinkingLevel(sourceWithLegacy.thinkingLevel),
     timeZone: normalizeTimeZoneSetting(sourceWithLegacy.timeZone),
     terminal: {

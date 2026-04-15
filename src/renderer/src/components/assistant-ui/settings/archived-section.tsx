@@ -5,11 +5,13 @@ import { SettingsCard } from "./shared";
 
 export function ArchivedSection({
   archivedSummaries,
+  timeZone,
   onOpenArchivedSession,
   onUnarchiveSession,
   onDeleteSession,
 }: {
   archivedSummaries: ChatSessionSummary[];
+  timeZone: string;
   onOpenArchivedSession: (sessionId: string) => void;
   onUnarchiveSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
@@ -39,7 +41,7 @@ export function ArchivedSection({
                   {summary.title}
                 </p>
                 <p className="mt-1 text-[12px] text-muted-foreground">
-                  最后更新于 {formatArchivedTime(summary.updatedAt)}
+                  最后更新于 {formatArchivedTime(summary.updatedAt, timeZone)}
                 </p>
               </button>
 

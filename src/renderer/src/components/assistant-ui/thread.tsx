@@ -66,7 +66,6 @@ import {
 import {
   EMPTY_CONTEXT_USAGE_SUMMARY,
   formatTokenCount,
-  formatUsedPercent,
   type ContextUsageSummary,
 } from "@renderer/lib/context-usage";
 import { Reasoning } from "@renderer/components/assistant-ui/reasoning";
@@ -213,16 +212,6 @@ function buildModelOptions(
     disabled: false,
   }));
 
-  if (!options.some((option) => option.id === currentModelId)) {
-    options.unshift({
-      id: currentModelId,
-      name: findEntryLabel(currentModelId, sources, entries),
-      description: "当前模型",
-      icon: <BotIcon className="size-4" />,
-      disabled: false,
-    });
-  }
-
   return options;
 }
 
@@ -283,6 +272,56 @@ export const Thread: FC<ThreadProps> = ({
   onBranchChanged = () => undefined,
   disableGlobalSideEffects = false,
 }) => {
+  const viewportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!terminalOpen || !viewportRef.current) {
+      return;
+    }
+
+    const viewport = viewportRef.current;
+    let frameId = 0;
+    let timeoutId = 0;
+
+    const scrollToBottom = (behavior: ScrollBehavior) => {
+      viewport.scrollTo({
+        top: viewport.scrollHeight,
+        behavior,
+      });
+    };
+
+    const scheduleScroll = (behavior: ScrollBehavior) => {
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+
+      frameId = requestAnimationFrame(() => {
+        scrollToBottom(behavior);
+      });
+    };
+
+    scheduleScroll("auto");
+
+    const resizeObserver = new ResizeObserver(() => {
+      scheduleScroll("auto");
+    });
+    resizeObserver.observe(viewport);
+
+    timeoutId = window.setTimeout(() => {
+      scrollToBottom("smooth");
+    }, 260);
+
+    return () => {
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      resizeObserver.disconnect();
+    };
+  }, [terminalOpen]);
+
   const [sources, setSources] = useState<ProviderSource[]>([]);
   const [entries, setEntries] = useState<ModelEntry[]>([]);
 
@@ -332,11 +371,12 @@ export const Thread: FC<ThreadProps> = ({
       >
         <div className="relative flex min-h-0 flex-1 flex-col">
           <ThreadPrimitive.Viewport
+            ref={viewportRef}
             turnAnchor="bottom"
             autoScroll
             scrollToBottomOnInitialize
             scrollToBottomOnThreadSwitch
-            className="relative mr-3 min-h-0 flex-1 overflow-x-auto overflow-y-auto scroll-smooth pl-8 pr-5 pt-3"
+            className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto scroll-smooth px-6 pt-4"
           >
             <AuiIf condition={(s) => s.thread.isEmpty}>
               <ThreadWelcome />
@@ -350,8 +390,8 @@ export const Thread: FC<ThreadProps> = ({
           <div
             className={
               terminalOpen
-                ? "relative mx-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-2 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel/85 to-transparent px-8 pb-3 pt-4"
-                : "relative mx-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-3 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel to-transparent px-8 pb-5 pt-9 md:pb-6"
+                ? "relative mx-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-2 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel/85 to-transparent px-6 pb-4 pt-2"
+                : "relative mx-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-3 overflow-visible bg-gradient-to-t from-shell-panel via-shell-panel to-transparent px-6 pb-6 pt-4 md:pb-6"
             }
           >
             <ThreadScrollToBottom />
@@ -455,6 +495,7 @@ const Composer: FC<ThreadResolvedProps> = ({
 }) => {
   const aui = useAui();
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
+
   const [inputScrollable, setInputScrollable] = useState(false);
   const supportsVision =
     currentModelEntry?.capabilities.vision ??
@@ -732,7 +773,7 @@ const ComposerAction: FC<
               }
             }}
             disabled={isCancelling}
-            className="flex h-9 items-center gap-2 rounded-full bg-[var(--color-accent)] px-3 text-white shadow-none hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-100"
+            className="flex h-8 items-center gap-1.5 rounded-[var(--radius-shell)] bg-[color:var(--color-accent)] px-2.5 text-[color:var(--chela-text-primary)] shadow-none hover:bg-[color:var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-100"
             aria-label={isCancelling ? runStatusLabel || "正在停止…" : "停止生成"}
           >
             {isCancelling ? (
@@ -740,7 +781,7 @@ const ComposerAction: FC<
             ) : (
               <SquareIcon className="size-3 fill-current" />
             )}
-            <span className="text-[13px] font-medium">
+            <span className="text-[12px] font-medium">
               {isCancelling ? runStatusLabel || "正在停止…" : "停止"}
             </span>
           </Button>
@@ -758,7 +799,7 @@ const ComposerAction: FC<
                 variant="default"
                 size="icon"
                 disabled
-                className="size-9 rounded-full bg-[var(--color-accent)] text-white shadow-none hover:bg-[var(--color-accent-hover)]"
+                className="size-8 rounded-[var(--radius-shell)] bg-[color:var(--color-accent)] text-white shadow-none hover:bg-[color:var(--color-accent-hover)]"
                 aria-label="Send message"
               >
                 <ArrowUpIcon className="size-4" />
@@ -771,7 +812,7 @@ const ComposerAction: FC<
                   type="button"
                   variant="default"
                   size="icon"
-                  className="size-9 rounded-full bg-[var(--color-accent)] text-white shadow-none hover:bg-[var(--color-accent-hover)]"
+                  className="size-8 rounded-[var(--radius-shell)] bg-[color:var(--color-accent)] text-white shadow-none hover:bg-[color:var(--color-accent-hover)]"
                   aria-label="Send message"
                 >
                   <ArrowUpIcon className="size-4" />
@@ -802,7 +843,6 @@ const ComposerStatusBar: FC<{
     const isThreadRunning = useAuiState((s) => s.thread.isRunning);
     const composerText = useAuiState((s) => s.composer.text);
     const { runStage, isCancelling } = useThreadRunStatus();
-    const usedPercent = formatUsedPercent(contextSummary);
     const showUsage =
       typeof contextSummary.latestInputTokens === "number" ||
       typeof contextSummary.latestOutputTokens === "number";
@@ -867,11 +907,6 @@ const ComposerStatusBar: FC<{
             </Tooltip>
           ) : null}
 
-          {usedPercent ? (
-            <span className="hidden shrink-0 rounded-full bg-shell-panel px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-text-secondary)] [font-variant-numeric:tabular-nums] dark:bg-white/8 sm:inline-flex">
-              ctx {usedPercent}
-            </span>
-          ) : null}
         </div>
 
         <ContextSummaryTrigger summary={contextSummary} onCompact={onCompactContext} />

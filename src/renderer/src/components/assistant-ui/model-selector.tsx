@@ -117,7 +117,7 @@ function ModelSelectorValue() {
     value != null ? models.find((model) => model.id === value) : undefined;
 
   if (!selectedModel) {
-    return <SelectPrimitive.Value />;
+    return <span className="text-muted-foreground truncate font-medium text-[12px]">选择模型...</span>;
   }
 
   return (

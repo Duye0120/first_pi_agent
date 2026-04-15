@@ -118,7 +118,7 @@ export function TerminalDrawer({ open, onToggle, settings }: Props) {
 
   return (
     <div
-      className={`shrink-0 overflow-hidden ${open ? "pointer-events-auto" : "pointer-events-none"}`}
+      className={`shrink-0 overflow-hidden border-t border-[color:var(--color-control-border)] shadow-[0_-4px_16px_rgba(0,0,0,0.03)] dark:shadow-[0_-4px_16px_rgba(0,0,0,0.2)] ${open ? "pointer-events-auto" : "pointer-events-none"}`}
       style={{
         height: visibleHeight,
         opacity: open ? 1 : 0,
@@ -127,7 +127,7 @@ export function TerminalDrawer({ open, onToggle, settings }: Props) {
           : "height 240ms linear, opacity 180ms ease-out",
       }}
     >
-      <div className="relative flex h-full flex-col bg-shell-terminal">
+      <div className="relative flex h-full flex-col bg-[color:var(--color-control-panel-bg)]">
         <div
           aria-hidden="true"
           className="absolute inset-x-0 top-0 z-20 h-3 cursor-ns-resize bg-transparent"
@@ -135,18 +135,17 @@ export function TerminalDrawer({ open, onToggle, settings }: Props) {
         />
 
         {/* Zed-like Header */}
-        <div className="flex min-w-0 items-center justify-between bg-background/70 pr-2">
-          <div className="flex min-w-0 flex-1 flex-nowrap items-end gap-1 overflow-x-auto overflow-y-hidden pt-1.5 pl-2 whitespace-nowrap [&::-webkit-scrollbar]:h-[3px] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-foreground/20 [&::-webkit-scrollbar-track]:bg-transparent">
+        <div className="flex min-w-0 items-center justify-between bg-transparent pr-2 border-b border-[color:var(--color-control-border)]">
+          <div className="flex min-w-0 flex-1 flex-nowrap items-end gap-1 overflow-x-auto overflow-y-hidden pt-1.5 pl-2 whitespace-nowrap [&::-webkit-scrollbar]:h-[3px] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color:var(--color-text-tertiary)] [&::-webkit-scrollbar-track]:bg-transparent">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTabId(tab.id)}
-                className={`group relative -mb-px flex shrink-0 items-center gap-2 rounded-t-[6px] px-3 py-1 text-[11px] font-medium transition-colors ${
-                  tab.id === activeTabId
-                    ? "z-10 border border-[color:var(--color-control-border)] bg-[color:var(--color-control-panel-bg)] text-foreground shadow-[var(--color-control-shadow)]"
-                    : "border-transparent text-[color:var(--color-text-secondary)] hover:bg-shell-hover hover:text-foreground"
-                }`}
+                className={`group relative -mb-px flex shrink-0 items-center gap-2 rounded-t-[6px] px-3 py-1.5 text-[11px] font-medium transition-colors ${tab.id === activeTabId
+                  ? "z-10 bg-[color:var(--color-control-tab-bg)] text-[color:var(--color-text-primary)] shadow-sm border border-b-0 border-[color:var(--color-control-border)]"
+                  : "border-transparent border overflow-visible border-b-0 text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-control-toolbar-hover)] hover:text-[color:var(--color-text-primary)]"
+                  }`}
               >
                 <span className="flex items-center gap-1.5">
                   <CommandLineIcon className="h-3.5 w-3.5 text-[color:var(--color-text-secondary)]" />

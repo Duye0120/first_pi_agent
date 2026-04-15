@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AdjustmentsHorizontalIcon,
   ArchiveBoxIcon,
   ArrowUturnLeftIcon,
   ChevronDownIcon,
@@ -72,7 +73,7 @@ function SidebarImpl({
   onDeleteGroup,
   onSetSessionGroup,
   viewMode = "threads",
-  activeSettingsSection = "ai_model",
+  activeSettingsSection = "general",
   onSelectSettingsSection,
   onExitSettings,
 }: SidebarProps) {
@@ -110,7 +111,8 @@ function SidebarImpl({
     label: string;
     icon: typeof Cog6ToothIcon;
   }[] = [
-      { id: "ai_model", label: "AI & 模型", icon: SparklesIcon },
+      { id: "general", label: "通用", icon: AdjustmentsHorizontalIcon },
+      { id: "ai_model", label: "模型", icon: SparklesIcon },
       { id: "workspace", label: "工作区", icon: FolderIcon },
       { id: "interface", label: "界面与终端", icon: SwatchIcon },
       { id: "system", label: "数据与系统", icon: Cog6ToothIcon },
@@ -128,9 +130,9 @@ function SidebarImpl({
     <button
       type="button"
       onClick={onClick}
-      className="chela-list-item flex h-11 w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-3.5 text-[12px] text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
+      className="chela-list-item flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-[12px] text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
     >
-      <Icon className="h-3.5 w-3.5 shrink-0" />
+      <Icon className="h-4 w-4 shrink-0" />
       <span className="truncate">{label}</span>
     </button>
   );
@@ -242,12 +244,12 @@ function SidebarImpl({
                 key={id}
                 type="button"
                 onClick={() => onSelectSettingsSection?.(id)}
-                className={`chela-list-item flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left text-[12px] transition ${active
-                    ? "chela-list-item-active font-medium"
-                    : "text-[color:var(--chela-text-secondary)] hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
+                className={`chela-list-item flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-[12px] transition ${active
+                  ? "chela-list-item-active font-medium bg-[color:var(--color-control-bg-hover)]"
+                  : "text-[color:var(--chela-text-secondary)] hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
                   }`}
               >
-                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <Icon className="h-4 w-4 shrink-0" />
                 <span className="truncate">{label}</span>
               </button>
             );
@@ -309,7 +311,7 @@ function SidebarImpl({
             setThreadMenuOpenFor(null);
             setArchiveConfirmFor(null);
           }}
-          className={`chela-list-item group flex cursor-pointer items-center gap-1.5 py-2.5 transition ${indented ? "pl-6 pr-2.5" : "px-3.5"
+          className={`chela-list-item group flex cursor-pointer items-center gap-2 py-2 transition ${indented ? "pl-7 pr-3" : "px-3"
             } ${active ? "chela-list-item-active font-medium" : ""}`}
         >
           <div
@@ -472,8 +474,8 @@ function SidebarImpl({
                   setMovingSessionId(null);
                 }}
                 className={`flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] hover:bg-[color:var(--color-control-bg-hover)] ${summary.groupId === g.id
-                    ? "text-[color:var(--color-control-selected-text)]"
-                    : "text-[color:var(--chela-text-secondary)] hover:text-[color:var(--chela-text-primary)]"
+                  ? "text-[color:var(--color-control-selected-text)]"
+                  : "text-[color:var(--chela-text-secondary)] hover:text-[color:var(--chela-text-primary)]"
                   }`}
               >
                 <FolderIcon className="h-3 w-3 shrink-0 text-[color:var(--chela-text-secondary)]" />
@@ -497,16 +499,16 @@ function SidebarImpl({
     <div className="relative h-full overflow-hidden">
       <div
         className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${isSettings
-            ? "pointer-events-auto translate-x-0 opacity-100"
-            : "pointer-events-none -translate-x-2 opacity-0"
+          ? "pointer-events-auto translate-x-0 opacity-100"
+          : "pointer-events-none -translate-x-2 opacity-0"
           }`}
       >
         {settingsSidebar}
       </div>
       <div
         className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${!isSettings
-            ? "pointer-events-auto translate-x-0 opacity-100"
-            : "pointer-events-none translate-x-2 opacity-0"
+          ? "pointer-events-auto translate-x-0 opacity-100"
+          : "pointer-events-none translate-x-2 opacity-0"
           }`}
       >
         <aside className="flex h-full bg-transparent flex-col text-[13px] text-[color:var(--chela-text-primary)]">
@@ -515,9 +517,9 @@ function SidebarImpl({
             <button
               type="button"
               onClick={onNewSession}
-              className="chela-list-item flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-[12px] font-medium text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
+              className="chela-list-item flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-[12px] font-medium text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
             >
-              <SquarePen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+              <SquarePen className="h-4 w-4 shrink-0" strokeWidth={1.8} />
               <span>新线程</span>
             </button>
           </div>
@@ -704,7 +706,7 @@ function SidebarImpl({
                       }}
                     >
                       {/* Group header */}
-                      <div className="chela-list-item group flex items-center px-2.5 py-2.5 transition">
+                      <div className="chela-list-item group flex items-center px-3 py-2 transition">
                         <button
                           type="button"
                           onClick={() => toggleGroupCollapse(group.id)}

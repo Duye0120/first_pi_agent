@@ -6,7 +6,6 @@ import type {
 } from "@shared/contracts";
 import type { ModelOption } from "@renderer/components/assistant-ui/model-selector";
 import { KeysSection } from "./keys-section";
-import { GeneralSection } from "./general-section";
 
 type AiModelSectionProps = {
   settings: Settings;
@@ -25,40 +24,20 @@ type AiModelSectionProps = {
 };
 
 export function AiModelSection({
-  settings,
   currentModelId,
-  thinkingLevel,
-  canConfigureThinking,
-  thinkingHint,
-  thinkingOptions,
-  modelOptions,
   onModelChange,
-  onThinkingLevelChange,
-  onSettingsChange,
   sources,
   entries,
   onDirectoryChanged,
 }: AiModelSectionProps) {
   return (
-    <div className="space-y-4 flex flex-col min-h-[850px]">
+    <div className="space-y-4 flex flex-col min-h-[500px]">
       <KeysSection
         currentModelId={currentModelId}
         initialSources={sources}
         initialEntries={entries}
         onDirectoryChanged={onDirectoryChanged}
         onModelChange={onModelChange}
-      />
-      <GeneralSection
-        settings={settings}
-        currentModelId={currentModelId}
-        thinkingLevel={thinkingLevel}
-        canConfigureThinking={canConfigureThinking}
-        thinkingHint={thinkingHint}
-        thinkingOptions={thinkingOptions}
-        modelOptions={modelOptions}
-        onModelChange={onModelChange}
-        onThinkingLevelChange={onThinkingLevelChange}
-        onSettingsChange={onSettingsChange}
       />
     </div>
   );

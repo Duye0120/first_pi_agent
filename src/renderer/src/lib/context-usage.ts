@@ -17,6 +17,7 @@ export const EMPTY_CONTEXT_USAGE_SUMMARY: ContextUsageSummary = {
   snapshotRevision: 0,
   snapshotUpdatedAt: null,
   compactedUntilSeq: null,
+  compactedMessageCount: 0,
   snapshotSummary: null,
   currentTask: null,
   currentState: null,
@@ -83,15 +84,15 @@ export function getContextStatusCopy(summary: ContextUsageSummary) {
   const remainingPercent = formatRemainingPercent(summary);
 
   if (usedPercent && remainingPercent) {
-    return `${usedPercent} 已用（剩余 ${remainingPercent}）`;
+    return `已用 ${usedPercent}，剩余 ${remainingPercent}`;
   }
 
   if (summary.state === "window-only") {
-    return "等待首轮 usage";
+    return "等待首轮用量";
   }
 
   if (summary.state === "usage-only") {
-    return "模型未提供视窗上限";
+    return "模型未提供窗口上限";
   }
 
   return "未知";

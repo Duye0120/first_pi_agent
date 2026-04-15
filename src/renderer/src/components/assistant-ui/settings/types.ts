@@ -5,6 +5,7 @@ import type {
 } from "@shared/contracts";
 
 export type SettingsSection =
+  | "general"
   | "ai_model"
   | "workspace"
   | "interface"

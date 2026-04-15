@@ -83,6 +83,7 @@ export const IPC_CHANNELS = {
   gitUnstageFiles: "git:unstage-files",
   gitCommit: "git:commit",
   gitPush: "git:push",
+  gitPull: "git:pull",
   gitStageHunk: "git:stage-hunk",
   gitRevertFile: "git:revert-file",
   gitRevertHunk: "git:revert-hunk",
@@ -91,6 +92,9 @@ export const IPC_CHANNELS = {
   gitListBranches: "git:list-branches",
   gitSwitchBranch: "git:switch-branch",
   gitCreateBranch: "git:create-branch",
+
+  // Worker (background model tasks)
+  workerGenerateCommitMessage: "worker:generate-commit-message",
 
   // UI
   uiGetState: "ui:get-state",

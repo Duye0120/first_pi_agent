@@ -1,3 +1,4 @@
+import { formatTimeInZone } from "@shared/timezone";
 import type { Settings, ThinkingLevel } from "@shared/contracts";
 import { THINKING_LEVEL_OPTIONS } from "@renderer/lib/thinking-levels";
 import type { SettingsSection } from "./types";
@@ -8,9 +9,14 @@ export const SETTINGS_SECTIONS: {
   description: string;
 }[] = [
   {
+    id: "general",
+    label: "通用",
+    description: "配置应用的默认行为、内置代理模型与通用设定。"
+  },
+  {
     id: "ai_model",
-    label: "AI & 模型",
-    description: "配置提供商鉴权、默认交互模型与默认思考强度设置。"
+    label: "模型",
+    description: "配置提供商鉴权、Base URL与模型目录配置。"
   },
   {
     id: "workspace",
@@ -56,9 +62,9 @@ export function parseNumericInput(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export function formatArchivedTime(iso: string) {
+export function formatArchivedTime(iso: string, timeZone: string) {
   try {
-    return new Date(iso).toLocaleString("zh-CN", {
+    return formatTimeInZone(iso, timeZone, "zh-CN", {
       month: "numeric",
       day: "numeric",
       hour: "2-digit",

@@ -137,6 +137,7 @@ const desktopApi: DesktopApi = {
     unstageFiles: (paths: string[]) => ipcRenderer.invoke(IPC_CHANNELS.gitUnstageFiles, paths),
     commit: (message: string) => ipcRenderer.invoke(IPC_CHANNELS.gitCommit, message),
     push: () => ipcRenderer.invoke(IPC_CHANNELS.gitPush),
+    pull: () => ipcRenderer.invoke(IPC_CHANNELS.gitPull),
   },
 
   ui: {

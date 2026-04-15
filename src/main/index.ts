@@ -11,6 +11,7 @@ import { registerWorkspaceIpc } from "./ipc/workspace.js";
 import { registerProvidersIpc } from "./ipc/providers.js";
 import { registerWorkbenchIpc } from "./ipc/workbench.js";
 import { registerWindowIpc } from "./ipc/window.js";
+import { registerWorkerIpc } from "./ipc/worker.js";
 import {
   configureAppIdentity,
   createMainWindow,
@@ -53,6 +54,8 @@ function registerIpcHandlers() {
   registerWorkspaceIpc();
 
   registerWorkbenchIpc();
+
+  registerWorkerIpc();
 
   registerWindowIpc();
 }

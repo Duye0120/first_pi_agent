@@ -8,10 +8,15 @@ import {
   ColumnsIcon,
   ListIcon,
   UploadIcon,
+  DownloadIcon,
   CheckIcon,
   PlusIcon,
   MinusIcon,
-  SendIcon,
+  SparklesIcon,
+  UserIcon,
+  FolderTreeIcon,
+  ListTreeIcon,
+  TrashIcon,
 } from "lucide-react";
 import type {
   GitDiffFile,
@@ -22,6 +27,7 @@ import type {
 import { Badge } from "@renderer/components/assistant-ui/badge";
 import { Button } from "@renderer/components/assistant-ui/button";
 import { DiffView } from "@renderer/components/DiffView";
+import { CommitDescriptionEditor } from "@renderer/components/ui/commit-description-editor";
 import { FileTreeView } from "@renderer/components/assistant-ui/diff-tree";
 import {
   SelectContent,
@@ -34,7 +40,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@renderer/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@renderer/components/ui/tooltip";
 import { cn } from "@renderer/lib/utils";
+import { useResizable } from "@renderer/hooks/use-resizable";
 
 const DIFF_SOURCES: readonly GitDiffSource[] = ["unstaged", "staged", "all"];
 const EMPTY_SOURCE_SNAPSHOT: GitDiffSourceSnapshot = {
@@ -76,7 +88,7 @@ function EmptyPanelState({
   description: string;
 }) {
   return (
-    <div className="grid min-h-[220px] place-items-center rounded-[6px] border border-border bg-[color:var(--color-control-panel-bg)] px-6 py-7 text-center shadow-sm">
+    <div className="grid min-h-[220px] place-items-center rounded-[6px] border border-border bg-[color:var(--color-control-panel-bg)] px-6 py-7 text-center">
       <div className="max-w-[260px]">
         <p className="text-sm font-medium text-foreground">{title}</p>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
@@ -170,15 +182,16 @@ function DiffSourceSelect({
 
           return (
             <SelectItem key={source} value={source} textValue={meta.label}>
-              <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-[12px] font-medium">{meta.label}</p>
-                  <p className="truncate text-[11px] text-muted-foreground">{meta.description}</p>
+              <div className="flex flex-col min-w-0 py-0.5 text-left">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-medium leading-none">{meta.label}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono leading-none">
+                    {formatSignedCount(snapshot.totalAdditions, "+")} · {formatSignedCount(snapshot.totalDeletions, "-")}
+                  </span>
                 </div>
-                <div className="shrink-0 text-right text-[11px] text-muted-foreground">
-                  <p>{snapshot.totalFiles} 文件</p>
-                  <p>{formatSignedCount(snapshot.totalAdditions, "+")} · {formatSignedCount(snapshot.totalDeletions, "-")}</p>
-                </div>
+                <span className="text-[11px] text-muted-foreground mt-1.5 leading-none">
+                  {meta.description}
+                </span>
               </div>
             </SelectItem>
           );
@@ -233,21 +246,23 @@ function DiffFileCard({
   expanded,
   onExpandedChange,
   layout,
+  className,
 }: {
   file: GitDiffFile;
   expanded: boolean;
   onExpandedChange: (open: boolean) => void;
   layout?: "vertical" | "horizontal";
+  className?: string;
 }) {
   return (
     <Collapsible
       open={expanded}
       onOpenChange={onExpandedChange}
-      className="overflow-hidden rounded-[6px] border border-border bg-[color:var(--color-control-panel-bg)] shadow-sm"
+      className={cn("flex flex-col min-h-0 overflow-hidden rounded-[6px] border border-border bg-[color:var(--color-control-panel-bg)]", className)}
     >
       <CollapsibleTrigger
         className={cn(
-          "flex w-full items-start gap-3 px-3 py-2 text-left transition-colors",
+          "flex shrink-0 w-full items-start gap-3 px-3 py-2 text-left transition-colors",
           expanded ? "bg-[color:var(--color-control-bg-hover)]" : "hover:bg-[color:var(--color-control-bg-hover)]/80",
         )}
       >
@@ -264,17 +279,11 @@ function DiffFileCard({
             <p className="font-medium text-diff-add-text">{formatSignedCount(file.additions, "+")}</p>
             <p className="font-medium text-diff-del-text">{formatSignedCount(file.deletions, "-")}</p>
           </div>
-          <ChevronDownIcon
-            className={cn(
-              "mt-0.5 size-4 text-muted-foreground transition-transform duration-200",
-              expanded && "rotate-180",
-            )}
-          />
         </div>
       </CollapsibleTrigger>
 
-      <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-        <div className="border-t border-border">
+      <CollapsibleContent className="flex flex-col flex-1 min-h-0 overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+        <div className="flex flex-col flex-1 min-h-0">
           <DiffView
             patch={file.patch}
             fileName={file.path}
@@ -338,6 +347,27 @@ function hydrateExpandedState(current: ExpandedDiffState, overview: GitDiffOverv
   return changed ? next : current;
 }
 
+// ─── Mock commit message generator ────────────────────────────────────────
+
+async function generateCommitMessage(
+  _selectedFiles: GitDiffFile[],
+  _diffs: string,
+): Promise<{ title: string; description: string }> {
+  // TODO: Replace with actual AI-powered commit message generation.
+  // For now, return a mock result with a nice mocked markdown template.
+
+  return {
+    title: "feat: update files based on recent changes",
+    description: `## Summary of changes
+
+- Updated configuration to support new layout parsing.
+- Refactored commit message formatting.
+- Resolved styling issues in the diff view panel.
+
+> Note: This is an automatically generated mock description for testing WYSIWYG markdown.`,
+  };
+}
+
 function DiffPanelInner({
   open,
   onClose,
@@ -345,78 +375,56 @@ function DiffPanelInner({
   isLoading,
   onRefresh,
 }: DiffPanelProps) {
-  
+  // ── State: layout & sizing ──────────────────────────────────────────
+  const { size: panelWidth, handleMouseDown: handlePanelResize } = useResizable({
+    axis: "horizontal",
+    initial: typeof window !== "undefined" ? window.innerWidth * 0.5 : 900,
+    min: 400,
+    max: typeof window !== "undefined" ? window.innerWidth - 100 : 900,
+    invert: true,
+  });
 
+  const { size: treeWidth, handleMouseDown: handleTreeResize } = useResizable({
+    axis: "horizontal",
+    initial: 350,
+    min: 200,
+    max: Math.max(200, panelWidth - 200),
+  });
+
+  const { size: commitPanelHeight, handleMouseDown: handleCommitResize } = useResizable({
+    axis: "vertical",
+    initial: 240,
+    min: 150,
+    max: 500,
+    invert: true,
+  });
+
+  const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
+  const [viewMode, setViewMode] = useState<"tree" | "list">("tree");
+
+  // ── State: diff source & expansion ──────────────────────────────────
   const [selectedDiffSource, setSelectedDiffSource] = useState<GitDiffSource>("all");
+  const [expandedDiffPaths, setExpandedDiffPaths] = useState<ExpandedDiffState>({});
+  const diffCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  // ── State: file selection ───────────────────────────────────────────
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const [selectedPathsChanged, setSelectedPathsChanged] = useState(false);
+  const [activeFile, setActiveFile] = useState<string | null>(null);
+
+  // ── State: commit ───────────────────────────────────────────────────
   const [commitMessage, setCommitMessage] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
   const [isStaging, setIsStaging] = useState(false);
+  const [isGeneratingMessage, setIsGeneratingMessage] = useState(false);
 
+  // ── Effects ─────────────────────────────────────────────────────────
   useEffect(() => {
     setSelectedPaths(new Set());
+    setSelectedPathsChanged(false);
   }, [selectedDiffSource, overview]);
-
-  const handleToggleSelection = useCallback((paths: string[], isSelected: boolean) => {
-    setSelectedPaths(current => {
-      const next = new Set(current);
-      for (const p of paths) {
-        if (isSelected) next.add(p);
-        else next.delete(p);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleSelectAll = useCallback(() => {
-    if (!overview) return;
-    const files = overview.sources[selectedDiffSource].files;
-    if (selectedPaths.size === files.length) {
-      setSelectedPaths(new Set());
-    } else {
-      setSelectedPaths(new Set(files.map(f => f.path)));
-    }
-  }, [overview, selectedDiffSource, selectedPaths]);
-
-  const handleStageSelected = useCallback(async () => {
-    if (selectedPaths.size === 0) return;
-    setIsStaging(true);
-    try {
-      await window.desktopApi.git.stageFiles(Array.from(selectedPaths));
-      await onRefresh();
-    } finally { setIsStaging(false); }
-  }, [selectedPaths, onRefresh]);
-
-  const handleUnstageSelected = useCallback(async () => {
-    if (selectedPaths.size === 0) return;
-    setIsStaging(true);
-    try {
-      await window.desktopApi.git.unstageFiles(Array.from(selectedPaths));
-      await onRefresh();
-    } finally { setIsStaging(false); }
-  }, [selectedPaths, onRefresh]);
-
-  const handleCommit = useCallback(async () => {
-    if (!commitMessage.trim()) return;
-    setIsCommitting(true);
-    try {
-      await window.desktopApi.git.commit(commitMessage);
-      setCommitMessage("");
-      await onRefresh();
-    } finally { setIsCommitting(false); }
-  }, [commitMessage, onRefresh]);
-
-  const handlePush = useCallback(async () => {
-    setIsPushing(true);
-    try {
-      await window.desktopApi.git.push();
-      // Optional refresh
-    } finally { setIsPushing(false); }
-  }, []);  const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
-  const [expandedDiffPaths, setExpandedDiffPaths] = useState<ExpandedDiffState>({});
-  const diffCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     if (!overview && !isLoading) {
@@ -425,78 +433,112 @@ const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   }, [isLoading, onRefresh, overview]);
 
   useEffect(() => {
-    if (!overview) {
-      return;
-    }
-
+    if (!overview) return;
     setExpandedDiffPaths((current) => hydrateExpandedState(current, overview));
     setSelectedDiffSource((current) => {
-      if (overview.sources[current].totalFiles > 0) {
-        return current;
-      }
-
+      if (overview.sources[current].totalFiles > 0) return current;
       return getFirstNonEmptySource(overview) ?? current;
     });
   }, [overview]);
 
-  const currentSourceSnapshot = overview?.sources[selectedDiffSource] ?? EMPTY_SOURCE_SNAPSHOT;
-  const currentExpandedPaths = expandedDiffPaths[selectedDiffSource] ?? [];
-
-  const [width, setWidth] = useState(640);
-  const draggingRef = useRef(false);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    draggingRef.current = true;
-    document.body.style.cursor = 'col-resize';
-
-    const handleMouseMove = (ev: MouseEvent) => {
-      if (!draggingRef.current) return;
-      const newWidth = window.innerWidth - ev.clientX;
-      setWidth(Math.max(240, Math.min(newWidth, window.innerWidth - 100)));
-    };
-
-    const handleMouseUp = () => {
-      if (!draggingRef.current) return;
-      draggingRef.current = false;
-      document.body.style.cursor = '';
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+  // ── Handlers: selection ─────────────────────────────────────────────
+  const handleToggleSelection = useCallback((paths: string[], isSelected: boolean) => {
+    setSelectedPaths((current) => {
+      const next = new Set(current);
+      for (const p of paths) {
+        if (isSelected) next.add(p);
+        else next.delete(p);
+      }
+      return next;
+    });
+    setSelectedPathsChanged(true);
   }, []);
 
-  const [treeWidth, setTreeWidth] = useState(180);
-  const treeDraggingRef = useRef(false);
+  const handleSelectAll = useCallback(() => {
+    if (!overview) return;
+    const files = overview.sources[selectedDiffSource].files;
+    if (selectedPaths.size === files.length) {
+      setSelectedPaths(new Set());
+    } else {
+      setSelectedPaths(new Set(files.map((f) => f.path)));
+    }
+    setSelectedPathsChanged(true);
+  }, [overview, selectedDiffSource, selectedPaths]);
 
-  const handleTreeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    treeDraggingRef.current = true;
-    document.body.style.cursor = 'col-resize';
-    const startX = e.clientX;
-    const startWidth = treeWidth;
+  // ── Handlers: stage / unstage ───────────────────────────────────────
+  const handleStageSelected = useCallback(async () => {
+    if (selectedPaths.size === 0) return;
+    setIsStaging(true);
+    try {
+      await window.desktopApi.git.stageFiles(Array.from(selectedPaths));
+      await onRefresh();
+    } finally {
+      setIsStaging(false);
+    }
+  }, [selectedPaths, onRefresh]);
 
-    const handleMouseMove = (ev: MouseEvent) => {
-      if (!treeDraggingRef.current) return;
-      const deltaX = ev.clientX - startX;
-      setTreeWidth(Math.max(100, Math.min(startWidth + deltaX, width - 200)));
-    };
+  const handleUnstageSelected = useCallback(async () => {
+    if (selectedPaths.size === 0) return;
+    setIsStaging(true);
+    try {
+      await window.desktopApi.git.unstageFiles(Array.from(selectedPaths));
+      await onRefresh();
+    } finally {
+      setIsStaging(false);
+    }
+  }, [selectedPaths, onRefresh]);
 
-    const handleMouseUp = () => {
-      if (!treeDraggingRef.current) return;
-      treeDraggingRef.current = false;
-      document.body.style.cursor = '';
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
+  // ── Handlers: commit ────────────────────────────────────────────────
+  const handleCommit = useCallback(async () => {
+    if (!commitMessage.trim()) return;
+    setIsCommitting(true);
+    try {
+      await window.desktopApi.git.commit(commitMessage);
+      setCommitMessage("");
+      setSelectedPathsChanged(false);
+      await onRefresh();
+    } finally {
+      setIsCommitting(false);
+    }
+  }, [commitMessage, onRefresh]);
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [treeWidth, width]);
+  const handlePush = useCallback(async () => {
+    setIsPushing(true);
+    try {
+      await window.desktopApi.git.push();
+    } finally {
+      setIsPushing(false);
+    }
+  }, []);
 
+  const handlePull = useCallback(async () => {
+    setIsPulling(true);
+    try {
+      await window.desktopApi.git.pull();
+    } finally {
+      setIsPulling(false);
+    }
+  }, []);
+
+  // ── Handler: generate commit message ────────────────────────────────
+  const handleGenerateMessage = useCallback(async () => {
+    if (!overview) return;
+    const files = overview.sources[selectedDiffSource].files.filter((f) =>
+      selectedPaths.size === 0 ? true : selectedPaths.has(f.path),
+    );
+    const diffs = files.map((f) => f.patch).join("\n");
+
+    setIsGeneratingMessage(true);
+    try {
+      const result = await generateCommitMessage(files, diffs);
+      setCommitMessage(result.title + "\n" + result.description);
+      setSelectedPathsChanged(false);
+    } finally {
+      setIsGeneratingMessage(false);
+    }
+  }, [overview, selectedDiffSource, selectedPaths]);
+
+  // ── Handlers: file expansion ────────────────────────────────────────
   const handleToggleFile = useCallback((path: string, open: boolean) => {
     setExpandedDiffPaths((current) => {
       const sourcePaths = current[selectedDiffSource] ?? [];
@@ -504,9 +546,7 @@ const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
         ? Array.from(new Set([...sourcePaths, path]))
         : sourcePaths.filter((item) => item !== path);
 
-      if (arePathListsEqual(sourcePaths, nextPaths)) {
-        return current;
-      }
+      if (arePathListsEqual(sourcePaths, nextPaths)) return current;
 
       return {
         ...current,
@@ -516,45 +556,39 @@ const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   }, [selectedDiffSource]);
 
   const handleJumpToFile = useCallback((path: string) => {
-    setExpandedDiffPaths((current) => {
-      const sourcePaths = current[selectedDiffSource] ?? [];
-      if (sourcePaths.includes(path)) {
-        return current;
-      }
-
-      return {
-        ...current,
-        [selectedDiffSource]: [...sourcePaths, path],
-      };
-    });
-
-    window.setTimeout(() => {
-      diffCardRefs.current[`${selectedDiffSource}:${path}`]?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 40);
-  }, [selectedDiffSource]);
+    setActiveFile(path);
+  }, []);
 
   const bindCardRef = useCallback((path: string, element: HTMLDivElement | null) => {
     diffCardRefs.current[`${selectedDiffSource}:${path}`] = element;
   }, [selectedDiffSource]);
 
-  // Drawer shell — fixed overlay that slides in/out via translate-x
+  // ── Derived values ──────────────────────────────────────────────────
   const drawerBase =
-    "fixed right-0 top-0 bottom-0 z-50 flex h-full min-h-0 flex-col bg-background shadow-2xl px-4 py-4 rounded-[8px] transform transition-transform duration-300 ease-in-out";
+    "fixed right-0 top-0 bottom-0 z-50 flex h-full min-h-0 flex-col bg-background px-4 py-4 rounded-[8px] transform transition-transform duration-300 ease-in-out";
   const drawerClosed = `${drawerBase} translate-x-full`;
   const drawerOpen = `${drawerBase} translate-x-0`;
-
   const drawerClass = open ? drawerOpen : drawerClosed;
 
+  const currentSourceSnapshot = overview?.sources[selectedDiffSource] ?? EMPTY_SOURCE_SNAPSHOT;
+  const currentExpandedPaths = expandedDiffPaths[selectedDiffSource] ?? [];
+  const expandedPathSet = new Set(currentExpandedPaths);
+  const hasAnyChanges = DIFF_SOURCES.some(
+    (source) => (overview?.sources[source]?.totalFiles ?? 0) > 0,
+  );
+  const meta = DIFF_SOURCE_META[selectedDiffSource];
+
+  // Sparkles highlight: selectedPaths changed + commitMessage non-empty
+  const showSparklesHint = selectedPathsChanged && commitMessage.trim().length > 0;
+
+  // ── Render: empty states ────────────────────────────────────────────
   function ResizeHandle() {
     return (
       <div
         className="absolute left-[-2px] w-[5px] top-0 bottom-0 cursor-col-resize z-50 group flex justify-center"
-        onMouseDown={handleMouseDown}
+        onMouseDown={handlePanelResize}
       >
-        <div className="w-[2px] h-full bg-blue-500 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200" />
+        <div className="w-[2px] h-full bg-primary/60 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200" />
       </div>
     );
   }
@@ -579,7 +613,7 @@ const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
 
   if (!overview) {
     return (
-      <aside className={drawerClass} style={{ width: open ? width : 640 }}>
+      <aside className={drawerClass} style={{ width: open ? panelWidth : 900 }}>
         {open && <ResizeHandle />}
         <DrawerHeader>
           <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">Diff</p>
@@ -596,7 +630,7 @@ const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
 
   if (!overview.isGitRepo) {
     return (
-      <aside className={drawerClass} style={{ width: open ? width : 640 }}>
+      <aside className={drawerClass} style={{ width: open ? panelWidth : 900 }}>
         {open && <ResizeHandle />}
         <DrawerHeader>
           <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">Diff</p>
@@ -617,194 +651,369 @@ const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
     );
   }
 
-  const meta = DIFF_SOURCE_META[selectedDiffSource];
-  const hasAnyChanges = DIFF_SOURCES.some((source) => overview.sources[source].totalFiles > 0);
-  const expandedPathSet = new Set(currentExpandedPaths);
-
+  // ── Render: main content ────────────────────────────────────────────
   return (
-    <aside className={drawerClass} style={{ width: open ? width : 640 }}>
+    <aside className={drawerClass} style={{ width: open ? panelWidth : 900 }}>
       {open && <ResizeHandle />}
       <DrawerHeader>
         <div>
           <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">Diff</p>
           <h3 className="text-lg font-semibold text-foreground">工作区 Diff</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {meta.description}
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{meta.description}</p>
         </div>
       </DrawerHeader>
+
+      {/* Toolbar */}
       <div className="flex items-center gap-2 mb-4">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onRefresh}
+              className="h-7 rounded-[6px] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
+              aria-label="刷新 diff"
+            >
+              <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
+              <span>刷新</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>刷新 diff</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setLayout((prev) => (prev === "vertical" ? "horizontal" : "vertical"))}
+              className="h-7 rounded-[6px] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
+              aria-label="切换视图布局"
+            >
+              {layout === "vertical" ? (
+                <ColumnsIcon className="size-3.5" />
+              ) : (
+                <ListIcon className="size-3.5" />
+              )}
+              <span>{layout === "vertical" ? "横向对比" : "垂直对比"}</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {layout === "vertical" ? "切换为横向对比" : "切换为垂直对比"}
+          </TooltipContent>
+        </Tooltip>
+
+        <div className="w-[1px] h-4 bg-border/50 mx-1 shrink-0" />
+
         <Button
           type="button"
           variant="outline"
-          onClick={onRefresh}
+          onClick={handlePull}
+          disabled={isPulling}
           className="h-7 rounded-[6px] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
-          aria-label="刷新 diff"
+          aria-label="拉取代码"
         >
-          <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
-          <span>刷新</span>
+          <DownloadIcon className={cn("size-3.5", isPulling && "animate-bounce")} />
+          <span>
+            {isPulling
+              ? "拉取中..."
+              : overview?.branch.behind && overview.branch.behind > 0
+                ? `拉取 (${overview.branch.behind})`
+                : "拉取"}
+          </span>
         </Button>
+
         <Button
           type="button"
           variant="outline"
-          onClick={() => setLayout((prev) => (prev === "vertical" ? "horizontal" : "vertical"))}
+          onClick={handlePush}
+          disabled={isPushing}
           className="h-7 rounded-[6px] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
-          aria-label="切换视图布局"
+          aria-label="推送代码"
         >
-          {layout === "vertical" ? <ColumnsIcon className="size-3.5" /> : <ListIcon className="size-3.5" />}
-          <span>{layout === "vertical" ? "横向对比" : "垂直对比"}</span>
+          <UploadIcon className={cn("size-3.5", isPushing && "animate-bounce")} />
+          <span>
+            {isPushing
+              ? "推送中..."
+              : overview?.branch.ahead && overview.branch.ahead > 0
+                ? `推送 (${overview.branch.ahead})`
+                : "推送"}
+          </span>
         </Button>
       </div>
 
+      {/* ── Fixed header: branch info + source selector ───────────── */}
+      <div className="mb-3 flex flex-col gap-3">
+        {/* Branch info bar */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center rounded-[6px] bg-[color:var(--color-control-bg)] px-2 py-1 text-[11px] text-foreground">
+            {formatBranchLabel(overview)}
+          </span>
+          <span className="inline-flex items-center rounded-[6px] bg-secondary/50 px-2 py-1 text-[11px] text-muted-foreground">
+            {overview.branch.hasChanges ? "有未提交改动" : "工作区干净"}
+          </span>
+          {currentSourceSnapshot.files.length > 0 && (
+            <div className="ml-1 flex items-center gap-2 text-[11px] font-medium">
+              <span className="text-[color:var(--color-diff-add-text)]">{formatSignedCount(currentSourceSnapshot.totalAdditions, "+")}</span>
+              <span className="text-[color:var(--color-diff-del-text)]">{formatSignedCount(currentSourceSnapshot.totalDeletions, "-")}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Diff source selector */}
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <DiffSourceSelect
+              selectedSource={selectedDiffSource}
+              overview={overview}
+              onChange={setSelectedDiffSource}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Scrollable content area ───────────────────────────────── */}
       <div className="min-h-0 flex-1 overflow-hidden">
         <SectionSurface className="flex h-full min-h-0 flex-col">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-[6px] bg-[color:var(--color-control-bg)] px-2 py-1 text-[11px] text-foreground shadow-none">
-              {formatBranchLabel(overview)}
-            </span>
-            <span className="inline-flex items-center rounded-[6px] bg-secondary/50 px-2 py-1 text-[11px] text-muted-foreground shadow-none">
-              {overview.branch.hasChanges ? "有未提交改动" : "工作区干净"}
-            </span>
-            {currentSourceSnapshot.files.length > 0 && (
-              <div className="ml-1 flex items-center gap-2 text-[11px] font-medium">
-                <span className="text-[color:var(--color-diff-add-text)]">{formatSignedCount(currentSourceSnapshot.totalAdditions, "+")}</span>
-                <span className="text-[color:var(--color-diff-del-text)]">{formatSignedCount(currentSourceSnapshot.totalDeletions, "-")}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 flex items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <DiffSourceSelect
-                selectedSource={selectedDiffSource}
-                overview={overview}
-                onChange={setSelectedDiffSource}
-              />
-            </div>
-            <div className="flex h-7 min-w-[28px] items-center justify-center rounded-[6px] bg-secondary/50 px-2.5 text-[11px] font-medium text-muted-foreground">
-              {currentSourceSnapshot.totalFiles}
-            </div>
-          </div>
-
+          {/* Empty state variants */}
           {!hasAnyChanges ? (
-            <div className="mt-5">
-              <EmptyPanelState
-                title="暂无改动"
-                description="当前 workspace 没有未提交改动；一旦出现修改、删除或新增文件，这里会自动刷新。"
-              />
-            </div>
+            <EmptyPanelState
+              title="暂无改动"
+              description="当前 workspace 没有未提交改动；一旦出现修改、删除或新增文件，这里会自动刷新。"
+            />
           ) : currentSourceSnapshot.files.length === 0 ? (
-            <div className="mt-5">
-              <EmptyPanelState
-                title={`${meta.label}为空`}
-                description="这个来源当前没有可展示的改动，可以切换到其他来源继续查看。"
-              />
-            </div>
+            <EmptyPanelState
+              title={`${meta.label}为空`}
+              description="这个来源当前没有可展示的改动，可以切换到其他来源继续查看。"
+            />
           ) : (
-            <>
-              <div className="relative mt-4 flex min-h-0 flex-1 overflow-hidden border-t border-border pt-4">
-                <div 
-                  className="shrink-0 flex flex-col min-h-0 pr-3"
-                  style={{ width: treeWidth }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-6 px-2 text-[11px] text-muted-foreground hover:bg-secondary/80 bg-secondary/50 rounded-[4px]"
-                      onClick={handleSelectAll}
-                    >
-                      {selectedPaths.size > 0 && selectedPaths.size === currentSourceSnapshot.files.length ? "取消全选" : "全选"}
-                    </Button>
-                    
+            <div className="relative flex min-h-0 flex-1 overflow-hidden">
+              {/* ── Left sidebar: tree + commit panel (siblings) ─────── */}
+              <div
+                className="shrink-0 flex flex-col min-h-0 pr-3"
+                style={{ width: treeWidth }}
+              >
+                {/* ── Tree area (top) ───────────────────────────────── */}
+                <div className="flex-1 flex flex-col min-h-0 pt-1">
+                  <div className="flex items-center justify-between mb-2 shrink-0">
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2.5 text-[12px] text-muted-foreground hover:bg-secondary/80 bg-secondary/50 rounded-[4px]"
+                        onClick={handleSelectAll}
+                      >
+                        {selectedPaths.size > 0 &&
+                          selectedPaths.size === currentSourceSnapshot.files.length
+                          ? "取消全选"
+                          : "全选"}
+                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 rounded-[4px] text-muted-foreground hover:bg-secondary/80 bg-secondary/50"
+                            onClick={() => setViewMode(v => v === "tree" ? "list" : "tree")}
+                          >
+                            {viewMode === "tree" ? <ListTreeIcon className="size-3.5" /> : <FolderTreeIcon className="size-3.5" />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>切换{viewMode === "tree" ? '平铺' : '树状'}视图</TooltipContent>
+                      </Tooltip>
+                    </div>
+
                     {selectedDiffSource === "unstaged" || selectedDiffSource === "all" ? (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 px-2 text-[11px] text-foreground bg-[color:var(--color-diff-add-text)]/20 hover:bg-[color:var(--color-diff-add-text)]/30 rounded-[4px]"
-                        onClick={handleStageSelected}
-                        disabled={selectedPaths.size === 0 || isStaging}
-                      >
-                        <PlusIcon className="w-3 h-3 mr-1" />
-                        暂存
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="h-7 px-2.5 text-[12px] rounded-[4px] gap-1.5"
+                            onClick={handleStageSelected}
+                            disabled={selectedPaths.size === 0 || isStaging}
+                          >
+                            <PlusIcon className="w-3.5 h-3.5" />
+                            暂存
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>暂存选中文件</TooltipContent>
+                      </Tooltip>
                     ) : selectedDiffSource === "staged" ? (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 px-2 text-[11px] text-foreground bg-[color:var(--color-diff-del-text)]/20 hover:bg-[color:var(--color-diff-del-text)]/30 rounded-[4px]"
-                        onClick={handleUnstageSelected}
-                        disabled={selectedPaths.size === 0 || isStaging}
-                      >
-                        <MinusIcon className="w-3 h-3 mr-1" />
-                        取消暂存
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="h-7 px-2.5 text-[12px] rounded-[4px] gap-1.5"
+                            onClick={handleUnstageSelected}
+                            disabled={selectedPaths.size === 0 || isStaging}
+                          >
+                            <MinusIcon className="w-3.5 h-3.5" />
+                            取消暂存
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>取消暂存选中文件</TooltipContent>
+                      </Tooltip>
                     ) : null}
                   </div>
-                  <div className="flex-1 overflow-y-auto mb-3">
-                    <FileTreeView 
-                    files={currentSourceSnapshot.files} 
-                    onSelectFile={(path) => handleJumpToFile(path)} 
-                    selectedPaths={selectedPaths}
-                    onToggleSelection={handleToggleSelection}
-                  />
-                  </div>
-                  
-                  {/* 提交面板 (Bottom of side panel) */}
-                  <div className="flex flex-col gap-2 shrink-0 border-t border-border pt-3">
-                    <textarea 
-                      placeholder="Commit message..."
-                      value={commitMessage}
-                      onChange={e => setCommitMessage(e.target.value)}
-                      className="w-full min-h-[60px] max-h-[120px] resize-y rounded-[6px] border border-border bg-background p-2 text-[12px] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+
+                  <div className="flex-1 overflow-y-auto min-h-0 pr-1">
+                    <FileTreeView
+                      files={currentSourceSnapshot.files}
+                      onSelectFile={(path) => handleJumpToFile(path)}
+                      selectedPaths={selectedPaths}
+                      onToggleSelection={handleToggleSelection}
+                      viewMode={viewMode}
                     />
+                  </div>
+                </div>
+
+                {/* ── Resizable divider ─────────────────────────────── */}
+                <div
+                  className="h-[2px] w-full cursor-row-resize hover:bg-primary/50 active:bg-primary/50 bg-border/40 transition-colors z-10 shrink-0 my-1 rounded-full"
+                  onMouseDown={handleCommitResize}
+                />
+
+                {/* ── Commit panel (bottom) ────────────────────────── */}
+                <div
+                  className="flex flex-col shrink-0 flex-none pb-2"
+                  style={{ height: commitPanelHeight }}
+                >
+                  <div className="flex flex-col flex-1 rounded-[4px] bg-[color:var(--color-control-panel-bg)] transition-colors overflow-hidden">
+                    {/* First row: avatar + title input + sparkles */}
+                    <div className="flex items-center gap-1 px-2 py-1.5 shrink-0 bg-secondary/10">
+                      <div className="flex items-center justify-center size-[18px] bg-secondary rounded-full mr-1 shrink-0 overflow-hidden text-muted-foreground/80">
+                        <UserIcon className="size-3" />
+                      </div>
+                      <input
+                        placeholder="Update files..."
+                        className="flex-1 bg-transparent text-[12px] font-medium placeholder:text-muted-foreground focus:outline-none min-w-0"
+                        value={commitMessage.split("\n")[0] || ""}
+                        onChange={(e) => {
+                          const lines = commitMessage.split("\n");
+                          lines[0] = e.target.value;
+                          setCommitMessage(lines.join("\n"));
+                        }}
+                      />
+                    </div>
+
+                    {/* Second row: description */}
+                    <div className="flex flex-col flex-1 w-full relative min-h-0">
+                      <CommitDescriptionEditor
+                        value={
+                          commitMessage.includes("\n")
+                            ? commitMessage.substring(commitMessage.indexOf("\n") + 1)
+                            : ""
+                        }
+                        onChange={(newDesc) => {
+                          const firstLine = commitMessage.split("\n")[0] || "";
+                          setCommitMessage(firstLine + "\n" + newDesc);
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Commit & Push actions */}
+                  <div className="flex items-center justify-between mt-2 shrink-0">
                     <div className="flex items-center gap-2">
-                      <Button 
-                        className="flex-1 h-7 text-[12px] bg-primary text-primary-foreground hover:bg-primary/90 rounded-[6px]"
-                        onClick={handleCommit}
-                        disabled={!commitMessage.trim() || isCommitting}
-                      >
-                        <SendIcon className="size-3 mr-1.5" />
-                        {isCommitting ? "提交中..." : "提交"}
-                      </Button>
-                      <Button 
-                        variant="outline"
-                        className="h-7 px-3 text-[12px] rounded-[6px] hover:bg-secondary/80 bg-secondary/50 border-0"
-                        onClick={handlePush}
-                        disabled={isPushing}
-                        title="推送到远程"
-                      >
-                        <UploadIcon className="size-3" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            className="h-7 px-2 text-[12px] rounded-[6px] font-medium tracking-wide flex items-center justify-center gap-1.5"
+                            onClick={handleCommit}
+                            disabled={selectedPaths.size === 0 || !commitMessage.trim() || isCommitting}
+                          >
+                            <CheckIcon className="size-3.5" />
+                            {isCommitting ? "提交中…" : `Commit (${selectedPaths.size})`}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {selectedPaths.size === 0 ? "请先勾选需要提交的文件" : (isCommitting ? "正在提交…" : "提交更改")}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {commitMessage.trim() && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 rounded-[6px] shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setCommitMessage("")}
+                            >
+                              <TrashIcon className="size-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>清空内容</TooltipContent>
+                        </Tooltip>
+                      )}
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              "size-7 rounded-[6px] shrink-0 text-muted-foreground hover:text-foreground relative",
+                              isGeneratingMessage && "animate-pulse"
+                            )}
+                            onClick={handleGenerateMessage}
+                            disabled={selectedPaths.size === 0 || isGeneratingMessage}
+                          >
+                            <SparklesIcon className="size-3.5" />
+                            {showSparklesHint && (
+                              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-accent/80" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {selectedPaths.size === 0 ? "需勾选文件后生成" : (isGeneratingMessage ? "正在生成…" : "生成提交信息")}
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 </div>
-                
-                {/* 侧边栏拖拽把手 (Tree Resizer) */}
-                <div 
-                  className="w-2 cursor-col-resize hover:bg-black/10 active:bg-black/20 transition-colors z-10 -ml-1 mr-1 shrink-0" 
-                  onMouseDown={handleTreeMouseDown}
-                />
-                
-                <div className="min-h-0 flex-1 overflow-y-auto pr-1 pl-2 border-l border-border/50">
-                  <div className="flex flex-col gap-3">
-                    {currentSourceSnapshot.files.map((file) => (
-                      <div
-                        key={file.path}
-                        ref={(element) => bindCardRef(file.path, element)}
-                      >
+              </div>
+
+              {/* ── Tree resize handle ──────────────────────────────── */}
+              <div
+                className="w-[2px] cursor-col-resize hover:bg-primary/50 active:bg-primary/50 bg-border/40 transition-colors z-10 shrink-0 self-stretch mr-2 ml-[-1px]"
+                onMouseDown={handleTreeResize}
+              />
+
+              {/* ── Right: diff cards ───────────────────────────────── */}
+              <div className="min-h-0 flex flex-col flex-1 overflow-y-auto border-l border-border/50 pl-3">
+                <div className="flex flex-col flex-1 min-h-0 gap-3">
+                  {/* Replace Right Side List mapping with Single Active File viewing or Empty state */}
+                  {(() => {
+                    const activeFileObj = activeFile ? currentSourceSnapshot.files.find(f => f.path === activeFile) : null;
+                    if (!activeFileObj && currentSourceSnapshot.files.length > 0) {
+                      return (
+                        <div className="flex flex-col items-center justify-center flex-1 h-full min-h-[300px] text-muted-foreground/50 gap-3">
+                          <FileIcon className="size-12 opacity-30 stroke-1" />
+                          <div className="text-sm font-medium">点击左侧文件查看 diff 内容</div>
+                        </div>
+                      );
+                    }
+                    if (!activeFileObj) return null; // When empty repo, it's handled above the SectionSurface technically, but just in case
+                    return (
+                      <div key={activeFileObj.path} className="flex flex-col flex-1 h-full min-h-0">
                         <DiffFileCard
-                          file={file}
+                          className="flex-1 h-full min-h-0 flex flex-col"
+                          file={activeFileObj}
                           layout={layout}
-                          expanded={expandedPathSet.has(file.path)}
-                          onExpandedChange={(open) => handleToggleFile(file.path, open)}
+                          expanded={true}
+                          onExpandedChange={() => { }}
                         />
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </div>
               </div>
-            </>
+            </div>
           )}
         </SectionSurface>
       </div>
@@ -818,7 +1027,7 @@ export function DiffPanel(props: DiffPanelProps) {
       <div
         className={cn(
           "fixed inset-0 z-40 bg-black/10 transition-opacity duration-300",
-          props.open ? "opacity-100" : "pointer-events-none opacity-0"
+          props.open ? "opacity-100" : "pointer-events-none opacity-0",
         )}
         onClick={props.onClose}
         aria-hidden="true"
@@ -827,4 +1036,3 @@ export function DiffPanel(props: DiffPanelProps) {
     </>
   );
 }
-

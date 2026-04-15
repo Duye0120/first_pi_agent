@@ -51,6 +51,7 @@ const MAX_SIDEBAR_SIZE = 28;
 const ROOT_UI_THEME_DATASET = "theme";
 const SETTINGS_ROUTE_PREFIX = "/settings";
 const SETTINGS_SECTION_IDS: SettingsSection[] = [
+  "general",
   "ai_model",
   "workspace",
   "interface",
@@ -67,12 +68,12 @@ function resolveSettingsSectionFromPath(pathname: string): SettingsSection | nul
     .replace(/^\/+/, "");
 
   if (!section) {
-    return "ai_model";
+    return "general";
   }
 
   return SETTINGS_SECTION_IDS.includes(section as SettingsSection)
     ? (section as SettingsSection)
-    : "ai_model";
+    : "general";
 }
 
 function clampSidebarSize(size: number) {
@@ -228,7 +229,7 @@ export default function App() {
   const [sidebarAnimating, setSidebarAnimating] = useState(false);
 
   const settingsSection = useMemo(
-    () => resolveSettingsSectionFromPath(location.pathname) ?? "ai_model",
+    () => resolveSettingsSectionFromPath(location.pathname) ?? "general",
     [location.pathname],
   );
   const mainView: "thread" | "settings" =
@@ -1175,7 +1176,7 @@ export default function App() {
     });
   }, [desktopApi]);
 
-  const openSettingsView = useCallback((section: SettingsSection = "ai_model") => {
+  const openSettingsView = useCallback((section: SettingsSection = "general") => {
     navigate(`${SETTINGS_ROUTE_PREFIX}/${section}`);
   }, [navigate]);
 
@@ -1506,7 +1507,7 @@ export default function App() {
                 runningSessionIds={runningSessionIds}
                 onSelectSession={selectSession}
                 onNewSession={createNewSession}
-                onOpenSettings={() => openSettingsView("ai_model")}
+                onOpenSettings={() => openSettingsView("general")}
                 onArchiveSession={archiveSession}
                 onUnarchiveSession={unarchiveSession}
                 onDeleteSession={deleteSessionPermanently}
@@ -1532,8 +1533,8 @@ export default function App() {
               <div className="chela-main-content-surface flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)]">
                 <div
                   className={`flex items-center justify-end gap-2 px-5 transition-[min-height,padding,opacity] duration-200 ease-out ${mainView === "thread"
-                      ? "min-h-[52px] pb-3 pt-4 opacity-100"
-                      : "pointer-events-none min-h-0 overflow-hidden py-0 opacity-0"
+                    ? "min-h-[52px] pb-3 pt-4 opacity-100"
+                    : "pointer-events-none min-h-0 overflow-hidden py-0 opacity-0"
                     }`}
                   aria-hidden={mainView !== "thread"}
                 >

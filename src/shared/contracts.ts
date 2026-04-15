@@ -141,6 +141,7 @@ export type ThinkingLevel = "off" | "low" | "medium" | "high" | "xhigh";
 
 export type Settings = {
   defaultModelId: string;
+  workerModelId: string | null;
   thinkingLevel: ThinkingLevel;
   timeZone: string;
   theme: "light" | "dark" | "custom";
@@ -294,102 +295,102 @@ export type SessionMemorySnapshot = {
 
 export type SessionTranscriptEvent =
   | {
-      seq: number;
-      sessionId: string;
-      timestamp: string;
-      type: "user_message";
-      message: ChatMessage;
-    }
+    seq: number;
+    sessionId: string;
+    timestamp: string;
+    type: "user_message";
+    message: ChatMessage;
+  }
   | {
-      seq: number;
-      sessionId: string;
-      runId: string;
-      ownerId?: string;
-      timestamp: string;
-      type: "run_started";
-      runKind: RunKind;
-      modelEntryId: string;
-      thinkingLevel: string;
-    }
+    seq: number;
+    sessionId: string;
+    runId: string;
+    ownerId?: string;
+    timestamp: string;
+    type: "run_started";
+    runKind: RunKind;
+    modelEntryId: string;
+    thinkingLevel: string;
+  }
   | {
-      seq: number;
-      sessionId: string;
-      runId: string;
-      timestamp: string;
-      type: "run_state_changed";
-      state: string;
-      reason?: string;
-      currentStepId?: string;
-    }
+    seq: number;
+    sessionId: string;
+    runId: string;
+    timestamp: string;
+    type: "run_state_changed";
+    state: string;
+    reason?: string;
+    currentStepId?: string;
+  }
   | {
-      seq: number;
-      sessionId: string;
-      runId: string;
-      timestamp: string;
-      type: "tool_started";
-      stepId: string;
-      toolName: string;
-      args: Record<string, unknown>;
-    }
+    seq: number;
+    sessionId: string;
+    runId: string;
+    timestamp: string;
+    type: "tool_started";
+    stepId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+  }
   | {
-      seq: number;
-      sessionId: string;
-      runId: string;
-      timestamp: string;
-      type: "tool_finished";
-      stepId: string;
-      toolName: string;
-      result?: unknown;
-      error?: string;
-    }
+    seq: number;
+    sessionId: string;
+    runId: string;
+    timestamp: string;
+    type: "tool_finished";
+    stepId: string;
+    toolName: string;
+    result?: unknown;
+    error?: string;
+  }
   | {
-      seq: number;
-      sessionId: string;
-      runId: string;
-      timestamp: string;
-      type: "confirmation_requested";
-      requestId: string;
-      title: string;
-      description: string;
-      detail?: string;
-    }
+    seq: number;
+    sessionId: string;
+    runId: string;
+    timestamp: string;
+    type: "confirmation_requested";
+    requestId: string;
+    title: string;
+    description: string;
+    detail?: string;
+  }
   | {
-      seq: number;
-      sessionId: string;
-      runId: string;
-      timestamp: string;
-      type: "confirmation_resolved";
-      requestId: string;
-      allowed: boolean;
-    }
+    seq: number;
+    sessionId: string;
+    runId: string;
+    timestamp: string;
+    type: "confirmation_resolved";
+    requestId: string;
+    allowed: boolean;
+  }
   | {
-      seq: number;
-      sessionId: string;
-      runId: string;
-      timestamp: string;
-      type: "assistant_message";
-      message: ChatMessage;
-    }
+    seq: number;
+    sessionId: string;
+    runId: string;
+    timestamp: string;
+    type: "assistant_message";
+    message: ChatMessage;
+  }
   | {
-      seq: number;
-      sessionId: string;
-      runId: string;
-      timestamp: string;
-      type: "compact_applied";
-      snapshotRevision: number;
-      compactedUntilSeq: number;
-      reason: "manual" | "auto";
-    }
+    seq: number;
+    sessionId: string;
+    runId: string;
+    timestamp: string;
+    type: "compact_applied";
+    snapshotRevision: number;
+    compactedUntilSeq: number;
+    reason: "manual" | "auto";
+  }
   | {
-      seq: number;
-      sessionId: string;
-      runId: string;
-      ownerId?: string;
-      timestamp: string;
-      type: "run_finished";
-      finalState: "completed" | "aborted" | "failed";
-      reason?: string;
-    };
+    seq: number;
+    sessionId: string;
+    runId: string;
+    ownerId?: string;
+    timestamp: string;
+    type: "run_finished";
+    finalState: "completed" | "aborted" | "failed";
+    reason?: string;
+  };
 
 export type AgentRunScope = {
   sessionId: string;
@@ -405,13 +406,13 @@ export type PendingApprovalNotice = {
   runSource: RunSource | null;
   lane: "foreground" | "background" | null;
   state:
-    | "running"
-    | "awaiting_confirmation"
-    | "executing_tool"
-    | "completed"
-    | "aborted"
-    | "failed"
-    | null;
+  | "running"
+  | "awaiting_confirmation"
+  | "executing_tool"
+  | "completed"
+  | "aborted"
+  | "failed"
+  | null;
   startedAt: number | null;
   currentStepId: string | null;
   approval: {
@@ -443,13 +444,13 @@ export type InterruptedApprovalNotice = {
   runSource: RunSource | null;
   lane: "foreground" | "background" | null;
   state:
-    | "running"
-    | "awaiting_confirmation"
-    | "executing_tool"
-    | "completed"
-    | "aborted"
-    | "failed"
-    | null;
+  | "running"
+  | "awaiting_confirmation"
+  | "executing_tool"
+  | "completed"
+  | "aborted"
+  | "failed"
+  | null;
   startedAt: number | null;
   currentStepId: string | null;
   canResume: boolean;
@@ -505,6 +506,7 @@ export type ContextSummary = {
   snapshotRevision: number;
   snapshotUpdatedAt: string | null;
   compactedUntilSeq: number | null;
+  compactedMessageCount: number;
   snapshotSummary: string | null;
   currentTask: string | null;
   currentState: string | null;
@@ -524,6 +526,8 @@ export type GitBranchSummary = {
   branchName: string | null;
   isDetached: boolean;
   hasChanges: boolean;
+  ahead?: number;
+  behind?: number;
 };
 
 export type GitBranchEntry = {
@@ -558,6 +562,11 @@ export type GitDiffOverview = {
 };
 
 export type GitDiffSnapshot = GitDiffOverview;
+
+export type GenerateCommitMessageRequest = {
+  selectedFiles: GitDiffFile[];
+  diffContent: string;
+};
 
 export type WindowFrameState = {
   isMaximized: boolean;
@@ -667,6 +676,7 @@ export type DesktopApi = {
     unstageFiles: (paths: string[]) => Promise<void>;
     commit: (message: string) => Promise<void>;
     push: () => Promise<void>;
+    pull: () => Promise<void>;
   };
   ui: {
     getState: () => Promise<WindowUiState>;

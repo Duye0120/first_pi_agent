@@ -692,6 +692,17 @@ function getUsageStats(events: SessionTranscriptEvent[]) {
   };
 }
 
+function getCompactedMessageCount(
+  events: SessionTranscriptEvent[],
+  compactedUntilSeq: number,
+) {
+  if (compactedUntilSeq <= 0) {
+    return 0;
+  }
+
+  return getMessageEvents(events).filter((event) => event.seq <= compactedUntilSeq).length;
+}
+
 function resolveContextWindow(sessionId: string): number | null {
   const meta = getSessionMeta(sessionId);
   const preferredModelEntryId = getSettings().defaultModelId;
@@ -702,7 +713,8 @@ function resolveContextWindow(sessionId: string): number | null {
 }
 
 function buildContextSummaryFromUsage(sessionId: string): ContextSummary {
-  const usageStats = getUsageStats(loadTranscriptEvents(sessionId));
+  const events = loadTranscriptEvents(sessionId);
+  const usageStats = getUsageStats(events);
   const usage = usageStats.latest;
   const contextWindow = resolveContextWindow(sessionId);
   const meta = getSessionMeta(sessionId);
@@ -733,6 +745,10 @@ function buildContextSummaryFromUsage(sessionId: string): ContextSummary {
   const snapshot = getPersistedSnapshot(sessionId);
   const requiredCompactedUntilSeq = getRequiredCompactedUntilSeq(sessionId);
   const hasSnapshot = snapshot.revision > 0;
+  const compactedMessageCount = getCompactedMessageCount(
+    events,
+    snapshot.compactedUntilSeq,
+  );
 
   return {
     state:
@@ -756,6 +772,7 @@ function buildContextSummaryFromUsage(sessionId: string): ContextSummary {
     snapshotRevision: snapshot.revision,
     snapshotUpdatedAt: hasSnapshot ? snapshot.updatedAt : null,
     compactedUntilSeq: snapshot.compactedUntilSeq > 0 ? snapshot.compactedUntilSeq : null,
+    compactedMessageCount,
     snapshotSummary: hasSnapshot && snapshot.summary.trim() ? snapshot.summary : null,
     currentTask: hasSnapshot ? snapshot.currentTask : null,
     currentState: hasSnapshot ? snapshot.currentState : null,

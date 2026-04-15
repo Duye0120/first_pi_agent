@@ -4,6 +4,7 @@ import { ArchivedSection } from "./archived-section";
 import { AboutSection } from "./about-section";
 
 type SystemSectionProps = {
+  timeZone: string;
   archivedSummaries: ChatSessionSummary[];
   onOpenArchivedSession: (sessionId: string) => void;
   onUnarchiveSession: (sessionId: string) => void;
@@ -11,6 +12,7 @@ type SystemSectionProps = {
 };
 
 export function SystemSection({
+  timeZone,
   archivedSummaries,
   onOpenArchivedSession,
   onUnarchiveSession,
@@ -20,11 +22,12 @@ export function SystemSection({
     <div className="space-y-4">
       <ArchivedSection
         archivedSummaries={archivedSummaries}
+        timeZone={timeZone}
         onOpenArchivedSession={onOpenArchivedSession}
         onUnarchiveSession={onUnarchiveSession}
         onDeleteSession={onDeleteSession}
       />
-      <LogsSection />
+      <LogsSection timeZone={timeZone} />
       <AboutSection />
     </div>
   );

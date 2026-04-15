@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { BotIcon } from "lucide-react";
 import type { ModelEntry, ProviderSource, SoulFilesStatus } from "@shared/contracts";
+import { resolveConfiguredTimeZone } from "@shared/timezone";
 import { buildSelectableModelOptions, findEntryLabel, loadProviderDirectory } from "@renderer/lib/provider-directory";
 import type { ModelOption } from "@renderer/components/assistant-ui/model-selector";
 import {
@@ -14,6 +15,7 @@ import { SECTION_META } from "./settings/constants";
 import { AiModelSection } from "./settings/ai-model-section";
 import { InterfaceSection } from "./settings/interface-section";
 import { SystemSection } from "./settings/system-section";
+import { GeneralSection } from "./settings/general-section";
 import type { SettingsViewProps } from "./settings/types";
 import { WorkspaceSection } from "./settings/workspace-section";
 
@@ -54,7 +56,7 @@ function SettingsViewImpl({
   }, [desktopApi]);
 
   useEffect(() => {
-    if (activeSection === "ai_model") {
+    if (activeSection === "ai_model" || activeSection === "general") {
       void loadDirectory();
     }
     if (activeSection === "workspace" && settings?.workspace) {
@@ -75,16 +77,6 @@ function SettingsViewImpl({
       icon: <BotIcon className="size-4" />,
       disabled: false,
     }));
-
-    if (!nextOptions.some((option) => option.id === currentModelId)) {
-      nextOptions.unshift({
-        id: currentModelId,
-        name: findEntryLabel(currentModelId, sources, entries),
-        description: "当前模型",
-        icon: <BotIcon className="size-4" />,
-        disabled: false,
-      });
-    }
 
     return nextOptions;
   }, [currentModelId, entries, sources]);
@@ -113,6 +105,7 @@ function SettingsViewImpl({
     );
   }
 
+  const resolvedTimeZone = resolveConfiguredTimeZone(settings.timeZone);
   const meta = SECTION_META[activeSection];
 
   return (
@@ -129,6 +122,21 @@ function SettingsViewImpl({
           </header>
 
           <div className="space-y-4 pb-8">
+            {activeSection === "general" ? (
+              <GeneralSection
+                settings={settings}
+                currentModelId={currentModelId}
+                thinkingLevel={effectiveThinkingLevel}
+                canConfigureThinking={thinkingEnabled}
+                thinkingHint={thinkingHint}
+                thinkingOptions={thinkingOptions}
+                modelOptions={modelOptions}
+                onModelChange={onModelChange}
+                onThinkingLevelChange={onThinkingLevelChange}
+                onSettingsChange={onSettingsChange}
+              />
+            ) : null}
+
             {activeSection === "ai_model" ? (
               <AiModelSection
                 settings={settings}
@@ -164,6 +172,7 @@ function SettingsViewImpl({
 
             {activeSection === "system" ? (
               <SystemSection
+                timeZone={resolvedTimeZone}
                 archivedSummaries={archivedSummaries || []}
                 onOpenArchivedSession={onOpenArchivedSession!}
                 onUnarchiveSession={onUnarchiveSession!}

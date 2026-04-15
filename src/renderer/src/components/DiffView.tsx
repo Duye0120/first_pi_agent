@@ -17,15 +17,15 @@ type SharedProps = {
 
 type Props =
   | (SharedProps & {
-      oldContent: string;
-      newContent: string;
-      patch?: never;
-    })
+    oldContent: string;
+    newContent: string;
+    patch?: never;
+  })
   | (SharedProps & {
-      patch: string;
-      oldContent?: never;
-      newContent?: never;
-    });
+    patch: string;
+    oldContent?: never;
+    newContent?: never;
+  });
 
 type DiffLineType = "add" | "del" | "context" | "meta";
 
@@ -256,9 +256,9 @@ function TextDiffView({ diffState, maxHunks, maxLines, layout = "vertical" }: {
     return (
       <div className="flex w-full divide-x divide-border">
         {/* Left Pane */}
-        <div 
-          ref={leftScrollRef} 
-          className="flex-1 overflow-x-auto pb-4" 
+        <div
+          ref={leftScrollRef}
+          className="flex-1 overflow-x-auto pb-4"
           onScroll={handleScroll('left')}
         >
           <div className="diff-view-code w-max min-w-full font-mono text-[11px] leading-5">
@@ -305,9 +305,9 @@ function TextDiffView({ diffState, maxHunks, maxLines, layout = "vertical" }: {
         </div>
 
         {/* Right Pane */}
-        <div 
-          ref={rightScrollRef} 
-          className="flex-1 overflow-x-auto pb-4" 
+        <div
+          ref={rightScrollRef}
+          className="flex-1 overflow-x-auto pb-4"
           onScroll={handleScroll('right')}
         >
           <div className="diff-view-code w-max min-w-full font-mono text-[11px] leading-5">
@@ -401,8 +401,8 @@ function TextDiffView({ diffState, maxHunks, maxLines, layout = "vertical" }: {
   };
 
   return (
-    <div className="overflow-hidden bg-code-bg">
-      <div className="max-h-[420px] overflow-auto">
+    <div className="flex flex-col h-full overflow-hidden bg-code-bg">
+      <div className="flex-1 overflow-auto max-h-none">
         {layout === "horizontal" ? renderHorizontal() : renderVertical()}
       </div>
 
@@ -424,14 +424,14 @@ export function DiffView(props: Props) {
       "patch" in props && typeof props.patch === "string"
         ? props.patch
         : createTwoFilesPatch(
-            props.fileName ?? "a",
-            props.fileName ?? "b",
-            props.oldContent,
-            props.newContent,
-            undefined,
-            undefined,
-            { context: 3 },
-          );
+          props.fileName ?? "a",
+          props.fileName ?? "b",
+          props.oldContent,
+          props.newContent,
+          undefined,
+          undefined,
+          { context: 3 },
+        );
     const patches = parsePatch(patchStr);
     const patch = patches[0];
 

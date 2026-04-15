@@ -61,9 +61,20 @@ export function formatDateTimeInTimeZone(
   timeZone: string,
   locale = "zh-CN",
 ): string {
-  return asDate(value).toLocaleString(locale, {
+  return formatTimeInZone(value, timeZone, locale, {
     hour12: false,
+  });
+}
+
+export function formatTimeInZone(
+  value: Date | string | number,
+  timeZone: string,
+  locale = "zh-CN",
+  options: Intl.DateTimeFormatOptions = {},
+): string {
+  return asDate(value).toLocaleString(locale, {
     timeZone,
+    ...options,
   });
 }
 
