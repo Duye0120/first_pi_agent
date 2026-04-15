@@ -194,6 +194,23 @@ function normalizePath(rawPath: string) {
   return rawPath;
 }
 
+function parseBranchTrackingCounts(summary: string) {
+  const bracketStart = summary.indexOf("[");
+  const bracketEnd = summary.indexOf("]", bracketStart + 1);
+  if (bracketStart < 0 || bracketEnd <= bracketStart) {
+    return {};
+  }
+
+  const trackingSummary = summary.slice(bracketStart + 1, bracketEnd);
+  const aheadMatch = trackingSummary.match(/ahead\s+(\d+)/i);
+  const behindMatch = trackingSummary.match(/behind\s+(\d+)/i);
+
+  return {
+    ahead: aheadMatch ? Number.parseInt(aheadMatch[1] ?? "0", 10) : undefined,
+    behind: behindMatch ? Number.parseInt(behindMatch[1] ?? "0", 10) : undefined,
+  };
+}
+
 async function resolveDetachedHeadLabel(workspacePath: string): Promise<string> {
   try {
     const result = await runGit(["rev-parse", "--short", "HEAD"], workspacePath);
@@ -216,11 +233,13 @@ async function resolveBranchSummary(
   }
 
   const summary = branchLine.slice(3).trim();
+  const trackingCounts = parseBranchTrackingCounts(summary);
 
   if (summary.startsWith("No commits yet on ")) {
     return {
       branchName: summary.slice("No commits yet on ".length).trim() || null,
       isDetached: false,
+      ...trackingCounts,
     };
   }
 
@@ -228,6 +247,7 @@ async function resolveBranchSummary(
     return {
       branchName: await resolveDetachedHeadLabel(workspacePath),
       isDetached: true,
+      ...trackingCounts,
     };
   }
 
@@ -235,6 +255,7 @@ async function resolveBranchSummary(
   return {
     branchName,
     isDetached: false,
+    ...trackingCounts,
   };
 }
 

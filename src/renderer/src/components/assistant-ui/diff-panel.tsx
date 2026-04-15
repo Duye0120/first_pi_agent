@@ -506,19 +506,21 @@ function DiffPanelInner({
     setIsPushing(true);
     try {
       await window.desktopApi.git.push();
+      await onRefresh();
     } finally {
       setIsPushing(false);
     }
-  }, []);
+  }, [onRefresh]);
 
   const handlePull = useCallback(async () => {
     setIsPulling(true);
     try {
       await window.desktopApi.git.pull();
+      await onRefresh();
     } finally {
       setIsPulling(false);
     }
-  }, []);
+  }, [onRefresh]);
 
   // ── Handler: generate commit message ────────────────────────────────
   const handleGenerateMessage = useCallback(async () => {
