@@ -15,7 +15,10 @@ import {
   FolderTreeIcon,
   ListTreeIcon,
   TrashIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from "lucide-react";
+import { useState } from "react";
 import type {
   CommitPlanGroup,
   GitDiffFile,
@@ -98,6 +101,7 @@ const DEFAULT_DIFF_WORKBENCH_DRAFT: DiffWorkbenchDraft = {
 };
 
 let diffWorkbenchDraft: DiffWorkbenchDraft = { ...DEFAULT_DIFF_WORKBENCH_DRAFT };
+const DEFAULT_VISIBLE_COMMIT_FILES = 4;
 
 type CommitPlanStatus =
   | "idle"
@@ -419,6 +423,16 @@ function CommitPlanCard({
   const statusMeta = getCommitPlanStatusMeta(group.status);
   const isBusy = group.status === "staging" || group.status === "committing";
   const isCommitted = group.status === "committed";
+  const shouldCollapseFiles = group.filePaths.length > DEFAULT_VISIBLE_COMMIT_FILES;
+  const [filesExpanded, setFilesExpanded] = useState(false);
+  const visibleFilePaths =
+    shouldCollapseFiles && !filesExpanded
+      ? group.filePaths.slice(0, DEFAULT_VISIBLE_COMMIT_FILES)
+      : group.filePaths;
+  const hiddenFileCount = Math.max(
+    0,
+    group.filePaths.length - DEFAULT_VISIBLE_COMMIT_FILES,
+  );
 
   return (
     <div
@@ -478,7 +492,7 @@ function CommitPlanCard({
       ) : null}
 
       <div className="mt-2 flex flex-wrap gap-2">
-        {group.filePaths.map((filePath) => (
+        {visibleFilePaths.map((filePath) => (
           <button
             key={filePath}
             type="button"
@@ -490,6 +504,26 @@ function CommitPlanCard({
           </button>
         ))}
       </div>
+
+      {shouldCollapseFiles ? (
+        <button
+          type="button"
+          onClick={() => setFilesExpanded((current) => !current)}
+          className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium leading-5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)] rounded-[var(--radius-shell)]"
+        >
+          {filesExpanded ? (
+            <>
+              <ChevronUpIcon className="size-3.5" />
+              收起文件列表
+            </>
+          ) : (
+            <>
+              <ChevronDownIcon className="size-3.5" />
+              展开其余 {hiddenFileCount} 个文件
+            </>
+          )}
+        </button>
+      ) : null}
 
       {group.error ? (
         <div className="mt-2 rounded-[var(--radius-shell)] bg-rose-500/8 px-2.5 py-2 text-[12px] leading-5 text-rose-700">
