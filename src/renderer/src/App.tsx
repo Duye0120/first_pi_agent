@@ -320,9 +320,9 @@ export default function App() {
   const sessionCacheRef = useRef<Record<string, ChatSession>>({});
   const appliedCustomThemeKeysRef = useRef<string[]>([]);
   const lastGitBranchRefreshRef = useRef(0);
-  const lastGitOverviewRefreshRef = useRef(0);
   const gitBranchRequestRef = useRef<Promise<GitBranchSummary | null> | null>(null);
   const gitOverviewRequestRef = useRef<Promise<GitDiffOverview | null> | null>(null);
+  const diffPanelAutoRefreshArmedRef = useRef(false);
   const rightPanelDragStateRef = useRef<{
     startX: number;
     startWidth: number;
@@ -469,7 +469,6 @@ export default function App() {
       return gitOverviewRequestRef.current;
     }
 
-    lastGitOverviewRefreshRef.current = Date.now();
     setGitOverviewLoading(true);
 
     const request = desktopApi.git
@@ -504,15 +503,17 @@ export default function App() {
 
   useEffect(() => {
     if (mainView !== "thread" || !diffPanelOpen) {
+      diffPanelAutoRefreshArmedRef.current = false;
       return;
     }
 
-    if (gitOverview && Date.now() - lastGitOverviewRefreshRef.current < 1_500) {
+    if (diffPanelAutoRefreshArmedRef.current) {
       return;
     }
 
+    diffPanelAutoRefreshArmedRef.current = true;
     void refreshGitOverview();
-  }, [diffPanelOpen, gitOverview, mainView, refreshGitOverview]);
+  }, [diffPanelOpen, mainView, refreshGitOverview]);
 
   const cacheSession = useCallback((session: ChatSession) => {
     setSessionCache((current) => {

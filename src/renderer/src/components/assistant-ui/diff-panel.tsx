@@ -586,12 +586,6 @@ export function DiffWorkbenchContent({
   }, [selectedDiffSource, overview]);
 
   useEffect(() => {
-    if (!overview && !isLoading) {
-      onRefresh();
-    }
-  }, [isLoading, onRefresh, overview]);
-
-  useEffect(() => {
     if (!overview) return;
     setSelectedDiffSource((current) => {
       if (overview.sources[current].totalFiles > 0) return current;
@@ -804,11 +798,7 @@ export function DiffWorkbenchContent({
         message: buildCommitMessage(group),
         paths: group.filePaths,
       });
-      patchCommitPlanGroup(groupId, (current) => ({
-        ...current,
-        status: "committed",
-        error: null,
-      }));
+      setCommitPlanGroups((current) => current.filter((item) => item.id !== groupId));
       setSelectedPathsChanged(false);
       await onRefresh();
     } catch (err) {
