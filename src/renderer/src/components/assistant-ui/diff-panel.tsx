@@ -939,7 +939,7 @@ function DiffPanelInner({
                       </div>
                       <textarea
                         ref={commitTitleRef}
-                        placeholder="Update files..."
+                        placeholder="输入提交标题..."
                         className="flex-1 bg-transparent text-[12px] font-medium placeholder:text-muted-foreground focus:outline-none min-w-0 resize-none overflow-hidden leading-[1.4] break-words"
                         rows={1}
                         value={commitMessage.split("\n")[0] || ""}
@@ -1014,11 +1014,11 @@ function DiffPanelInner({
                               disabled={selectedPaths.size === 0 || !commitMessage.trim() || isCommitting}
                             >
                               <CheckIcon className="size-3.5" />
-                              {isCommitting ? "提交中…" : `Commit (${selectedPaths.size})`}
+                              {isCommitting ? "提交中…" : `提交 (${selectedPaths.size})`}
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            {selectedPaths.size === 0 ? "请先勾选需要提交的文件" : (isCommitting ? "正在提交…" : "提交更改")}
+                            {selectedPaths.size === 0 ? "请先勾选需要提交的文件" : (isCommitting ? "提交中…" : "提交选中文件")}
                           </TooltipContent>
                         </Tooltip>
                       </div>

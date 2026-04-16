@@ -23,7 +23,7 @@ export function CommitDescriptionEditor({
         heading: { levels: [1, 2, 3, 4] },
       }),
       Placeholder.configure({
-        placeholder: "Description (Supports Markdown)...",
+        placeholder: "输入提交说明（支持 Markdown）...",
         emptyEditorClass:
           "is-editor-empty before:content-[attr(data-placeholder)] before:text-muted-foreground/70 before:float-left before:pointer-events-none before:h-0",
       }),
