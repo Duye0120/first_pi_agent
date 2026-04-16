@@ -81,6 +81,28 @@ type DiffWorkbenchContentProps = {
   panelWidth?: number;
 };
 
+type DiffWorkbenchDraft = {
+  treeWidth: number;
+  commitPanelHeight: number;
+  layout: "vertical" | "horizontal";
+  viewMode: "tree" | "list";
+  selectedDiffSource: GitDiffSource;
+  activeFile: string | null;
+  commitMessage: string;
+};
+
+const DEFAULT_DIFF_WORKBENCH_DRAFT: DiffWorkbenchDraft = {
+  treeWidth: 350,
+  commitPanelHeight: 240,
+  layout: "vertical",
+  viewMode: "tree",
+  selectedDiffSource: "all",
+  activeFile: null,
+  commitMessage: "",
+};
+
+let diffWorkbenchDraft: DiffWorkbenchDraft = { ...DEFAULT_DIFF_WORKBENCH_DRAFT };
+
 function EmptyPanelState({
   title,
   description,
@@ -89,7 +111,7 @@ function EmptyPanelState({
   description: string;
 }) {
   return (
-    <div className="grid min-h-[220px] place-items-center rounded-[6px] border border-border bg-[color:var(--color-control-panel-bg)] px-6 py-7 text-center">
+    <div className="grid min-h-[220px] place-items-center rounded-[var(--radius-shell)] border border-border bg-[color:var(--color-control-panel-bg)] px-6 py-7 text-center">
       <div className="max-w-[260px]">
         <p className="text-sm font-medium text-foreground">{title}</p>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
@@ -108,7 +130,7 @@ function SectionSurface({
   return (
     <section
       className={cn(
-        "rounded-[6px] border border-border bg-[color:var(--color-control-panel-bg)] p-3 shadow-sm",
+        "rounded-[var(--radius-shell)] border border-border bg-[color:var(--color-control-panel-bg)] p-3 shadow-sm",
         className,
       )}
     >
@@ -177,14 +199,14 @@ function DiffSourceSelect({
     <SelectRoot value={selectedSource} onValueChange={(value) => onChange(value as GitDiffSource)}>
       <SelectTrigger
         variant="ghost"
-        className="h-7 w-full rounded-[6px] px-2.5 text-[12px] border-0 bg-secondary/50 hover:bg-secondary/80 justify-between items-center"
+        className="h-7 w-full rounded-[var(--radius-shell)] px-2.5 text-[12px] border-0 bg-secondary/50 hover:bg-secondary/80 justify-between items-center"
       >
         <span className="truncate font-medium text-foreground">
           {selectedMeta.label} <span className="text-muted-foreground font-normal ml-1">({selectedSnapshot.totalFiles})</span>
         </span>
       </SelectTrigger>
 
-      <SelectContent className="min-w-[240px] rounded-[6px]">
+      <SelectContent className="min-w-[240px] rounded-[var(--radius-shell)]">
         {DIFF_SOURCES.map((source) => {
           const meta = DIFF_SOURCE_META[source];
           const snapshot = overview?.sources[source] ?? EMPTY_SOURCE_SNAPSHOT;
@@ -220,7 +242,7 @@ function DiffSummaryCard({
   tone?: "default" | "positive" | "negative";
 }) {
   return (
-    <div className="rounded-[6px] bg-[color:var(--color-control-bg)] px-3 py-2 shadow-none">
+    <div className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-3 py-2 shadow-none">
       <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">{label}</p>
       <p
         className={cn(
@@ -267,7 +289,7 @@ function DiffFileCard({
     <Collapsible
       open={expanded}
       onOpenChange={onExpandedChange}
-      className={cn("flex flex-col min-h-0 overflow-hidden rounded-[6px] border border-border bg-[color:var(--color-control-panel-bg)]", className)}
+      className={cn("flex flex-col min-h-0 overflow-hidden rounded-[var(--radius-shell)] border border-border bg-[color:var(--color-control-panel-bg)]", className)}
     >
       <CollapsibleTrigger
         className={cn(
@@ -383,34 +405,36 @@ export function DiffWorkbenchContent({
   // ── State: layout & sizing ──────────────────────────────────────────
   const { size: treeWidth, handleMouseDown: handleTreeResize } = useResizable({
     axis: "horizontal",
-    initial: 350,
+    initial: diffWorkbenchDraft.treeWidth,
     min: 200,
     max: Math.max(200, (panelWidth ?? (typeof window !== "undefined" ? window.innerWidth : 900)) - 200),
   });
 
   const { size: commitPanelHeight, handleMouseDown: handleCommitResize } = useResizable({
     axis: "vertical",
-    initial: 240,
+    initial: diffWorkbenchDraft.commitPanelHeight,
     min: 150,
     max: 500,
     invert: true,
   });
 
-  const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
-  const [viewMode, setViewMode] = useState<"tree" | "list">("tree");
+  const [layout, setLayout] = useState<"vertical" | "horizontal">(diffWorkbenchDraft.layout);
+  const [viewMode, setViewMode] = useState<"tree" | "list">(diffWorkbenchDraft.viewMode);
 
   // ── State: diff source & expansion ──────────────────────────────────
-  const [selectedDiffSource, setSelectedDiffSource] = useState<GitDiffSource>("all");
+  const [selectedDiffSource, setSelectedDiffSource] = useState<GitDiffSource>(
+    diffWorkbenchDraft.selectedDiffSource,
+  );
   const [expandedDiffPaths, setExpandedDiffPaths] = useState<ExpandedDiffState>({});
   const diffCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // ── State: file selection ───────────────────────────────────────────
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [selectedPathsChanged, setSelectedPathsChanged] = useState(false);
-  const [activeFile, setActiveFile] = useState<string | null>(null);
+  const [activeFile, setActiveFile] = useState<string | null>(diffWorkbenchDraft.activeFile);
 
   // ── State: commit ───────────────────────────────────────────────────
-  const [commitMessage, setCommitMessage] = useState("");
+  const [commitMessage, setCommitMessage] = useState(diffWorkbenchDraft.commitMessage);
   const [isCommitting, setIsCommitting] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
@@ -448,6 +472,44 @@ export function DiffWorkbenchContent({
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [commitMessage]);
+
+  useEffect(() => {
+    diffWorkbenchDraft = {
+      treeWidth,
+      commitPanelHeight,
+      layout,
+      viewMode,
+      selectedDiffSource,
+      activeFile,
+      commitMessage,
+    };
+  }, [
+    activeFile,
+    commitMessage,
+    commitPanelHeight,
+    layout,
+    selectedDiffSource,
+    treeWidth,
+    viewMode,
+  ]);
+
+  useEffect(() => {
+    if (!overview) {
+      return;
+    }
+
+    const currentFiles = overview.sources[selectedDiffSource]?.files ?? [];
+    if (currentFiles.length === 0) {
+      setActiveFile(null);
+      return;
+    }
+
+    if (activeFile && currentFiles.some((file) => file.path === activeFile)) {
+      return;
+    }
+
+    setActiveFile(currentFiles[0]?.path ?? null);
+  }, [activeFile, overview, selectedDiffSource]);
 
   // ── Handlers: selection ─────────────────────────────────────────────
   const handleToggleSelection = useCallback((paths: string[], isSelected: boolean) => {
@@ -629,7 +691,7 @@ export function DiffWorkbenchContent({
           variant="ghost"
           size="icon"
           onClick={onClose}
-          className="h-7 w-7 shrink-0 rounded-[6px] text-muted-foreground hover:bg-[color:var(--color-control-bg-hover)]"
+          className="h-7 w-7 shrink-0 rounded-[var(--radius-shell)] text-muted-foreground hover:bg-[color:var(--color-control-bg-hover)]"
           aria-label="关闭 Diff 面板"
         >
           <XIcon className="size-4" />
@@ -695,7 +757,7 @@ export function DiffWorkbenchContent({
               type="button"
               variant="outline"
               onClick={onRefresh}
-              className="h-7 rounded-[6px] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
+              className="h-7 rounded-[var(--radius-shell)] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
               aria-label="刷新 diff"
             >
               <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
@@ -711,7 +773,7 @@ export function DiffWorkbenchContent({
               type="button"
               variant="outline"
               onClick={() => setLayout((prev) => (prev === "vertical" ? "horizontal" : "vertical"))}
-              className="h-7 rounded-[6px] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
+              className="h-7 rounded-[var(--radius-shell)] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
               aria-label="切换视图布局"
             >
               {layout === "vertical" ? (
@@ -734,7 +796,7 @@ export function DiffWorkbenchContent({
           variant="outline"
           onClick={handlePull}
           disabled={isPulling}
-          className="h-7 rounded-[6px] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
+          className="h-7 rounded-[var(--radius-shell)] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
           aria-label="拉取代码"
         >
           <DownloadIcon className={cn("size-3.5", isPulling && "animate-bounce")} />
@@ -752,7 +814,7 @@ export function DiffWorkbenchContent({
           variant="outline"
           onClick={handlePush}
           disabled={isPushing}
-          className="h-7 rounded-[6px] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
+          className="h-7 rounded-[var(--radius-shell)] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
           aria-label="推送代码"
         >
           <UploadIcon className={cn("size-3.5", isPushing && "animate-bounce")} />
@@ -770,10 +832,10 @@ export function DiffWorkbenchContent({
       <div className="mb-3 flex flex-col gap-3">
         {/* Branch info bar */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center rounded-[6px] bg-[color:var(--color-control-bg)] px-2 py-1 text-[11px] text-foreground">
+          <span className="inline-flex items-center rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-2 py-1 text-[11px] text-foreground">
             {formatBranchLabel(overview)}
           </span>
-          <span className="inline-flex items-center rounded-[6px] bg-secondary/50 px-2 py-1 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center rounded-[var(--radius-shell)] bg-secondary/50 px-2 py-1 text-[11px] text-muted-foreground">
             {overview.branch.hasChanges ? "有未提交改动" : "工作区干净"}
           </span>
           {currentSourceSnapshot.files.length > 0 && (
@@ -824,7 +886,7 @@ export function DiffWorkbenchContent({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2.5 text-[12px] text-muted-foreground hover:bg-secondary/80 bg-secondary/50 rounded-[4px]"
+                        className="h-7 px-2.5 text-[12px] text-muted-foreground hover:bg-secondary/80 bg-secondary/50 rounded-[var(--radius-shell)]"
                         onClick={handleSelectAll}
                       >
                         {selectedPaths.size > 0 &&
@@ -837,7 +899,7 @@ export function DiffWorkbenchContent({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="size-7 rounded-[4px] text-muted-foreground hover:bg-secondary/80 bg-secondary/50"
+                            className="size-7 rounded-[var(--radius-shell)] text-muted-foreground hover:bg-secondary/80 bg-secondary/50"
                             onClick={() => setViewMode(v => v === "tree" ? "list" : "tree")}
                           >
                             {viewMode === "tree" ? <ListTreeIcon className="size-3.5" /> : <FolderTreeIcon className="size-3.5" />}
@@ -853,7 +915,7 @@ export function DiffWorkbenchContent({
                           <Button
                             variant="secondary"
                             size="sm"
-                            className="h-7 px-2.5 text-[12px] rounded-[4px] gap-1.5"
+                            className="h-7 px-2.5 text-[12px] rounded-[var(--radius-shell)] gap-1.5"
                             onClick={handleStageSelected}
                             disabled={selectedPaths.size === 0 || isStaging}
                           >
@@ -869,7 +931,7 @@ export function DiffWorkbenchContent({
                           <Button
                             variant="secondary"
                             size="sm"
-                            className="h-7 px-2.5 text-[12px] rounded-[4px] gap-1.5"
+                            className="h-7 px-2.5 text-[12px] rounded-[var(--radius-shell)] gap-1.5"
                             onClick={handleUnstageSelected}
                             disabled={selectedPaths.size === 0 || isStaging}
                           >
@@ -904,7 +966,7 @@ export function DiffWorkbenchContent({
                   className="flex flex-col shrink-0 flex-none pb-2"
                   style={{ height: commitPanelHeight }}
                 >
-                  <div className="flex flex-col flex-1 rounded-[4px] bg-[color:var(--color-control-panel-bg)] transition-colors overflow-hidden">
+                  <div className="flex flex-col flex-1 rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)] transition-colors overflow-hidden">
                     {/* First row: avatar + title input + sparkles */}
                     <div className="flex items-center gap-1 px-2 py-1.5 shrink-0 bg-secondary/10">
                       <div className="flex items-center justify-center size-[18px] bg-secondary rounded-full mr-1 shrink-0 overflow-hidden text-muted-foreground/80">
@@ -951,7 +1013,7 @@ export function DiffWorkbenchContent({
                       <div
                         role="status"
                         aria-live="polite"
-                        className="rounded-[6px] bg-secondary/30 px-3 py-2 text-[12px] leading-5 text-muted-foreground"
+                        className="rounded-[var(--radius-shell)] bg-secondary/30 px-3 py-2 text-[12px] leading-5 text-muted-foreground"
                       >
                         正在按 commit skill 生成提交信息…
                       </div>
@@ -961,7 +1023,7 @@ export function DiffWorkbenchContent({
                       <div
                         role="status"
                         aria-live="polite"
-                        className="rounded-[6px] bg-rose-500/8 px-3 py-2 text-[12px] leading-5 text-rose-700"
+                        className="rounded-[var(--radius-shell)] bg-rose-500/8 px-3 py-2 text-[12px] leading-5 text-rose-700"
                       >
                         {generateMessageError}
                       </div>
@@ -971,7 +1033,7 @@ export function DiffWorkbenchContent({
                       <div
                         role="status"
                         aria-live="polite"
-                        className="rounded-[6px] bg-rose-500/8 px-3 py-2 text-[12px] leading-5 text-rose-700"
+                        className="rounded-[var(--radius-shell)] bg-rose-500/8 px-3 py-2 text-[12px] leading-5 text-rose-700"
                       >
                         {commitError}
                       </div>
@@ -982,7 +1044,7 @@ export function DiffWorkbenchContent({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
-                              className="h-7 px-2 text-[12px] rounded-[6px] font-medium tracking-wide flex items-center justify-center gap-1.5"
+                              className="h-7 px-2 text-[12px] rounded-[var(--radius-shell)] font-medium tracking-wide flex items-center justify-center gap-1.5"
                               onClick={handleCommit}
                               disabled={selectedPaths.size === 0 || !commitMessage.trim() || isCommitting}
                             >
@@ -1003,7 +1065,7 @@ export function DiffWorkbenchContent({
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="size-7 rounded-[6px] shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                className="size-7 rounded-[var(--radius-shell)] shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                 onClick={() => setCommitMessage("")}
                               >
                                 <TrashIcon className="size-3.5" />
@@ -1019,7 +1081,7 @@ export function DiffWorkbenchContent({
                               variant="ghost"
                               size="icon"
                               className={cn(
-                                "size-7 rounded-[6px] shrink-0 text-muted-foreground hover:text-foreground relative",
+                                "size-7 rounded-[var(--radius-shell)] shrink-0 text-muted-foreground hover:text-foreground relative",
                                 isGeneratingMessage && "animate-pulse"
                               )}
                               onClick={handleGenerateMessage}
