@@ -142,6 +142,8 @@ const desktopApi: DesktopApi = {
   worker: {
     generateCommitMessage: (request) =>
       ipcRenderer.invoke(IPC_CHANNELS.workerGenerateCommitMessage, request),
+    generateCommitPlan: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workerGenerateCommitPlan, request),
   },
 
   ui: {

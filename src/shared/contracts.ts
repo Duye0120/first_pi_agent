@@ -614,6 +614,23 @@ export type GenerateCommitMessageResult = {
   skillName: "commit";
 };
 
+export type GenerateCommitPlanRequest = GenerateCommitMessageRequest;
+
+export type CommitPlanGroup = {
+  id: string;
+  title: string;
+  description: string;
+  filePaths: string[];
+  reason?: string;
+};
+
+export type GenerateCommitPlanResult = {
+  groups: CommitPlanGroup[];
+  usedModelRole: "utility" | "chat";
+  fallbackUsed: boolean;
+  skillName: "commit";
+};
+
 export type WindowFrameState = {
   isMaximized: boolean;
 };
@@ -735,6 +752,9 @@ export type DesktopApi = {
     generateCommitMessage: (
       request: GenerateCommitMessageRequest,
     ) => Promise<GenerateCommitMessageResult>;
+    generateCommitPlan: (
+      request: GenerateCommitPlanRequest,
+    ) => Promise<GenerateCommitPlanResult>;
   };
   ui: {
     getState: () => Promise<WindowUiState>;

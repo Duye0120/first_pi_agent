@@ -95,6 +95,7 @@ export const IPC_CHANNELS = {
 
   // Worker (background model tasks)
   workerGenerateCommitMessage: "worker:generate-commit-message",
+  workerGenerateCommitPlan: "worker:generate-commit-plan",
 
   // UI
   uiGetState: "ui:get-state",
