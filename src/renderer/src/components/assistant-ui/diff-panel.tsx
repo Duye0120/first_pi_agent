@@ -423,50 +423,68 @@ function CommitPlanCard({
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-3 py-3",
-        isCommitted && "bg-emerald-50/70 dark:bg-emerald-950/20",
+        "rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3.5 py-3 shadow-[var(--color-control-shadow)]",
+        isCommitted && "bg-emerald-50/60 dark:bg-emerald-950/20",
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="inline-flex h-6 items-center rounded-full bg-[color:var(--color-control-panel-bg)] px-2.5 text-[11px] font-medium text-[color:var(--color-text-secondary)] shadow-[var(--color-control-shadow)]">
             提交 {index + 1}
-          </p>
-          <textarea
-            rows={1}
-            value={group.title}
-            disabled={disabled || isBusy}
-            onChange={(event) => onTitleChange(event.target.value)}
-            className="mt-2 w-full resize-none bg-transparent text-sm font-medium leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
-            placeholder="输入提交标题..."
-          />
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {group.filePaths.length} 个文件
+          </span>
         </div>
-
         <Badge variant={statusMeta.variant} className="shrink-0">
           {statusMeta.label}
         </Badge>
       </div>
 
       <textarea
+        rows={2}
+        value={group.title}
+        aria-label={`提交 ${index + 1} 标题`}
+        disabled={disabled || isBusy}
+        onChange={(event) => onTitleChange(event.target.value)}
+        onInput={(event) => {
+          const element = event.currentTarget;
+          element.style.height = "auto";
+          element.style.height = `${element.scrollHeight}px`;
+        }}
+        ref={(element) => {
+          if (!element) return;
+          element.style.height = "auto";
+          element.style.height = `${element.scrollHeight}px`;
+        }}
+        className="mt-2 min-h-[52px] w-full resize-none rounded-[var(--radius-shell)] bg-background/78 px-3 py-2 text-[13px] font-semibold leading-5 text-foreground outline-none ring-1 ring-[color:var(--color-control-border)] transition-[background-color,box-shadow] placeholder:text-muted-foreground focus-visible:bg-[color:var(--color-control-bg-active)] focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)] disabled:cursor-not-allowed"
+        placeholder="输入提交标题..."
+      />
+
+      <textarea
         rows={3}
         value={group.description}
+        aria-label={`提交 ${index + 1} 说明`}
         disabled={disabled || isBusy}
         onChange={(event) => onDescriptionChange(event.target.value)}
-        className="mt-2 min-h-[72px] w-full resize-y rounded-[var(--radius-shell)] bg-background/70 px-2.5 py-2 text-[12px] leading-5 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+        className="mt-2 min-h-[84px] w-full resize-y rounded-[var(--radius-shell)] bg-background/78 px-3 py-2.5 text-[12px] leading-6 text-foreground outline-none ring-1 ring-[color:var(--color-control-border)] transition-[background-color,box-shadow] placeholder:text-muted-foreground focus-visible:bg-[color:var(--color-control-bg-active)] focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)] disabled:cursor-not-allowed"
         placeholder="输入提交说明（支持 Markdown）..."
       />
 
       {group.reason ? (
-        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{group.reason}</p>
+        <div className="mt-2 rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)] px-3 py-2 text-[11px] leading-5 text-muted-foreground">
+          {group.reason}
+        </div>
       ) : null}
 
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap gap-2">
         {group.filePaths.map((filePath) => (
           <button
             key={filePath}
             type="button"
+            aria-label={`定位到 ${filePath}`}
             onClick={() => onJumpToFile(filePath)}
-            className="rounded-full bg-background/80 px-2.5 py-1 text-[11px] leading-none text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+            className="max-w-full truncate rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)] px-2.5 py-1.5 text-left text-[11px] leading-5 text-muted-foreground shadow-[var(--color-control-shadow)] transition-colors hover:bg-[color:var(--color-selection-muted-bg)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)]"
           >
             {filePath}
           </button>
@@ -479,14 +497,14 @@ function CommitPlanCard({
         </div>
       ) : null}
 
-      <div className="mt-3 flex items-center justify-end gap-2">
+      <div className="mt-3 flex items-center justify-end gap-2 border-t border-[color:var(--color-control-border)]/70 pt-3">
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={onStage}
           disabled={disabled || isBusy || isCommitted || group.filePaths.length === 0}
-          className="h-7 px-2.5 text-[12px]"
+          className="h-8 px-3 text-[12px]"
         >
           {group.status === "staging" ? (
             <RefreshCwIcon className="size-3.5 animate-spin" />
@@ -501,7 +519,7 @@ function CommitPlanCard({
           size="sm"
           onClick={onCommit}
           disabled={disabled || isBusy || isCommitted || !group.title.trim() || group.filePaths.length === 0}
-          className="h-7 px-2.5 text-[12px]"
+          className="h-8 px-3 text-[12px]"
         >
           {group.status === "committing" ? (
             <RefreshCwIcon className="size-3.5 animate-spin" />
@@ -555,8 +573,6 @@ export function DiffWorkbenchContent({
   // ── State: commit plan ──────────────────────────────────────────────
   const [commitPlanGroups, setCommitPlanGroups] = useState(diffWorkbenchDraft.commitPlanGroups);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
-  const [isBatchStagingPlan, setIsBatchStagingPlan] = useState(false);
-  const [isBatchCommittingPlan, setIsBatchCommittingPlan] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
   const [isStaging, setIsStaging] = useState(false);
@@ -806,95 +822,6 @@ export function DiffWorkbenchContent({
     }
   }, [commitPlanGroups, onRefresh, patchCommitPlanGroup]);
 
-  const handleStageAllPlanned = useCallback(async () => {
-    const groups = commitPlanGroups.filter(
-      (group) => group.status !== "committed" && group.filePaths.length > 0,
-    );
-    if (groups.length === 0) return;
-
-    const groupIds = new Set(groups.map((group) => group.id));
-    const filePaths = Array.from(new Set(groups.flatMap((group) => group.filePaths)));
-
-    setCommitPlanError(null);
-    setIsBatchStagingPlan(true);
-    setCommitPlanGroups((current) =>
-      current.map((group) =>
-        groupIds.has(group.id)
-          ? { ...group, status: "staging", error: null }
-          : group,
-      ),
-    );
-
-    try {
-      await window.desktopApi.git.stageFiles(filePaths);
-      setCommitPlanGroups((current) =>
-        current.map((group) =>
-          groupIds.has(group.id)
-            ? { ...group, status: "staged", error: null }
-            : group,
-        ),
-      );
-      await onRefresh();
-    } catch (err) {
-      const message = getErrorMessage(err, "暂存失败");
-      setCommitPlanGroups((current) =>
-        current.map((group) =>
-          groupIds.has(group.id)
-            ? { ...group, status: "error", error: message }
-            : group,
-        ),
-      );
-      setCommitPlanError(message);
-    } finally {
-      setIsBatchStagingPlan(false);
-    }
-  }, [commitPlanGroups, onRefresh]);
-
-  const handleCommitAllPlanned = useCallback(async () => {
-    const groups = commitPlanGroups.filter(
-      (group) => group.status !== "committed" && group.filePaths.length > 0 && group.title.trim(),
-    );
-    if (groups.length === 0) return;
-
-    setCommitPlanError(null);
-    setIsBatchCommittingPlan(true);
-
-    try {
-      for (const group of groups) {
-        patchCommitPlanGroup(group.id, (current) => ({
-          ...current,
-          status: "committing",
-          error: null,
-        }));
-
-        try {
-          await window.desktopApi.git.commit({
-            message: buildCommitMessage(group),
-            paths: group.filePaths,
-          });
-          patchCommitPlanGroup(group.id, (current) => ({
-            ...current,
-            status: "committed",
-            error: null,
-          }));
-          setSelectedPathsChanged(false);
-          await onRefresh();
-        } catch (err) {
-          const message = getErrorMessage(err, "提交失败");
-          patchCommitPlanGroup(group.id, (current) => ({
-            ...current,
-            status: "error",
-            error: message,
-          }));
-          setCommitPlanError(message);
-          break;
-        }
-      }
-    } finally {
-      setIsBatchCommittingPlan(false);
-    }
-  }, [commitPlanGroups, onRefresh, patchCommitPlanGroup]);
-
   const handleClearPlan = useCallback(() => {
     setCommitPlanError(null);
     setCommitPlanGroups([]);
@@ -915,12 +842,7 @@ export function DiffWorkbenchContent({
   const hasBusyPlanGroup = commitPlanGroups.some(
     (group) => group.status === "staging" || group.status === "committing",
   );
-  const isPlanBusy =
-    isGeneratingPlan || isBatchStagingPlan || isBatchCommittingPlan || hasBusyPlanGroup;
-  const pendingPlanGroups = commitPlanGroups.filter((group) => group.status !== "committed");
-  const committablePlanGroups = pendingPlanGroups.filter(
-    (group) => group.filePaths.length > 0 && group.title.trim(),
-  );
+  const isPlanBusy = isGeneratingPlan || hasBusyPlanGroup;
   const canGeneratePlan = selectedFiles.length > 0 && !isPlanBusy;
   const generateTooltip = isGeneratingPlan
     ? "正在生成提交计划…"
@@ -1213,7 +1135,7 @@ export function DiffWorkbenchContent({
                   className="flex flex-col shrink-0 flex-none pb-2"
                   style={{ height: commitPanelHeight }}
                 >
-                  <div className="flex min-h-0 flex-1 flex-col rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)] p-2">
+                  <div className="flex min-h-0 flex-1 flex-col rounded-[calc(var(--radius-shell)+2px)] bg-[color:var(--color-control-panel-bg)] p-2.5 shadow-[var(--color-control-shadow)]">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
@@ -1266,30 +1188,6 @@ export function DiffWorkbenchContent({
                       </div>
                     </div>
 
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-2.5 text-[12px]"
-                        onClick={handleStageAllPlanned}
-                        disabled={commitPlanGroups.length === 0 || isPlanBusy}
-                      >
-                        <PlusIcon className="size-3.5" />
-                        全部暂存
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-7 px-2.5 text-[12px]"
-                        onClick={handleCommitAllPlanned}
-                        disabled={committablePlanGroups.length === 0 || isPlanBusy}
-                      >
-                        <CheckIcon className="size-3.5" />
-                        依次提交全部
-                      </Button>
-                    </div>
-
                     {isGeneratingPlan ? (
                       <div
                         role="status"
@@ -1318,15 +1216,13 @@ export function DiffWorkbenchContent({
 
                     <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
                       {commitPlanGroups.length === 0 ? (
-                        <div className="flex h-full min-h-[132px] items-center justify-center rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-4 text-center">
-                          <div className="max-w-[280px]">
-                            <p className="text-sm font-medium text-foreground">
-                              {selectedPaths.size > 0 ? "已选文件，开始生成计划" : "先勾选文件，再生成提交计划"}
-                            </p>
-                            <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-                              生成只分析当前勾选文件。全选可以一次纳入全部改动。
-                            </p>
-                          </div>
+                        <div className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-3 py-2.5 text-[12px] leading-5 text-muted-foreground shadow-[var(--color-control-shadow)]">
+                          <p className="font-medium text-foreground">
+                            {selectedPaths.size > 0 ? "已选文件，点击右上角生成计划。" : "先勾选文件，再生成计划。"}
+                          </p>
+                          <p className="mt-1">
+                            计划会按当前勾选的文件生成。
+                          </p>
                         </div>
                       ) : (
                         <div className="flex flex-col gap-2">
