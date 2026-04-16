@@ -16,13 +16,11 @@ import type {
   Settings,
   SessionGroup,
   ThinkingLevel,
-  WindowBounds,
   WindowFrameState,
 } from "@shared/contracts";
 import { AssistantThreadPanel } from "@renderer/components/assistant-ui/assistant-thread-panel";
 import { Button } from "@renderer/components/assistant-ui/button";
 import {
-  DiffPanel,
   DiffWorkbenchContent,
 } from "@renderer/components/assistant-ui/diff-panel";
 import {
@@ -50,14 +48,13 @@ const LEGACY_ACTIVE_SESSION_STORAGE_KEY = "first-pi-agent.active-session-id";
 const SIDEBAR_WIDTH_STORAGE_KEY = "chela.sidebar-width";
 const LEGACY_SIDEBAR_WIDTH_STORAGE_KEY = "first-pi-agent.sidebar-width";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "chela.sidebar-collapsed";
-const LEGACY_RIGHT_PANEL_SIZE_STORAGE_KEY = "first-pi-agent.right-panel-size";
 const DEFAULT_SIDEBAR_SIZE = 18;
-const MIN_SIDEBAR_SIZE = 14;
-const MAX_SIDEBAR_SIZE = 28;
-const RIGHT_PANEL_DOCK_BREAKPOINT = 1180;
+const MIN_SIDEBAR_SIZE = 4;
+const MAX_SIDEBAR_SIZE = 85;
 const MIN_RIGHT_PANEL_WIDTH = 480;
 const MAX_RIGHT_PANEL_WIDTH = 920;
 const MIN_THREAD_CONTENT_WIDTH = 320;
+const RIGHT_PANEL_GAP_PX = 8;
 const ROOT_UI_THEME_DATASET = "theme";
 const SETTINGS_ROUTE_PREFIX = "/settings";
 const SETTINGS_SECTION_IDS: SettingsSection[] = [
@@ -163,20 +160,6 @@ function clearStoredStrings(keys: string[]) {
   }
 }
 
-function readStoredPanelSize(
-  primaryKey: string,
-  fallbackKeys: string[],
-  defaultSize: number,
-  clamp: (size: number) => number,
-) {
-  const storedValue = readStoredNumber([primaryKey, ...fallbackKeys]);
-  if (storedValue !== null) {
-    return clamp(storedValue);
-  }
-
-  return defaultSize;
-}
-
 function applyCustomThemeVariables(
   root: HTMLElement,
   previousKeys: string[],
@@ -268,11 +251,7 @@ export default function App() {
   });
   const [settings, setSettings] = useState<Settings | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth : 0,
-  );
   const [threadWorkspaceWidth, setThreadWorkspaceWidth] = useState(0);
-  const [rightPanelPresentation, setRightPanelPresentation] = useState<"dock" | "drawer">("drawer");
   const [sidebarSize, setSidebarSize] = useState(() => {
     const storedWidth = readStoredNumber([
       SIDEBAR_WIDTH_STORAGE_KEY,
@@ -315,9 +294,7 @@ export default function App() {
   const diffPanelOpen =
     rightPanelState.open && rightPanelState.activeView === "diff";
   const dockedRightPanelVisible =
-    mainView === "thread" && diffPanelOpen && rightPanelPresentation === "dock";
-  const drawerDiffPanelVisible =
-    mainView === "thread" && diffPanelOpen && rightPanelPresentation === "drawer";
+    mainView === "thread" && diffPanelOpen;
   const threadTerminalOpen = terminalOpen && !dockedRightPanelVisible;
   const resolvedRightPanelWidth = useMemo(() => {
     const containerWidth =
@@ -333,10 +310,10 @@ export default function App() {
 
     return clampRightPanelWidth(preferredWidth, containerWidth);
   }, [rightPanelState.width, threadWorkspaceWidth]);
+
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
   const threadWorkspaceRef = useRef<HTMLDivElement | null>(null);
   const rightPanelStateRef = useRef(rightPanelState);
-  const rightPanelBaseWindowBoundsRef = useRef<WindowBounds | null>(null);
   const rightPanelToggleInFlightRef = useRef(false);
   const summariesRef = useRef<ChatSessionSummary[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
@@ -351,6 +328,7 @@ export default function App() {
     startWidth: number;
     containerWidth: number;
   } | null>(null);
+  const lastExpandedSidebarSizeRef = useRef(sidebarSize);
 
   useEffect(() => {
     summariesRef.current = summaries;
@@ -367,22 +345,6 @@ export default function App() {
   useEffect(() => {
     rightPanelStateRef.current = rightPanelState;
   }, [rightPanelState]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const handleResize = () => {
-      setWindowWidth(window.innerWidth);
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
 
   useEffect(() => {
     const element = threadWorkspaceRef.current;
@@ -410,6 +372,12 @@ export default function App() {
   }, [mainView, dockedRightPanelVisible]);
 
   useEffect(() => {
+    if (!sidebarCollapsed) {
+      lastExpandedSidebarSizeRef.current = clampSidebarSize(sidebarSize);
+    }
+  }, [sidebarCollapsed, sidebarSize]);
+
+  useEffect(() => {
     localStorage.setItem(
       SIDEBAR_WIDTH_STORAGE_KEY,
       String(clampSidebarSize(sidebarSize)),
@@ -431,9 +399,11 @@ export default function App() {
 
     if (sidebarCollapsed) {
       panel.collapse();
-    } else {
-      panel.expand();
+      return;
     }
+
+    panel.expand();
+    panel.resize(clampSidebarSize(lastExpandedSidebarSizeRef.current));
   }, [sidebarCollapsed]);
 
   useEffect(() => {
@@ -1297,89 +1267,44 @@ export default function App() {
   );
 
   const closeRightPanel = useCallback(() => {
-    void (async () => {
-      if (rightPanelToggleInFlightRef.current) {
-        return;
-      }
-
-      rightPanelToggleInFlightRef.current = true;
-      try {
-        const baseBounds = rightPanelBaseWindowBoundsRef.current;
-        if (baseBounds && desktopApi?.window.setBounds && !frameState.isMaximized) {
-          await desktopApi.window.setBounds(baseBounds);
-        }
-
-        rightPanelBaseWindowBoundsRef.current = null;
-        setRightPanelPresentation("drawer");
-        updateRightPanelState({ open: false });
-      } finally {
-        rightPanelToggleInFlightRef.current = false;
-      }
-    })();
-  }, [desktopApi, frameState.isMaximized, updateRightPanelState]);
+    updateRightPanelState({ open: false });
+  }, [updateRightPanelState]);
 
   const toggleDiffPanel = useCallback(() => {
-    void (async () => {
-      if (rightPanelToggleInFlightRef.current) {
-        return;
-      }
+    if (rightPanelToggleInFlightRef.current) return;
+    rightPanelToggleInFlightRef.current = true;
 
-      rightPanelToggleInFlightRef.current = true;
-      try {
+    try {
+      const containerWidth = Math.round(
+        threadWorkspaceRef.current?.getBoundingClientRect().width ?? threadWorkspaceWidth
+      );
+      
+      const nextPanelWidth = containerWidth > 0
+        ? clampRightPanelWidth(
+            typeof rightPanelStateRef.current.width === "number"
+              ? rightPanelStateRef.current.width
+              : getDefaultRightPanelWidth(containerWidth),
+            containerWidth
+          )
+        : resolvedRightPanelWidth;
+
       if (diffPanelOpen) {
-        const baseBounds = rightPanelBaseWindowBoundsRef.current;
-        if (baseBounds && desktopApi?.window.setBounds && !frameState.isMaximized) {
-          await desktopApi.window.setBounds(baseBounds);
-        }
-
-        rightPanelBaseWindowBoundsRef.current = null;
-        setRightPanelPresentation("drawer");
         updateRightPanelState({ open: false });
-        return;
-      }
-
-      let nextPresentation: "dock" | "drawer" =
-        windowWidth >= RIGHT_PANEL_DOCK_BREAKPOINT ? "dock" : "drawer";
-
-      if (
-        mainView === "thread" &&
-        !frameState.isMaximized &&
-        desktopApi?.window.getBounds &&
-        desktopApi.window.setBounds
-      ) {
-        const baseBounds =
-          rightPanelBaseWindowBoundsRef.current ?? await desktopApi.window.getBounds();
-        const nextBounds = await desktopApi.window.setBounds({
-          ...baseBounds,
-          width: baseBounds.width + resolvedRightPanelWidth,
+      } else {
+        updateRightPanelState({
+          open: true,
+          activeView: "diff",
+          width: nextPanelWidth,
         });
-
-        if (nextBounds.width - baseBounds.width >= resolvedRightPanelWidth - 4) {
-          rightPanelBaseWindowBoundsRef.current = baseBounds;
-          nextPresentation = "dock";
-        } else {
-          rightPanelBaseWindowBoundsRef.current = null;
-          nextPresentation = "drawer";
-        }
       }
-
-      setRightPanelPresentation(nextPresentation);
-      updateRightPanelState({
-        open: true,
-        activeView: "diff",
-      });
-      } finally {
-        rightPanelToggleInFlightRef.current = false;
-      }
-    })();
+    } finally {
+      rightPanelToggleInFlightRef.current = false;
+    }
   }, [
-    desktopApi,
     diffPanelOpen,
-    frameState.isMaximized,
-    mainView,
     resolvedRightPanelWidth,
+    threadWorkspaceWidth,
     updateRightPanelState,
-    windowWidth,
   ]);
 
   const handleRightPanelResizeMouseDown = useCallback(
@@ -1453,12 +1378,12 @@ export default function App() {
   const handleShellLayoutChanged = useCallback((layout: Record<string, number>) => {
     const nextSidebarSize = layout["shell-sidebar"];
     if (typeof nextSidebarSize === "number" && Number.isFinite(nextSidebarSize)) {
-      if (nextSidebarSize <= 0.5) {
-        setSidebarCollapsed(true);
+      if (nextSidebarSize <= MIN_SIDEBAR_SIZE) {
         return;
       }
-      setSidebarCollapsed(false);
-      setSidebarSize(clampSidebarSize(nextSidebarSize));
+      const resolvedSize = clampSidebarSize(nextSidebarSize);
+      lastExpandedSidebarSizeRef.current = resolvedSize;
+      setSidebarSize(resolvedSize);
     }
   }, []);
 
@@ -1472,8 +1397,11 @@ export default function App() {
     setSidebarAnimating(true);
     clearTimeout(sidebarAnimatingTimerRef.current);
     sidebarAnimatingTimerRef.current = setTimeout(() => setSidebarAnimating(false), 520);
+    if (!sidebarCollapsed) {
+      lastExpandedSidebarSizeRef.current = clampSidebarSize(sidebarSize);
+    }
     setSidebarCollapsed((current) => !current);
-  }, []);
+  }, [sidebarCollapsed, sidebarSize]);
 
   const handleToggleMaximize = useCallback(() => {
     if (!desktopApi) {
@@ -1877,73 +1805,75 @@ export default function App() {
             <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
               <div
                 ref={threadWorkspaceRef}
-                className={`flex min-h-0 flex-1 overflow-hidden bg-transparent ${dockedRightPanelVisible ? "gap-2 pr-2" : ""}`}
+                className={`flex h-full min-h-0 overflow-hidden bg-transparent ${dockedRightPanelVisible ? "gap-2" : ""}`}
               >
-                <div
-                  className={`chela-main-content-surface flex min-h-0 flex-1 flex-col overflow-hidden bg-[color:var(--chela-bg-surface)] ${dockedRightPanelVisible
-                    ? "rounded-[var(--radius-shell)]"
-                    : "rounded-l-[var(--radius-shell)]"
-                    }`}
-                >
+                <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
                   <div
-                    className={`flex items-center justify-end gap-2 px-5 transition-[min-height,padding,opacity] duration-200 ease-out ${mainView === "thread"
-                      ? "min-h-[52px] pb-3 pt-4 opacity-100"
-                      : "pointer-events-none min-h-0 overflow-hidden py-0 opacity-0"
+                    className={`chela-main-content-surface flex min-h-0 flex-1 flex-col overflow-hidden bg-[color:var(--chela-bg-surface)] transition-[border-radius] duration-300 ease-out ${dockedRightPanelVisible
+                      ? "rounded-[var(--radius-shell)]"
+                      : "rounded-l-[var(--radius-shell)]"
                       }`}
-                    aria-hidden={mainView !== "thread"}
                   >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setTerminalOpen((prev) => !prev)}
-                      className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "text-muted-foreground"}`}
-                      aria-label={terminalOpen ? "收起终端" : "展开终端"}
-                    >
-                      <CommandLineIcon className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={toggleDiffPanel}
-                      className={`relative h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "text-muted-foreground"}`}
-                      aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
-                    >
-                      <GitCompareArrows className="h-4 w-4" />
-                      {gitBranchSummary?.hasChanges && !diffPanelOpen && (
-                        <span className="absolute right-1 top-1 size-1.5 rounded-full bg-red-500" />
-                      )}
-                    </Button>
-                  </div>
-
-                  <div className="relative min-h-0 flex-1 bg-[color:var(--chela-bg-surface)]">
                     <div
-                      className={mainView === "thread" ? "h-full min-h-0" : "hidden"}
+                      className={`flex items-center justify-end gap-2 px-5 transition-[min-height,padding,opacity] duration-200 ease-out ${mainView === "thread"
+                        ? "min-h-[52px] pb-3 pt-4 opacity-100"
+                        : "pointer-events-none min-h-0 overflow-hidden py-0 opacity-0"
+                        }`}
                       aria-hidden={mainView !== "thread"}
                     >
-                      {threadPanels}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setTerminalOpen((prev) => !prev)}
+                        className={`h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 hover:bg-shell-toolbar-hover ${terminalOpen ? "bg-shell-toolbar-hover text-foreground" : "text-muted-foreground"}`}
+                        aria-label={terminalOpen ? "收起终端" : "展开终端"}
+                      >
+                        <CommandLineIcon className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={toggleDiffPanel}
+                        className={`relative h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "text-muted-foreground"}`}
+                        aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
+                      >
+                        <GitCompareArrows className="h-4 w-4" />
+                        {gitBranchSummary?.hasChanges && !diffPanelOpen && (
+                          <span className="absolute right-1 top-1 size-1.5 rounded-full bg-red-500" />
+                        )}
+                      </Button>
                     </div>
-                    <div
-                      className={mainView === "settings" ? "h-full min-h-0" : "hidden"}
-                      aria-hidden={mainView !== "settings"}
-                    >
-                      {settingsContent}
-                    </div>
-                  </div>
 
-                  <div className={mainView === "thread" && !dockedRightPanelVisible ? "" : "hidden"}>
-                    <TerminalDrawer
-                      open={terminalOpen}
-                      onToggle={() => setTerminalOpen((prev) => !prev)}
-                      settings={settings}
-                    />
+                    <div className="relative min-h-0 flex-1 bg-[color:var(--chela-bg-surface)]">
+                      <div
+                        className={mainView === "thread" ? "h-full min-h-0" : "hidden"}
+                        aria-hidden={mainView !== "thread"}
+                      >
+                        {threadPanels}
+                      </div>
+                      <div
+                        className={mainView === "settings" ? "h-full min-h-0" : "hidden"}
+                        aria-hidden={mainView !== "settings"}
+                      >
+                        {settingsContent}
+                      </div>
+                    </div>
+
+                    <div className={mainView === "thread" && !dockedRightPanelVisible ? "" : "hidden"}>
+                      <TerminalDrawer
+                        open={terminalOpen}
+                        onToggle={() => setTerminalOpen((prev) => !prev)}
+                        settings={settings}
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {dockedRightPanelVisible ? (
                   <div
-                    className="relative flex min-h-0 shrink-0 flex-col overflow-hidden rounded-[var(--radius-shell)] border border-black/5 bg-[color:var(--chela-bg-surface)] dark:border-white/6"
+                    className="relative flex min-h-0 shrink-0 flex-col overflow-hidden rounded-[var(--radius-shell)] border border-black/5 bg-[color:var(--chela-bg-surface)] dark:border-white/6 animate-panel-in"
                     style={{ width: resolvedRightPanelWidth }}
                   >
                     <div
@@ -1976,16 +1906,6 @@ export default function App() {
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
-
-      {drawerDiffPanelVisible ? (
-        <DiffPanel
-          open={diffPanelOpen}
-          onClose={closeRightPanel}
-          overview={gitOverview}
-          isLoading={gitOverviewLoading}
-          onRefresh={handleRefreshGitOverview}
-        />
-      ) : null}
     </main>
   );
 }
