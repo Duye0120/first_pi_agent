@@ -1865,7 +1865,7 @@ export default function App() {
                             size="icon"
                             onClick={toggleDiffPanel}
                             className={`relative h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 transition-[background-color,color,opacity,transform] duration-200 ease-out hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground scale-[0.98]" : "text-muted-foreground hover:scale-[1.02]"}`}
-                            aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
+                            aria-label={diffPanelOpen ? "收起右侧边栏" : "展开右侧边栏"}
                           >
                             {diffPanelOpen ? (
                               <PanelRightClose className="h-4 w-4" strokeWidth={1.9} />
@@ -1878,7 +1878,7 @@ export default function App() {
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent side="bottom">
-                          {diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
+                          {diffPanelOpen ? "收起右侧边栏" : "展开右侧边栏"}
                         </TooltipContent>
                       </Tooltip>
                     </div>

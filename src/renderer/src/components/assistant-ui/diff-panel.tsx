@@ -920,7 +920,7 @@ export function DiffWorkbenchContent({
           size="icon"
           onClick={onClose}
           className="h-7 w-7 shrink-0 rounded-[var(--radius-shell)] text-muted-foreground hover:bg-[color:var(--color-control-bg-hover)]"
-          aria-label="关闭 Diff 面板"
+          aria-label="关闭右侧边栏"
         >
           <XIcon className="size-4" />
         </Button>
@@ -932,12 +932,12 @@ export function DiffWorkbenchContent({
     return (
       <section className={cn("flex h-full min-h-0 flex-col bg-background px-4 py-4", className)}>
         <PanelHeader>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">Diff</p>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">边栏</p>
         </PanelHeader>
         <div className="mt-4">
           <EmptyPanelState
             title={isLoading ? "正在读取变更" : "准备读取变更"}
-            description="稍等一下，正在从当前 workspace 拉取 Git diff 快照。"
+            description="稍等一下，正在从当前 workspace 拉取 Git 变更快照。"
           />
         </div>
       </section>
@@ -948,10 +948,10 @@ export function DiffWorkbenchContent({
     return (
       <section className={cn("flex h-full min-h-0 flex-col bg-background px-4 py-4", className)}>
         <PanelHeader>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">Diff</p>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">边栏</p>
         </PanelHeader>
         <div className="mt-2">
-          <h3 className="text-lg font-semibold text-foreground">工作区 Diff</h3>
+          <h3 className="text-lg font-semibold text-foreground">工作区边栏</h3>
           <p className="mt-1 text-xs text-muted-foreground">
             当前 workspace 没有可读取的 Git 仓库。
           </p>
@@ -959,7 +959,7 @@ export function DiffWorkbenchContent({
         <div className="mt-4">
           <EmptyPanelState
             title="Git 仓库未就绪"
-            description="先在当前 workspace 初始化 Git 仓库，这里就能展示 diff。"
+            description="先在当前 workspace 初始化 Git 仓库，这里就能展示工作区改动。"
           />
         </div>
       </section>
@@ -971,8 +971,8 @@ export function DiffWorkbenchContent({
     <section className={cn("flex h-full min-h-0 flex-col bg-background px-4 py-4", className)}>
       <PanelHeader>
         <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">Diff</p>
-          <h3 className="text-lg font-semibold text-foreground">工作区 Diff</h3>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-text-secondary)]">边栏</p>
+          <h3 className="text-lg font-semibold text-foreground">工作区边栏</h3>
           <p className="mt-1 text-xs text-muted-foreground">{meta.description}</p>
         </div>
       </PanelHeader>
@@ -1108,7 +1108,7 @@ export function DiffWorkbenchContent({
             <div className="relative flex min-h-0 flex-1 overflow-hidden">
               {/* ── Left sidebar: tree + commit panel (siblings) ─────── */}
               <div
-                className="shrink-0 flex flex-col min-h-0 pr-3"
+                className="shrink-0 flex flex-col min-h-0 pr-2"
                 style={{ width: treeWidth }}
               >
                 {/* ── Tree area (top) ───────────────────────────────── */}
@@ -1333,12 +1333,12 @@ export function DiffWorkbenchContent({
 
               {/* ── Tree resize handle ──────────────────────────────── */}
               <div
-                className="w-[2px] cursor-col-resize hover:bg-primary/50 active:bg-primary/50 bg-border/40 transition-colors z-10 shrink-0 self-stretch mr-2 ml-[-1px]"
+                className="w-[2px] cursor-col-resize hover:bg-primary/50 active:bg-primary/50 bg-border/40 transition-colors z-10 shrink-0 self-stretch mr-1 ml-0"
                 onMouseDown={handleTreeResize}
               />
 
               {/* ── Right: diff cards ───────────────────────────────── */}
-              <div className="min-h-0 flex flex-col flex-1 overflow-y-auto border-l border-border/50 pl-3">
+              <div className="min-h-0 flex flex-col flex-1 overflow-y-auto pl-2">
                 <div className="flex flex-col flex-1 min-h-0 gap-3">
                   {/* Replace Right Side List mapping with Single Active File viewing or Empty state */}
                   {(() => {
