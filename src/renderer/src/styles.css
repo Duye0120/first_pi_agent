@@ -492,3 +492,52 @@ body, .status-pill, .composer-ghost-button {
   opacity: 0;
   pointer-events: none;
 }
+
+@keyframes chela-main-content-shift-left {
+  from {
+    opacity: 0.985;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes chela-main-content-shift-right {
+  from {
+    opacity: 0.985;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+[data-right-panel-animating] .chela-right-panel-shell {
+  transition:
+    width 460ms cubic-bezier(0.16, 1, 0.3, 1),
+    margin-left 460ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 420ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 220ms ease;
+}
+
+.chela-right-panel-content {
+  transition:
+    opacity 420ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+[data-right-panel-animating] .chela-main-content-surface {
+  will-change: transform, opacity;
+}
+
+[data-right-panel-animating][data-right-panel-open="true"] .chela-main-content-surface {
+  animation: chela-main-content-shift-left 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-right-panel-animating][data-right-panel-open="false"] .chela-main-content-surface {
+  animation: chela-main-content-shift-right 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}

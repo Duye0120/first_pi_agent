@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CommandLineIcon,
 } from "@heroicons/react/24/outline";
-import { GitCompareArrows } from "lucide-react";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import type {
   ChatSession,
   ChatSessionSummary,
@@ -35,6 +35,11 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@renderer/components/ui/resizable";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@renderer/components/ui/tooltip";
 import {
   EMPTY_CONTEXT_USAGE_SUMMARY,
 } from "@renderer/lib/context-usage";
@@ -280,6 +285,7 @@ export default function App() {
   const [gitOverview, setGitOverview] = useState<GitDiffOverview | null>(null);
   const [gitOverviewLoading, setGitOverviewLoading] = useState(false);
   const [sidebarAnimating, setSidebarAnimating] = useState(false);
+  const [rightPanelAnimating, setRightPanelAnimating] = useState(false);
 
   const settingsSection = useMemo(
     () => resolveSettingsSectionFromPath(location.pathname) ?? "general",
@@ -293,9 +299,9 @@ export default function App() {
   const activeSessionId = activeSession?.id ?? null;
   const diffPanelOpen =
     rightPanelState.open && rightPanelState.activeView === "diff";
-  const dockedRightPanelVisible =
-    mainView === "thread" && diffPanelOpen;
-  const threadTerminalOpen = terminalOpen && !dockedRightPanelVisible;
+  const rightPanelVisibleOrAnimating =
+    mainView === "thread" && (diffPanelOpen || rightPanelAnimating);
+  const threadTerminalOpen = terminalOpen && !rightPanelVisibleOrAnimating;
   const resolvedRightPanelWidth = useMemo(() => {
     const containerWidth =
       threadWorkspaceWidth > 0
@@ -328,6 +334,9 @@ export default function App() {
     startWidth: number;
     containerWidth: number;
   } | null>(null);
+  const rightPanelAnimatingTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   const lastExpandedSidebarSizeRef = useRef(sidebarSize);
 
   useEffect(() => {
@@ -369,13 +378,23 @@ export default function App() {
     return () => {
       observer.disconnect();
     };
-  }, [mainView, dockedRightPanelVisible]);
+  }, [mainView, rightPanelVisibleOrAnimating]);
 
   useEffect(() => {
     if (!sidebarCollapsed) {
       lastExpandedSidebarSizeRef.current = clampSidebarSize(sidebarSize);
     }
   }, [sidebarCollapsed, sidebarSize]);
+
+  useEffect(() => () => clearTimeout(rightPanelAnimatingTimerRef.current), []);
+
+  const armRightPanelAnimation = useCallback(() => {
+    setRightPanelAnimating(true);
+    clearTimeout(rightPanelAnimatingTimerRef.current);
+    rightPanelAnimatingTimerRef.current = setTimeout(() => {
+      setRightPanelAnimating(false);
+    }, 520);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(
@@ -1268,8 +1287,9 @@ export default function App() {
   );
 
   const closeRightPanel = useCallback(() => {
+    armRightPanelAnimation();
     updateRightPanelState({ open: false });
-  }, [updateRightPanelState]);
+  }, [armRightPanelAnimation, updateRightPanelState]);
 
   const toggleDiffPanel = useCallback(() => {
     if (rightPanelToggleInFlightRef.current) return;
@@ -1289,6 +1309,8 @@ export default function App() {
           )
         : resolvedRightPanelWidth;
 
+      armRightPanelAnimation();
+
       if (diffPanelOpen) {
         updateRightPanelState({ open: false });
       } else {
@@ -1302,6 +1324,7 @@ export default function App() {
       rightPanelToggleInFlightRef.current = false;
     }
   }, [
+    armRightPanelAnimation,
     diffPanelOpen,
     resolvedRightPanelWidth,
     threadWorkspaceWidth,
@@ -1310,7 +1333,7 @@ export default function App() {
 
   const handleRightPanelResizeMouseDown = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!dockedRightPanelVisible) {
+      if (!diffPanelOpen) {
         return;
       }
 
@@ -1369,7 +1392,7 @@ export default function App() {
       document.addEventListener("mouseup", handleMouseUp);
     },
     [
-      dockedRightPanelVisible,
+      diffPanelOpen,
       resolvedRightPanelWidth,
       threadWorkspaceWidth,
       updateRightPanelState,
@@ -1758,6 +1781,8 @@ export default function App() {
         className="relative min-h-0 flex-1"
         data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
         {...(sidebarAnimating ? { "data-sidebar-animating": "" } : {})}
+        data-right-panel-open={diffPanelOpen ? "true" : "false"}
+        {...(rightPanelAnimating ? { "data-right-panel-animating": "" } : {})}
       >
         <ResizablePanelGroup
           orientation="horizontal"
@@ -1806,11 +1831,11 @@ export default function App() {
             <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
               <div
                 ref={threadWorkspaceRef}
-                className={`flex h-full min-h-0 overflow-hidden bg-transparent ${dockedRightPanelVisible ? "gap-2" : ""}`}
+                className="flex h-full min-h-0 overflow-hidden bg-transparent"
               >
                 <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
                   <div
-                    className={`chela-main-content-surface flex min-h-0 flex-1 flex-col overflow-hidden bg-[color:var(--chela-bg-surface)] transition-[border-radius] duration-300 ease-out ${dockedRightPanelVisible
+                    className={`chela-main-content-surface flex min-h-0 flex-1 flex-col overflow-hidden bg-[color:var(--chela-bg-surface)] transition-[border-radius] duration-300 ease-out ${rightPanelVisibleOrAnimating
                       ? "rounded-[var(--radius-shell)]"
                       : "rounded-l-[var(--radius-shell)]"
                       }`}
@@ -1832,19 +1857,30 @@ export default function App() {
                       >
                         <CommandLineIcon className="h-4 w-4" />
                       </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={toggleDiffPanel}
-                        className={`relative h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground" : "text-muted-foreground"}`}
-                        aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
-                      >
-                        <GitCompareArrows className="h-4 w-4" />
-                        {gitBranchSummary?.hasChanges && !diffPanelOpen && (
-                          <span className="absolute right-1 top-1 size-1.5 rounded-full bg-red-500" />
-                        )}
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={toggleDiffPanel}
+                            className={`relative h-9 w-9 cursor-pointer rounded-[var(--radius-shell)] border-none bg-transparent shadow-none ring-0 transition-[background-color,color,opacity,transform] duration-200 ease-out hover:bg-shell-toolbar-hover ${diffPanelOpen ? "bg-shell-toolbar-hover text-foreground scale-[0.98]" : "text-muted-foreground hover:scale-[1.02]"}`}
+                            aria-label={diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
+                          >
+                            {diffPanelOpen ? (
+                              <PanelRightClose className="h-4 w-4" strokeWidth={1.9} />
+                            ) : (
+                              <PanelRightOpen className="h-4 w-4" strokeWidth={1.9} />
+                            )}
+                            {gitBranchSummary?.hasChanges && !diffPanelOpen && (
+                              <span className="absolute right-1 top-1 size-1.5 rounded-full bg-red-500" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          {diffPanelOpen ? "收起 Diff 面板" : "展开 Diff 面板"}
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
 
                     <div className="relative min-h-0 flex-1 bg-[color:var(--chela-bg-surface)]">
@@ -1862,7 +1898,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className={mainView === "thread" && !dockedRightPanelVisible ? "" : "hidden"}>
+                    <div className={mainView === "thread" && !rightPanelVisibleOrAnimating ? "" : "hidden"}>
                       <TerminalDrawer
                         open={terminalOpen}
                         onToggle={() => setTerminalOpen((prev) => !prev)}
@@ -1872,34 +1908,41 @@ export default function App() {
                   </div>
                 </div>
 
-                {dockedRightPanelVisible ? (
+                {mainView === "thread" ? (
                   <div
-                    className="relative flex min-h-0 shrink-0 flex-col overflow-hidden rounded-[var(--radius-shell)] border border-black/5 bg-[color:var(--chela-bg-surface)] dark:border-white/6 animate-panel-in"
-                    style={{ width: resolvedRightPanelWidth }}
+                    className={`chela-right-panel-shell relative flex min-h-0 shrink-0 flex-col overflow-hidden rounded-[var(--radius-shell)] bg-[color:var(--chela-bg-surface)] ${diffPanelOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"} ${diffPanelOpen || rightPanelAnimating ? "border border-black/5 dark:border-white/6" : "border border-transparent"}`}
+                    style={{
+                      width: diffPanelOpen ? resolvedRightPanelWidth : 0,
+                      marginLeft: diffPanelOpen ? RIGHT_PANEL_GAP_PX : 0,
+                    }}
                   >
                     <div
-                      className="absolute left-0 top-0 bottom-0 z-20 flex w-3 -translate-x-1/2 cursor-col-resize justify-center group"
+                      className={`absolute left-0 top-0 bottom-0 z-20 flex w-3 -translate-x-1/2 cursor-col-resize justify-center group ${diffPanelOpen ? "pointer-events-auto" : "pointer-events-none opacity-0"}`}
                       onMouseDown={handleRightPanelResizeMouseDown}
                     >
                       <div className="h-full w-px bg-border/60 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-active:opacity-100" />
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-hidden">
-                      <DiffWorkbenchContent
-                        onClose={closeRightPanel}
-                        overview={gitOverview}
-                        isLoading={gitOverviewLoading}
-                        onRefresh={handleRefreshGitOverview}
-                        className="h-full"
-                        panelWidth={resolvedRightPanelWidth}
-                      />
-                    </div>
+                    {rightPanelVisibleOrAnimating ? (
+                      <>
+                        <div className={`chela-right-panel-content min-h-0 flex-1 overflow-hidden ${diffPanelOpen ? "translate-x-0 opacity-100" : "translate-x-3 opacity-0"}`}>
+                          <DiffWorkbenchContent
+                            onClose={closeRightPanel}
+                            overview={gitOverview}
+                            isLoading={gitOverviewLoading}
+                            onRefresh={handleRefreshGitOverview}
+                            className="h-full"
+                            panelWidth={resolvedRightPanelWidth}
+                          />
+                        </div>
 
-                    <TerminalDrawer
-                      open={terminalOpen}
-                      onToggle={() => setTerminalOpen((prev) => !prev)}
-                      settings={settings}
-                    />
+                        <TerminalDrawer
+                          open={terminalOpen}
+                          onToggle={() => setTerminalOpen((prev) => !prev)}
+                          settings={settings}
+                        />
+                      </>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
