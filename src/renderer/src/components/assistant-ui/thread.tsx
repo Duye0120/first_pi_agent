@@ -41,10 +41,12 @@ import type {
   ModelEntry,
   PendingApprovalGroup,
   PendingApprovalNotice,
+  RuntimeSkillUsage,
   ProviderSource,
   SelectedFile,
   ThinkingLevel,
 } from "@shared/contracts";
+import { extractRuntimeSkillUsages } from "@shared/skill-usage";
 
 import {
   ComposerAttachments,
@@ -69,6 +71,7 @@ import {
   type ContextUsageSummary,
 } from "@renderer/lib/context-usage";
 import { Reasoning } from "@renderer/components/assistant-ui/reasoning";
+import { SkillUsageStrip } from "@renderer/components/assistant-ui/skill-usage-strip";
 import {
   SelectContent,
   SelectItem,
@@ -977,6 +980,25 @@ const AssistantMessageTextPart: FC = () => {
   return null;
 };
 
+const AssistantMessageSkillUsages: FC = () => {
+  const rawSkillUsages = useAuiState((s) => {
+    const custom = s.message.metadata?.custom as
+      | { skillUsages?: RuntimeSkillUsage[] }
+      | undefined;
+    return custom?.skillUsages ?? null;
+  });
+  const skillUsages = useMemo(
+    () => extractRuntimeSkillUsages(rawSkillUsages),
+    [rawSkillUsages],
+  );
+
+  if (skillUsages.length === 0) {
+    return null;
+  }
+
+  return <SkillUsageStrip skillUsages={skillUsages} className="mb-3" />;
+};
+
 const AssistantMessageStatus: FC = () => {
   const { runStatusLabel } = useThreadRunStatus();
   const status = useAuiState((s) => s.message.status);
@@ -1030,6 +1052,7 @@ const AssistantMessage: FC = () => {
     >
       <div className="wrap-break-word px-2 py-2 text-[15px] leading-7 text-foreground">
         <AssistantMessageStatus />
+        <AssistantMessageSkillUsages />
         <MessagePrimitive.Parts
           components={{
             Text: AssistantMessageTextPart,

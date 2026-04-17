@@ -25,11 +25,14 @@ import type {
   GitDiffOverview,
   GitDiffSource,
   GitDiffSourceSnapshot,
+  RuntimeSkillUsage,
 } from "@shared/contracts";
+import { getRuntimeSkillUsage } from "@shared/skill-usage";
 import { Badge } from "@renderer/components/assistant-ui/badge";
 import { Button } from "@renderer/components/assistant-ui/button";
 import { DiffView } from "@renderer/components/DiffView";
 import { FileTreeView } from "@renderer/components/assistant-ui/diff-tree";
+import { SkillUsageStrip } from "@renderer/components/assistant-ui/skill-usage-strip";
 import {
   SelectContent,
   SelectItem,
@@ -88,6 +91,7 @@ type DiffWorkbenchDraft = {
   selectedDiffSource: GitDiffSource;
   activeFile: string | null;
   commitPlanGroups: CommitPlanCardState[];
+  commitPlanSkillUsage: RuntimeSkillUsage | null;
 };
 
 const DEFAULT_DIFF_WORKBENCH_DRAFT: DiffWorkbenchDraft = {
@@ -98,6 +102,7 @@ const DEFAULT_DIFF_WORKBENCH_DRAFT: DiffWorkbenchDraft = {
   selectedDiffSource: "all",
   activeFile: null,
   commitPlanGroups: [],
+  commitPlanSkillUsage: null,
 };
 
 let diffWorkbenchDraft: DiffWorkbenchDraft = { ...DEFAULT_DIFF_WORKBENCH_DRAFT };
@@ -114,6 +119,11 @@ type CommitPlanStatus =
 type CommitPlanCardState = CommitPlanGroup & {
   status: CommitPlanStatus;
   error: string | null;
+};
+
+type CommitPlanGenerationResult = {
+  groups: CommitPlanCardState[];
+  skillUsage: RuntimeSkillUsage | null;
 };
 
 function EmptyPanelState({
@@ -362,12 +372,15 @@ function createCommitPlanCardState(groups: CommitPlanGroup[]): CommitPlanCardSta
 
 async function generateCommitPlan(
   selectedFiles: GitDiffFile[],
-): Promise<CommitPlanCardState[]> {
+): Promise<CommitPlanGenerationResult> {
   const result = await window.desktopApi.worker.generateCommitPlan({
     selectedFiles,
   });
 
-  return createCommitPlanCardState(result.groups);
+  return {
+    groups: createCommitPlanCardState(result.groups),
+    skillUsage: result.skillUsage ?? null,
+  };
 }
 
 function buildCommitMessage(group: Pick<CommitPlanGroup, "title" | "description">): string {
@@ -606,6 +619,9 @@ export function DiffWorkbenchContent({
 
   // ── State: commit plan ──────────────────────────────────────────────
   const [commitPlanGroups, setCommitPlanGroups] = useState(diffWorkbenchDraft.commitPlanGroups);
+  const [commitPlanSkillUsage, setCommitPlanSkillUsage] = useState(
+    diffWorkbenchDraft.commitPlanSkillUsage,
+  );
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [isCommittingAll, setIsCommittingAll] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
@@ -638,16 +654,24 @@ export function DiffWorkbenchContent({
       selectedDiffSource,
       activeFile,
       commitPlanGroups,
+      commitPlanSkillUsage,
     };
   }, [
     activeFile,
     commitPanelHeight,
     commitPlanGroups,
+    commitPlanSkillUsage,
     layout,
     selectedDiffSource,
     treeWidth,
     viewMode,
   ]);
+
+  useEffect(() => {
+    if (commitPlanGroups.length === 0) {
+      setCommitPlanSkillUsage(null);
+    }
+  }, [commitPlanGroups.length]);
 
   useEffect(() => {
     if (!overview) {
@@ -757,8 +781,9 @@ export function DiffWorkbenchContent({
 
     setIsGeneratingPlan(true);
     try {
-      const groups = await generateCommitPlan(files);
-      setCommitPlanGroups(groups);
+      const result = await generateCommitPlan(files);
+      setCommitPlanGroups(result.groups);
+      setCommitPlanSkillUsage(result.skillUsage);
       setSelectedPathsChanged(false);
     } catch (err) {
       const message = getErrorMessage(err, "生成提交计划失败");
@@ -875,6 +900,7 @@ export function DiffWorkbenchContent({
   const handleClearPlan = useCallback(() => {
     setCommitPlanError(null);
     setCommitPlanGroups([]);
+    setCommitPlanSkillUsage(null);
   }, []);
 
   // ── Handlers: file expansion ────────────────────────────────────────
@@ -909,6 +935,12 @@ export function DiffWorkbenchContent({
     ? `依次提交全部（${commitAllProgress.current}/${commitAllProgress.total}）`
     : "依次提交全部";
   const showSparklesHint = selectedPathsChanged && commitPlanGroups.length > 0;
+  const pendingCommitPlanSkillUsage = getRuntimeSkillUsage(
+    "commit",
+    "right-panel.commit-plan",
+  );
+  const visibleCommitPlanSkillUsage =
+    commitPlanSkillUsage ?? (isGeneratingPlan ? pendingCommitPlanSkillUsage : null);
 
   function PanelHeader({ children }: { children: React.ReactNode }) {
     return (
@@ -1208,6 +1240,13 @@ export function DiffWorkbenchContent({
                           <Badge variant="secondary">已选 {selectedPaths.size}</Badge>
                           <Badge variant="secondary">计划 {commitPlanGroups.length}</Badge>
                         </div>
+                        {visibleCommitPlanSkillUsage ? (
+                          <SkillUsageStrip
+                            skillUsages={[visibleCommitPlanSkillUsage]}
+                            leadLabel="由"
+                            className="mt-2"
+                          />
+                        ) : null}
                       </div>
 
                       <div className="flex items-center gap-1">
@@ -1272,16 +1311,6 @@ export function DiffWorkbenchContent({
                         </Tooltip>
                       </div>
                     </div>
-
-                    {isGeneratingPlan ? (
-                      <div
-                        role="status"
-                        aria-live="polite"
-                        className="mt-2 rounded-[var(--radius-shell)] bg-secondary/30 px-3 py-2 text-[12px] leading-5 text-muted-foreground"
-                      >
-                        正在按 commit skill 生成提交计划…
-                      </div>
-                    ) : null}
 
                     {commitPlanError ? (
                       <div

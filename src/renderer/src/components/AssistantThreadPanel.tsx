@@ -21,8 +21,10 @@ import type {
   GitBranchSummary,
   InterruptedApprovalGroup,
   PendingApprovalGroup,
+  RuntimeSkillUsage,
   ThinkingLevel,
 } from "@shared/contracts";
+import { extractRuntimeSkillUsages } from "@shared/skill-usage";
 import { deriveSessionTitle } from "@renderer/lib/session";
 import { Thread } from "@renderer/components/assistant-ui/thread";
 import type { ContextUsageSummary } from "@renderer/lib/context-usage";
@@ -79,6 +81,7 @@ function createResponse(id: string): AgentResponse {
     status: "running",
     steps: [],
     finalText: "",
+    skillUsages: [],
     startedAt: Date.now(),
   };
 }
@@ -99,6 +102,21 @@ function safeArgsText(value: unknown) {
 
 function normalizeLineEndings(text: string) {
   return text.replace(/\r\n|\n\r|\r/g, "\n");
+}
+
+function mergeRuntimeSkillUsages(
+  current: RuntimeSkillUsage[],
+  next: RuntimeSkillUsage[],
+) {
+  const byKey = new Map<string, RuntimeSkillUsage>();
+  for (const item of current) {
+    byKey.set(`${item.skillId}:${item.entryPointId}`, item);
+  }
+  for (const item of next) {
+    byKey.set(`${item.skillId}:${item.entryPointId}`, item);
+  }
+
+  return [...byKey.values()];
 }
 
 function getToolResultText(result: unknown): string | null {
@@ -239,6 +257,7 @@ function toThreadMessage(message: ChatMessage): ThreadMessageLike {
         );
       })
     : [];
+  const skillUsages = extractRuntimeSkillUsages(message.meta?.skillUsages);
 
   if (message.role === "assistant") {
     return {
@@ -253,6 +272,7 @@ function toThreadMessage(message: ChatMessage): ThreadMessageLike {
       metadata: {
         custom: {
           rawMessageId: message.id,
+          ...(skillUsages.length > 0 ? { skillUsages } : {}),
         },
       },
     };
@@ -617,6 +637,14 @@ function SessionRuntime({
         queue.push({
           content: buildAssistantParts(response.steps, response.finalText),
           status: buildRuntimeStatus(response),
+          metadata: {
+            custom:
+              response.skillUsages && response.skillUsages.length > 0
+                ? {
+                    skillUsages: response.skillUsages,
+                  }
+                : undefined,
+          },
         });
       };
 
@@ -654,6 +682,14 @@ function SessionRuntime({
         const update: ChatModelRunResult = {
           content: buildAssistantParts(response.steps, response.finalText),
           status: buildRuntimeStatus(response),
+          metadata: {
+            custom:
+              response.skillUsages && response.skillUsages.length > 0
+                ? {
+                    skillUsages: response.skillUsages,
+                  }
+                : undefined,
+          },
         };
 
         queue.finish(update);
@@ -768,6 +804,13 @@ function SessionRuntime({
             step.toolResult = event.result;
             step.toolError = event.error;
             step.endedAt = Date.now();
+            const skillUsages = extractRuntimeSkillUsages(event.result);
+            if (skillUsages.length > 0) {
+              response.skillUsages = mergeRuntimeSkillUsages(
+                response.skillUsages ?? [],
+                skillUsages,
+              );
+            }
             publish();
             break;
           }

@@ -7,7 +7,8 @@ import type {
   ConfirmationResponse,
 } from "../shared/agent-events.js";
 import type { HarnessApprovalResolution } from "./harness/types.js";
-import type { AgentStep, ChatMessage } from "../shared/contracts.js";
+import type { AgentStep, ChatMessage, RuntimeSkillUsage } from "../shared/contracts.js";
+import { extractRuntimeSkillUsages } from "../shared/skill-usage.js";
 import { IPC_CHANNELS } from "../shared/ipc.js";
 import { getSettings } from "./settings.js";
 import { appLogger } from "./logger.js";
@@ -28,6 +29,7 @@ type RunBuffer = {
   finalText: string;
   usage?: { inputTokens: number; outputTokens: number };
   steps: AgentStep[];
+  skillUsages: RuntimeSkillUsage[];
   lastStopReason?: string;
 };
 
@@ -90,6 +92,20 @@ function getLatestThinkingStep(steps: AgentStep[]) {
   return [...steps].reverse().find((step) => step.kind === "thinking");
 }
 
+function mergeRuntimeSkillUsages(
+  current: RuntimeSkillUsage[],
+  next: RuntimeSkillUsage[],
+) {
+  const byKey = new Map<string, RuntimeSkillUsage>();
+  for (const item of current) {
+    byKey.set(`${item.skillId}:${item.entryPointId}`, item);
+  }
+  for (const item of next) {
+    byKey.set(`${item.skillId}:${item.entryPointId}`, item);
+  }
+  return [...byKey.values()];
+}
+
 export class ElectronAdapter {
   private readonly window: BrowserWindow;
   private readonly scope: AgentEventScope;
@@ -104,6 +120,7 @@ export class ElectronAdapter {
       startedAt: Date.now(),
       finalText: "",
       steps: [],
+      skillUsages: [],
     };
   }
 
@@ -407,6 +424,13 @@ export class ElectronAdapter {
           step.toolError = event.isError ? String(event.result) : undefined;
           step.endedAt = now;
         }
+        const skillUsages = extractRuntimeSkillUsages(event.result);
+        if (skillUsages.length > 0) {
+          this.buffer.skillUsages = mergeRuntimeSkillUsages(
+            this.buffer.skillUsages,
+            skillUsages,
+          );
+        }
 
         appendToolFinishedEvent({
           sessionId,
@@ -528,6 +552,12 @@ export class ElectronAdapter {
       timestamp: new Date(endedAt).toISOString(),
       status: status === "completed" ? "done" : "error",
       usage: this.buffer.usage,
+      meta:
+        this.buffer.skillUsages.length > 0
+          ? {
+              skillUsages: this.buffer.skillUsages,
+            }
+          : undefined,
       steps,
     };
   }
