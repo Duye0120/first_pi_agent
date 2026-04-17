@@ -450,11 +450,18 @@ function CommitPlanCard({
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3.5 py-3 shadow-[var(--color-control-shadow)]",
+        "rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3.5 py-3 shadow-[var(--color-control-shadow)] transition-all relative overflow-hidden",
         isCommitted && "bg-emerald-50/60 dark:bg-emerald-950/20",
+        isBusy && "opacity-95 pointer-events-none ring-2 ring-[color:var(--color-control-focus-ring)] ring-offset-1 border-transparent",
       )}
     >
-      <div className="flex items-center justify-between gap-3">
+      {isBusy ? (
+        <div className="absolute top-0 left-0 w-full h-[3px] bg-muted/10 overflow-hidden z-20">
+          <div className="h-full w-full bg-[color:var(--color-control-focus-ring)] animate-pulse opacity-80" />
+        </div>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-3 relative z-10">
         <div className="flex min-w-0 items-center gap-2">
           <span className="inline-flex h-6 items-center rounded-full bg-[color:var(--color-control-panel-bg)] px-2.5 text-[11px] font-medium text-[color:var(--color-text-secondary)] shadow-[var(--color-control-shadow)]">
             提交 {index + 1}
@@ -551,14 +558,17 @@ function CommitPlanCard({
           size="sm"
           onClick={onStage}
           disabled={disabled || isBusy || isCommitted || group.filePaths.length === 0}
-          className="h-8 px-3 text-[12px]"
+          className={cn(
+            "h-8 px-3 text-[12px] transition-all",
+            group.status === "staging" && "opacity-80 disabled:opacity-80 text-foreground border-[color:var(--color-control-focus-ring)]"
+          )}
         >
           {group.status === "staging" ? (
-            <RefreshCwIcon className="size-3.5 animate-spin" />
+            <RefreshCwIcon className="size-3.5 animate-spin text-[color:var(--color-control-focus-ring)]" />
           ) : (
             <PlusIcon className="size-3.5" />
           )}
-          暂存本组
+          {group.status === "staging" ? "暂存中…" : "暂存本组"}
         </Button>
 
         <Button
@@ -566,14 +576,19 @@ function CommitPlanCard({
           size="sm"
           onClick={onCommit}
           disabled={disabled || isBusy || isCommitted || !group.title.trim() || group.filePaths.length === 0}
-          className="h-8 px-3 text-[12px]"
+          className={cn(
+            "h-8 px-3 text-[12px] transition-all",
+            group.status === "committing" && "opacity-100 disabled:opacity-100 bg-foreground/90"
+          )}
         >
           {group.status === "committing" ? (
             <RefreshCwIcon className="size-3.5 animate-spin" />
+          ) : group.status === "committed" ? (
+            <CheckCheckIcon className="size-3.5" />
           ) : (
             <CheckIcon className="size-3.5" />
           )}
-          提交本组
+          {group.status === "committing" ? "提交中…" : group.status === "committed" ? "已提交" : "提交本组"}
         </Button>
       </div>
     </div>
@@ -1254,15 +1269,21 @@ export function DiffWorkbenchContent({
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-7 rounded-[var(--radius-shell)] shrink-0 text-muted-foreground hover:text-foreground"
+                                variant={isCommittingAll ? "default" : "ghost"}
+                                size="sm"
+                                className={cn(
+                                  "h-7 rounded-[var(--radius-shell)] shrink-0 transition-all",
+                                  isCommittingAll ? "bg-foreground/90 text-background px-2.5" : "w-7 p-0 text-muted-foreground hover:text-foreground"
+                                )}
                                 onClick={handleCommitAllPlanGroups}
                                 disabled={!canCommitAll}
                                 aria-label="依次提交全部"
                               >
                                 {isCommittingAll ? (
-                                  <RefreshCwIcon className="size-3.5 animate-spin" />
+                                  <>
+                                    <RefreshCwIcon className="size-3.5 animate-spin mr-1.5" />
+                                    <span className="text-[11px] font-medium leading-none">{commitAllProgress.current} / {commitAllProgress.total}</span>
+                                  </>
                                 ) : (
                                   <CheckCheckIcon className="size-3.5" />
                                 )}
@@ -1292,19 +1313,28 @@ export function DiffWorkbenchContent({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
-                              variant="ghost"
-                              size="icon"
+                              variant={isGeneratingPlan || showSparklesHint ? "default" : "ghost"}
+                              size="sm"
                               className={cn(
-                                "size-7 rounded-[var(--radius-shell)] shrink-0 text-muted-foreground hover:text-foreground relative",
-                                isGeneratingPlan && "animate-pulse",
+                                "h-7 rounded-[var(--radius-shell)] shrink-0 transition-all gap-1.5",
+                                isGeneratingPlan || showSparklesHint ? "bg-foreground/90 text-background px-2.5" : "w-7 p-0 text-muted-foreground hover:text-foreground",
                               )}
                               onClick={handleGeneratePlan}
                               disabled={!canGeneratePlan}
                             >
-                              <SparklesIcon className="size-3.5" />
-                              {showSparklesHint ? (
-                                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent/80" />
-                              ) : null}
+                              {isGeneratingPlan ? (
+                                <>
+                                  <SparklesIcon className="size-3.5 animate-pulse" />
+                                  <span className="text-[11px] font-medium leading-none">生成中…</span>
+                                </>
+                              ) : showSparklesHint ? (
+                                <>
+                                  <SparklesIcon className="size-3.5" />
+                                  <span className="text-[11px] font-medium leading-none">重新生成</span>
+                                </>
+                              ) : (
+                                <SparklesIcon className="size-3.5" />
+                              )}
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>{generateTooltip}</TooltipContent>
@@ -1328,16 +1358,33 @@ export function DiffWorkbenchContent({
                       </div>
                     ) : null}
 
-                    <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
-                      {commitPlanGroups.length === 0 ? (
-                        <div className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-3 py-2.5 text-[12px] leading-5 text-muted-foreground shadow-[var(--color-control-shadow)]">
-                          <p className="font-medium text-foreground">
-                            {selectedPaths.size > 0 ? "已选文件，点击右上角生成计划。" : "先勾选文件，再生成计划。"}
-                          </p>
-                          <p className="mt-1">
-                            计划会按当前勾选的文件生成。
-                          </p>
+                    <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1 relative">
+                      {isGeneratingPlan && commitPlanGroups.length > 0 ? (
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-[var(--radius-shell)] backdrop-blur-[2px] bg-background/60 shadow-inner">
+                          <div className="flex flex-col items-center justify-center p-4 rounded-[var(--radius-shell)] bg-background/95 shadow-[var(--color-control-shadow)] border border-border/50">
+                            <SparklesIcon className="size-6 animate-pulse text-[color:var(--color-control-focus-ring)] mb-3" />
+                            <p className="text-[12px] font-medium text-foreground">重新分析与生成中…</p>
+                          </div>
                         </div>
+                      ) : null}
+                      
+                      {commitPlanGroups.length === 0 ? (
+                        isGeneratingPlan ? (
+                          <div className="flex flex-col items-center justify-center rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)]/50 px-4 py-8 text-center shadow-inner">
+                            <SparklesIcon className="size-6 animate-pulse text-muted-foreground mb-3" />
+                            <p className="text-[12px] font-medium text-foreground">AI 正在阅读和分析代码变动</p>
+                            <p className="text-[11px] text-muted-foreground mt-1 text-balance">这可能需要几秒钟，分析完成后将自动为您填入提交信息</p>
+                          </div>
+                        ) : (
+                          <div className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-3 py-2.5 text-[12px] leading-5 text-muted-foreground shadow-[var(--color-control-shadow)]">
+                            <p className="font-medium text-foreground">
+                              {selectedPaths.size > 0 ? "已选文件，点击右上角生成计划。" : "先勾选文件，再生成计划。"}
+                            </p>
+                            <p className="mt-1">
+                              计划会按当前勾选的文件生成。
+                            </p>
+                          </div>
+                        )
                       ) : (
                         <div className="flex flex-col gap-2">
                           {commitPlanGroups.map((group, index) => (
