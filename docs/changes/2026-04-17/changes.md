@@ -148,3 +148,372 @@
 ### 结果
 
 - 树区和内容区之间的空白明显收窄，只保留必要的拖拽安全区。
+
+## Settings 新增 Skills 管理页
+
+**时间**: 11:46:42
+
+### 改了什么
+
+1. 在设置路由、侧栏导航和 section 常量里新增 `Skills` 分区，入口直接并入现有 settings 架构。
+2. 新增 main/preload/shared 的 skills 数据契约与 IPC，支持列出本地 skills、搜索 catalog、安装 skill、打开目录和打开 `SKILL.md`。
+3. 新建主进程 `skills` 服务，扫描当前工作区 `.agents/skills` 与用户级 `~/.codex/skills`，按 canonical name 去重聚合，默认隐藏 `.system` 和 runtime skills。
+4. 新增 renderer 端 `SkillsSection`，提供本地即时过滤、详情面板、来源标记、目录与 `SKILL.md` 打开入口，以及独立的“发现更多 skills”安装区。
+
+### 为什么改
+
+- 现在项目里已经有一批常用 skills，设置页需要一个正式入口来管理它们，而不是继续靠目录和文档手翻。
+- 项目内与用户级 skills 会同时存在，页面需要把来源和去重规则显式做出来，减少“为什么重复显示”的困惑。
+- 搜索发现和本地管理拆成两段以后，CLI 或网络链路不稳时，本地管理仍然可以保持可用。
+
+### 涉及文件
+
+- `src/shared/contracts.ts`
+- `src/shared/ipc.ts`
+- `src/preload/index.ts`
+- `src/main/index.ts`
+- `src/main/ipc/skills.ts`
+- `src/main/skills.ts`
+- `src/renderer/src/App.tsx`
+- `src/renderer/src/components/assistant-ui/sidebar.tsx`
+- `src/renderer/src/components/assistant-ui/settings/constants.ts`
+- `src/renderer/src/components/assistant-ui/settings/types.ts`
+- `src/renderer/src/components/assistant-ui/settings-view.tsx`
+- `src/renderer/src/components/assistant-ui/settings/skills-section.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- 设置页现在有独立的 Skills 管理入口，能同时看到项目内和用户级 skills。
+- 本地 skills 支持即时搜索、查看来源、打开目录和打开 `SKILL.md`。
+- 发现新 skill 与安装动作已经接到主进程 skills 服务，失败时会单独降级，不会拖垮本地列表。
+
+## Skills 页改成管理台式列表布局
+
+**时间**: 14:06:55
+
+### 改了什么
+
+1. 把 `SkillsSection` 从原来的双栏概览卡 + 详情面板，改成更接近参考图的“顶部筛选 + 右侧搜索 + 单列列表”布局。
+2. 顶部收成轻量 filter tab、搜索框和刷新按钮，去掉大块统计 dashboard 视觉。
+3. 已安装 skills 改成扁平单列条目，每行左侧名称描述、中间来源信息、右侧展开开关；详情改成行内展开，不再单独占右侧一列。
+4. 发现区也同步改成列表式条目，和已安装列表保持同一套阅读节奏。
+
+### 为什么改
+
+- 用户提供了明确的 UX 参考，希望页面整体节奏更像“管理台列表”，而不是偏 dashboard 的设置卡片页。
+- 当前 Skills 页信息结构已经够复杂，单列列表会比双栏详情更顺手，更适合快速扫视和逐项管理。
+- 这轮保持 Chela 原有的暖底色、弱边界和选中态语言，只借参考图的布局和交互节奏。
+
+### 涉及文件
+
+- `src/renderer/src/components/assistant-ui/settings/skills-section.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- Skills 页现在更接近管理台式 UX，浏览和逐项展开的节奏更清楚。
+- 视觉风格仍然保持 Chela 现有的控制面板语言，没有切成参考图那种纯白后台和强蓝色系统。
+
+## Skills 行内开关改回展开控件
+
+**时间**: 14:14:00
+
+### 改了什么
+
+1. 去掉了 `Skills` 列表行右侧那个 `Switch`。
+2. 整行继续保持可点击展开，右侧改成 `详情 / 收起 + chevron` 的纯展开提示。
+
+### 为什么改
+
+- 参考图里的 switch 语义是“启用 / 停用 skill”。
+- 当前 Chela 这版并没有真正的技能启用态，那个 switch 只负责展开详情，语义会误导用户。
+
+### 涉及文件
+
+- `src/renderer/src/components/assistant-ui/settings/skills-section.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- 现在 `Skills` 列表右侧控件和真实交互语义一致，只表达“展开详情”。
+
+## Skills 页继续瘦身并修复收起失效
+
+**时间**: 14:58:42
+
+### 改了什么
+
+1. 把顶部第一块继续收成单行工具条，只保留筛选 tab、搜索框和刷新按钮。
+2. 删掉顶部那段解释文案，减少首屏高度占用。
+3. 把来源信息统一收成一套 badge，去掉 `个人 / 用户级 / 当前工作区` 这类重复表达。
+4. 修正展开状态逻辑，允许列表项真正收起到空，不会再自动反弹回第一项。
+
+### 为什么改
+
+- 用户反馈顶部区域占位过大，页面首屏有效内容太少。
+- 当前来源信息重复表达太多，读起来会显得乱。
+- `收起` 没生效的根因是列表 effect 在 `expandedSkillId` 为空时自动重新选中了第一项。
+
+### 涉及文件
+
+- `src/renderer/src/components/assistant-ui/settings/skills-section.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- `Skills` 页首屏现在更紧，列表更早进入可读区。
+- 来源信息只保留一套必要表达。
+- `收起` 现在是正常可用的。
+
+## Skills 实例详情继续减信息
+
+**时间**: 15:02:09
+
+### 改了什么
+
+1. 把实例详情里的 `SKILL.md` 路径整行删掉，只保留目录路径。
+2. 把标题行里的 `2 个实例` 徽标删掉。
+
+### 为什么改
+
+- 目录已经能说明实例位置，`SKILL.md` 路径在默认场景下属于可推断信息。
+- 标题行已经有 `项目内 / 用户级` 两个来源 badge，`2 个实例` 再重复一遍没有增量信息。
+
+### 涉及文件
+
+- `src/renderer/src/components/assistant-ui/settings/skills-section.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- 详情区更干净，信息密度更集中在真正需要看的目录和动作上。
+
+## Skills 展开区去掉重复预览块
+
+**时间**: 15:04:20
+
+### 改了什么
+
+1. 把展开区最上面那块 `# ChatGPT Apps` / frontmatter 文本预览删掉。
+
+### 为什么改
+
+- 标题行本身已经提供了 skill 名称和描述。
+- 展开区再放一层同义预览会重复信息，尤其在 `name:` / `description:` 直接被串出来时会显得很吵。
+
+### 涉及文件
+
+- `src/renderer/src/components/assistant-ui/settings/skills-section.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- 展开区现在只保留真正需要操作的实例列表。
+
+## Skills 页补上位置迁移 UI 预览
+
+**时间**: 15:12:55
+
+### 改了什么
+
+1. 把 `用户级` 这层来源表达统一改成 `Codex`，让 `~/.codex/skills` 的语义更直接。
+2. 在每个 skill 的展开区顶部新增一块轻量 `位置迁移` 预览层，支持选择当前来源、`复制 / 移动` 动作，以及目标根目录。
+3. 目标根目录先放出四类位置：`项目内`、`Codex`、`Claude`、`其他 agent`，其中项目内与 Codex 继续根据真实安装情况标记。
+4. 当前来源位置不再作为可选目标，卡片只保留一层状态标签，避免“自己迁移到自己”和重复说明。
+5. 发现区安装按钮文案同步改成 `安装到 Codex`，和页面新的位置语义对齐。
+
+### 为什么改
+
+- 用户希望后续能把 skill 在项目内、本地全局，以及 Claude 等其他 agent 目录之间做复制或移动。
+- 这轮先看 UI 结构，页面需要先把“从哪来、到哪去、用什么动作”这三件事摆清楚。
+- 现有 `用户级` 说法偏抽象，`Codex` 会比泛化来源标签更接近真实目录和用户心智。
+
+### 涉及文件
+
+- `src/renderer/src/components/assistant-ui/settings/skills-section.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- `Skills` 展开区现在已经能预览位置迁移的交互结构。
+- Claude 和其他 agent 根目录已经进入同一套 UI 版式，后续接真实文件操作时不需要再重做页面骨架。
+
+## Skills 迁移区改成双区块工作台
+
+**时间**: 15:17:03
+
+### 改了什么
+
+1. 把展开区从“迁移卡片压在实例列表上方”的纵向堆叠，改成左侧 `已安装位置`、右侧 `迁移草稿` 的双区块布局。
+2. 把右侧迁移目标从四张大卡片收成轻量 pill 选择，减少首屏噪声和视觉重量。
+3. 去掉那个禁用按钮式的假 CTA，改成更明确的草稿摘要与目标目录说明。
+4. 目标目录区域继续保留 `已存在同名 skill / 可承接新副本` 这类状态提示，让用户能直接判断后续动作语义。
+
+### 为什么改
+
+- 用户明确反馈上一版迁移 UI 看起来别扭。
+- 原先那组大卡片和禁用按钮会把注意力从真正的实例位置上抢走，读起来像一块还没接完的半成品。
+- 当前这个页面更适合做成“左边看现状，右边配动作”的工作台式结构。
+
+### 涉及文件
+
+- `src/renderer/src/components/assistant-ui/settings/skills-section.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- 展开区的信息层级更稳定，实例查看和迁移动作分工更清楚。
+- 迁移区的交互感受更轻，和当前 `Chela` 设置页的控制面板语言更贴近。
+
+## Skills 迁移区 UX 精修
+
+**时间**: 07:30
+
+### 改了什么
+
+1. 移除 `TransferPreview` 右上角遗留的 `UI 预览` 占位 badge。
+2. 把 `迁移草稿` 标题改成简洁的 `迁移`，去掉"草稿"暗示。
+3. 删除标题行下方的冗余摘要行（Codex → 项目内 复制 badge 组合），状态已由下方控件选中态体现。
+4. `来源` 区块改成仅当 skill 来源超过一个时才显示，单一来源无需显示多余选择。
+5. `动作` 标签改为 `操作`，语义更直接。
+6. `目标根目录` 改为 `目标位置`。
+7. 当前来源按钮的 disabled 样式从 `opacity-80` 改为 `opacity-40 cursor-not-allowed`，明确区分可选和不可选。
+8. 目标位置按钮标签 `已存在` 改为 `已有`，更紧凑。
+9. 底部目标路径信息块重新布局：路径和说明并排显示，移除"目标目录"冗余标签，覆盖警告改成带颜色的 amber 提示。
+10. `InlineInstance` 修正空 badge 容器问题（无 badge 时不渲染外层 div），`目录` 标签改用 uppercase tracking 样式与迁移区保持一致。
+11. `InstalledSkillRow` 展开区去掉冗余的背景色嵌套，`已安装位置` 标签改用 uppercase tracking 样式。
+12. `SettingsCard` 标题 `已安装` 去掉无意义描述 `"单列管理列表。"`。
+13. 移除不再使用的 `ArrowRightIcon` import。
+
+### 为什么改
+
+- 用户反馈此区域使用感和体验感非常差。
+- `UI 预览` badge 应该是开发阶段占位，没有清掉就被带进了正式界面。
+- `迁移草稿` 措辞让人觉得功能未完成。
+- 过多冗余信息（摘要行、标签、描述）使区域信息密度过高、层次混乱。
+- disabled 状态不够明显导致用户无法快速区分可选与不可选目标。
+
+### 涉及文件
+
+- `src/renderer/src/components/assistant-ui/settings/skills-section.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- 迁移区视觉更干净，"来源不够多不显示"减少不必要操作。
+- disabled 目标位置视觉区分更明确。
+- 底部路径信息更紧凑，覆盖警告有颜色语义。
+- 整体区域信息层次更清晰。
+
+## Skills 使用位置映射与运行时提示
+
+**时间**: 16:17:22
+
+### 改了什么
+
+1. 新增共享 `skill usage registry`，把 `commit` skill 和 `右侧边栏 / 提交计划生成` 的固定入口映射收成一处统一配置。
+2. 扩展 shared contracts，新增 `SkillUsageTarget`、`RuntimeSkillUsage`、`ChatMessageMeta.skillUsages`，并把 `usageTargets` 挂到 `InstalledSkillDetail`，把 `skillUsage` 挂到 `GenerateCommitMessageResult / GenerateCommitPlanResult`。
+3. `skills` 主进程服务接入 registry，`listInstalled()` 返回的每个 skill 会自带固定入口映射。
+4. `worker-service` 在 commit 相关结果里补齐结构化 `skillUsage`，不再只回 `skillName`。
+5. 右侧边栏的提交计划区接上 `skillUsage`，加载态和生成完成后都会显示 `由 commit skill` 的轻量提示。
+6. 新增 renderer 端 `SkillUsageStrip`，聊天区 assistant message 支持消费 `meta.skillUsages` 并显示轻量技能条。
+7. `ElectronAdapter` 和聊天运行时链路补上 `skillUsages` 透传，后续结构化技能结果可以直接进入消息持久化和运行时 UI。
+8. `Skills` 设置页列表行新增固定入口 pill，`commit` 现在能直接看到它会被右侧边栏的提交计划生成用到。
+
+### 为什么改
+
+- 用户希望能明确知道一个 skill 会在哪些功能入口生效，而不是只在目录里看到它存在。
+- 当前 `commit` skill 已经被右侧边栏提交计划链路调用，但这层关系只散落在 worker 实现和零散文案里。
+- 运行时也需要一层轻提示，让用户知道这次动作背后实际使用了哪个 skill。
+
+### 涉及文件
+
+- `src/shared/contracts.ts`
+- `src/shared/skill-usage.ts`
+- `src/main/skills.ts`
+- `src/main/worker-service.ts`
+- `src/main/adapter.ts`
+- `src/renderer/src/components/assistant-ui/diff-panel.tsx`
+- `src/renderer/src/components/AssistantThreadPanel.tsx`
+- `src/renderer/src/components/assistant-ui/thread.tsx`
+- `src/renderer/src/components/assistant-ui/skill-usage-strip.tsx`
+- `src/renderer/src/components/assistant-ui/settings/skills-section.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- `Skills` 设置页现在能展示技能的固定使用位置。
+- 右侧边栏生成提交计划时会稳定显示 `commit skill` 来源提示。
+- 聊天区已经具备消费结构化 `skillUsages` 的能力，后续新链路只要补元数据就能直接显示。
+
+## 修复聊天区 skill usage 渲染循环
+
+**时间**: 16:27:54
+
+### 改了什么
+
+1. 调整聊天区 `AssistantMessageSkillUsages` 的读取方式，`useAuiState` selector 只返回原始 `skillUsages` 引用。
+2. 把 `extractRuntimeSkillUsages()` 的归一化逻辑移到组件内 `useMemo`，避免 selector 每次都创建新数组。
+
+### 为什么改
+
+- 新增聊天区 skill strip 之后，assistant-ui store selector 在每次读取时都会拿到一个新数组。
+- React 会把这种不稳定 snapshot 视为持续变化，最终触发 `Maximum update depth exceeded`。
+
+### 涉及文件
+
+- `src/renderer/src/components/assistant-ui/thread.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- 聊天区 skill usage strip 改成稳定渲染。
+- 当前修复范围集中在崩溃点，右侧边栏和 settings 的 usage 提示链路保持原样。
+
+## 补充 UI 与性能并重约束
+
+**时间**: 16:34:18
+
+### 改了什么
+
+1. 在项目约束里补充 `UI 交付默认同时满足表现和性能` 规则。
+2. 明确 React 高频界面默认优先稳定 selector、减少无意义重渲染、控制派生对象创建。
+
+### 为什么改
+
+- 用户明确要求后续界面工作同时满足 UI 质量和性能表现。
+- 这条约束直接影响设置页、聊天区、diff panel 这类高频区域的实现方式，需要进入长期规则。
+
+### 涉及文件
+
+- `AGENTS.md`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- 后续相关改动会同时按视觉质量和性能稳定性验收。
+
+## 提交计划区去掉重复 skill 提示
+
+**时间**: 16:39:46
+
+### 改了什么
+
+1. 删除 `diff panel` 提交计划区里那块独立的生成中提示条。
+2. 保留标题下方的 `由 commit skill` 轻提示作为唯一 skill 来源表达。
+
+### 为什么改
+
+- 用户明确指出提交计划区出现了两层重复提示。
+- 顶部 skill strip 已经完整表达来源信息，底部再放一块生成中文案会造成冲突和视觉噪声。
+
+### 涉及文件
+
+- `src/renderer/src/components/assistant-ui/diff-panel.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- 提交计划区现在只保留一处 skill 来源提示。
+- 生成中的状态反馈回到按钮脉冲和面板内容本身，信息层级更干净。
