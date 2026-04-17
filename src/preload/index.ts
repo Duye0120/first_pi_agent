@@ -81,6 +81,15 @@ const desktopApi: DesktopApi = {
     getLogSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.settingsGetLogSnapshot),
     openLogFolder: (logId) => ipcRenderer.invoke(IPC_CHANNELS.settingsOpenLogFolder, logId),
   },
+  skills: {
+    listInstalled: () => ipcRenderer.invoke(IPC_CHANNELS.skillsListInstalled),
+    searchCatalog: (query: string) => ipcRenderer.invoke(IPC_CHANNELS.skillsSearchCatalog, query),
+    install: (request) => ipcRenderer.invoke(IPC_CHANNELS.skillsInstall, request),
+    openDirectory: (skillId: string, source) =>
+      ipcRenderer.invoke(IPC_CHANNELS.skillsOpenDirectory, skillId, source),
+    openSkillFile: (skillId: string, source) =>
+      ipcRenderer.invoke(IPC_CHANNELS.skillsOpenSkillFile, skillId, source),
+  },
 
   // ── Providers / Models ─────────────────────────────────────
   providers: {

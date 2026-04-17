@@ -9,6 +9,7 @@ import type {
   GenerateCommitMessageRequest,
   GenerateCommitMessageResult,
 } from "../shared/contracts.js";
+import { getRuntimeSkillUsage } from "../shared/skill-usage.js";
 import { resolveModelEntry } from "./providers.js";
 import { getSettings } from "./settings.js";
 import { appLogger } from "./logger.js";
@@ -35,6 +36,15 @@ type CompletionResult = {
   content: Array<{ type: string }>;
   usage?: unknown;
 };
+
+function getCommitRuntimeSkillUsage() {
+  const usage = getRuntimeSkillUsage("commit", "right-panel.commit-plan");
+  if (!usage) {
+    throw new Error("commit skill usage registry 缺少 right-panel.commit-plan 配置。");
+  }
+
+  return usage;
+}
 
 const COMMIT_TYPE_META = {
   feat: { emoji: "✨", label: "feat" },
@@ -663,7 +673,10 @@ function buildHeuristicCommitDescription(
 function buildHeuristicCommitMessageResult(
   request: GenerateCommitMessageRequest,
   rawText: string,
-  meta: Omit<GenerateCommitMessageResult, "title" | "description" | "skillName">,
+  meta: Omit<
+    GenerateCommitMessageResult,
+    "title" | "description" | "skillName" | "skillUsage"
+  >,
 ): GenerateCommitMessageResult {
   const topics = detectCommitTopics(request.selectedFiles);
   const title = buildHeuristicCommitTitle(request, topics);
@@ -686,6 +699,7 @@ function buildHeuristicCommitMessageResult(
     title,
     description,
     skillName: "commit",
+    skillUsage: getCommitRuntimeSkillUsage(),
     ...meta,
   };
 }
@@ -980,7 +994,7 @@ function tryParseCommitPlanJson(
 function buildHeuristicCommitPlanResult(
   request: GenerateCommitPlanRequest,
   rawText: string,
-  meta: Omit<GenerateCommitPlanResult, "groups" | "skillName">,
+  meta: Omit<GenerateCommitPlanResult, "groups" | "skillName" | "skillUsage">,
 ): GenerateCommitPlanResult {
   const groups = buildHeuristicCommitPlanGroups(request);
 
@@ -999,13 +1013,17 @@ function buildHeuristicCommitPlanResult(
   return {
     groups,
     skillName: "commit",
+    skillUsage: getCommitRuntimeSkillUsage(),
     ...meta,
   };
 }
 
 function parseCommitMessageResult(
   rawText: string,
-  meta: Omit<GenerateCommitMessageResult, "title" | "description" | "skillName">,
+  meta: Omit<
+    GenerateCommitMessageResult,
+    "title" | "description" | "skillName" | "skillUsage"
+  >,
 ): GenerateCommitMessageResult {
   const jsonResult = tryParseCommitMessageJson(rawText);
 
@@ -1013,6 +1031,7 @@ function parseCommitMessageResult(
     return {
       ...jsonResult,
       skillName: "commit",
+      skillUsage: getCommitRuntimeSkillUsage(),
       ...meta,
     };
   }
@@ -1090,6 +1109,7 @@ function parseCommitMessageResult(
     title,
     description: descriptionLines.join("\n").trim(),
     skillName: "commit",
+    skillUsage: getCommitRuntimeSkillUsage(),
     ...meta,
   };
 }
@@ -1173,6 +1193,7 @@ export class WorkerService {
       return {
         groups: parsed,
         skillName: "commit",
+        skillUsage: getCommitRuntimeSkillUsage(),
         ...meta,
       };
     }
