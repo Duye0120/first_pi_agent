@@ -1370,8 +1370,8 @@ export function DiffWorkbenchContent({
                       
                       {commitPlanGroups.length === 0 ? (
                         isGeneratingPlan ? (
-                          <div className="flex flex-col items-center justify-center rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)]/50 px-4 py-8 text-center shadow-inner">
-                            <SparklesIcon className="size-6 animate-pulse text-muted-foreground mb-3" />
+                          <div className="flex h-full min-h-[140px] flex-col items-center justify-center rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)]/50 px-4 py-6 text-center shadow-inner">
+                            <SparklesIcon className="size-6 shrink-0 animate-pulse text-muted-foreground mb-3" />
                             <p className="text-[12px] font-medium text-foreground">AI 正在阅读和分析代码变动</p>
                             <p className="text-[11px] text-muted-foreground mt-1 text-balance">这可能需要几秒钟，分析完成后将自动为您填入提交信息</p>
                           </div>
