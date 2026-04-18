@@ -1,0 +1,4 @@
+
+> chela@0.1.0 check D:\a_github\first_pi_agent
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.renderer.json
+
