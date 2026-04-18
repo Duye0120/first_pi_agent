@@ -2,6 +2,7 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { Type } from "@mariozechner/pi-ai";
 import { checkFetchUrl } from "../security.js";
 import { FETCH_POLICY } from "../../shared/security.js";
+import { resolveNetworkTimeoutMs } from "../network/proxy.js";
 
 const parameters = Type.Object({
   url: Type.String({ description: "网页 URL（必须是 http/https）" }),
@@ -58,10 +59,13 @@ export function createWebFetchTool(): AgentTool<typeof parameters, WebFetchDetai
 
       const maxLength = params.maxLength ?? 10000;
 
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), FETCH_POLICY.timeoutMs);
+      const controller = new AbortController();
+      const timeout = setTimeout(
+        () => controller.abort(),
+        resolveNetworkTimeoutMs(),
+      );
 
+      try {
         // Chain with external abort signal
         if (signal) {
           signal.addEventListener("abort", () => controller.abort(), { once: true });
@@ -71,7 +75,6 @@ export function createWebFetchTool(): AgentTool<typeof parameters, WebFetchDetai
           signal: controller.signal,
           headers: { "User-Agent": "PiDesktopAgent/1.0" },
         });
-        clearTimeout(timeout);
 
         if (!response.ok) {
           return {
@@ -118,6 +121,8 @@ export function createWebFetchTool(): AgentTool<typeof parameters, WebFetchDetai
           content: [{ type: "text", text: `获取失败: ${message}` }],
           details: { url: params.url, statusCode: 0, contentLength: 0, truncated: false },
         };
+      } finally {
+        clearTimeout(timeout);
       }
     },
   };

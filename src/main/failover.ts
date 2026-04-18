@@ -7,8 +7,11 @@
 // ---------------------------------------------------------------------------
 
 import { net } from "electron";
-import { listEntries, resolveModelEntry } from "./providers.js";
-import { getSettings } from "./settings.js";
+import { DEFAULT_MODEL_ENTRY_ID } from "../shared/provider-directory.js";
+import {
+  listSelectableModelEntries,
+  resolveModelEntry,
+} from "./providers.js";
 import { appLogger } from "./logger.js";
 
 // ---------------------------------------------------------------------------
@@ -43,18 +46,29 @@ const RETRIABLE_PATTERNS = [
   "fetch failed",
   "network",
   "rate limit",
-  "429",
-  "503",
-  "502",
-  "500",
   "overloaded",
   "capacity",
 ];
 
+const RETRIABLE_HTTP_STATUS_REGEX = /\b(?:5\d{2}|429)\b/;
+
 export function isProviderTransientError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const msg = err.message.toLowerCase();
+  if (RETRIABLE_HTTP_STATUS_REGEX.test(msg)) return true;
   return RETRIABLE_PATTERNS.some((p) => msg.includes(p));
+}
+
+export function listFailoverCandidateEntryIds(primaryEntryId: string): string[] {
+  const preferred = [primaryEntryId, DEFAULT_MODEL_ENTRY_ID];
+  const enabledEntries = listSelectableModelEntries().map((entry) => entry.id);
+
+  return [...preferred, ...enabledEntries].filter(
+    (entryId, index, all): entryId is string =>
+      typeof entryId === "string" &&
+      entryId.trim().length > 0 &&
+      all.indexOf(entryId) === index,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -69,51 +83,35 @@ export function resolveWithFailover(
   primaryEntryId: string,
 ): FailoverResult & { resolved: ReturnType<typeof resolveModelEntry> } {
   const failedEntries: string[] = [];
+  const candidateEntryIds = listFailoverCandidateEntryIds(primaryEntryId);
 
-  // 尝试主模型
-  try {
-    const resolved = resolveModelEntry(primaryEntryId);
-    return {
-      entryId: resolved.entry.id,
-      entryName: resolved.entry.name,
-      failedEntries,
-      isFailover: false,
-      resolved,
-    };
-  } catch (err) {
-    failedEntries.push(primaryEntryId);
-    appLogger.warn({
-      scope: "failover",
-      message: `主模型 ${primaryEntryId} 不可用，尝试备选`,
-      error: err instanceof Error ? err : new Error(String(err)),
-    });
-  }
-
-  // 尝试备选模型（按创建顺序）
-  const allEntries = listEntries().filter(
-    (e) => e.enabled && e.id !== primaryEntryId,
-  );
-
-  for (const entry of allEntries) {
+  for (const entryId of candidateEntryIds) {
     try {
-      const resolved = resolveModelEntry(entry.id);
-      appLogger.info({
-        scope: "failover",
-        message: `已降级到备选模型：${entry.name} (${entry.id})`,
-      });
+      const resolved = resolveModelEntry(entryId);
       return {
-        entryId: entry.id,
-        entryName: entry.name,
+        entryId: resolved.entry.id,
+        entryName: resolved.entry.name,
         failedEntries,
-        isFailover: true,
+        isFailover: resolved.entry.id !== primaryEntryId,
         resolved,
       };
-    } catch {
-      failedEntries.push(entry.id);
+    } catch (error) {
+      failedEntries.push(entryId);
+      appLogger.warn({
+        scope: "failover",
+        message:
+          entryId === primaryEntryId
+            ? "主模型解析失败，准备尝试候选模型"
+            : "候选模型解析失败，继续尝试下一个",
+        data: {
+          primaryEntryId,
+          entryId,
+        },
+        error,
+      });
     }
   }
 
-  // 全部失败
   throw new Error(
     `所有模型均不可用（已尝试 ${failedEntries.length} 个）。请检查 API Key 和网络连接。`,
   );
@@ -128,7 +126,7 @@ export async function withRetry<T>(
   options: { maxRetries?: number; retryDelayMs?: number } = {},
 ): Promise<T> {
   const maxRetries = options.maxRetries ?? 2;
-  const retryDelayMs = options.retryDelayMs ?? 1000;
+  const baseDelayMs = options.retryDelayMs ?? 1000;
 
   let lastError: unknown;
 
@@ -142,12 +140,17 @@ export async function withRetry<T>(
         throw err;
       }
 
+      // 指数退避 + 满抖动，避免多个会话同时重试时撞到 provider 的同一窗口。
+      const exponential = baseDelayMs * 2 ** attempt;
+      const jitter = Math.floor(Math.random() * baseDelayMs);
+      const waitMs = Math.min(exponential + jitter, 15_000);
+
       appLogger.info({
         scope: "failover",
-        message: `暂时性错误，${retryDelayMs}ms 后重试 (${attempt + 1}/${maxRetries})`,
+        message: `暂时性错误，${waitMs}ms 后重试 (${attempt + 1}/${maxRetries})`,
       });
 
-      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }
 

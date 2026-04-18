@@ -1,6 +1,7 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { Type } from "@mariozechner/pi-ai";
 import { checkFetchUrl } from "../security.js";
+import { resolveNetworkTimeoutMs } from "../network/proxy.js";
 
 const parameters = Type.Object({
   query: Type.String({ description: "搜索关键词" }),
@@ -17,9 +18,9 @@ type SearchHit = {
 type WebSearchResultItem =
   | string
   | {
-      tool_use_id: string;
-      content: SearchHit[];
-    };
+    tool_use_id: string;
+    content: SearchHit[];
+  };
 
 type WebSearchDetails = {
   query: string;
@@ -253,12 +254,16 @@ export function createWebSearchTool(): AgentTool<typeof parameters, WebSearchDet
         };
       }
 
-      try {
-        const controller = new AbortController();
-        if (signal) {
-          signal.addEventListener("abort", () => controller.abort(), { once: true });
-        }
+      const controller = new AbortController();
+      const timeout = setTimeout(
+        () => controller.abort(),
+        resolveNetworkTimeoutMs(),
+      );
+      if (signal) {
+        signal.addEventListener("abort", () => controller.abort(), { once: true });
+      }
 
+      try {
         const response = await fetch(searchUrl, {
           signal: controller.signal,
           headers: {
@@ -313,6 +318,8 @@ export function createWebSearchTool(): AgentTool<typeof parameters, WebSearchDet
           content: [{ type: "text", text: JSON.stringify({ error: error instanceof Error ? error.message : "搜索失败" }, null, 2) }],
           details,
         };
+      } finally {
+        clearTimeout(timeout);
       }
     },
   };
