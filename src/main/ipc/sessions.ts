@@ -1,5 +1,5 @@
 import { IPC_CHANNELS } from "../../shared/ipc.js";
-import type { ChatSession } from "../../shared/contracts.js";
+import type { ChatSession, SessionGroupCreateInput } from "../../shared/contracts.js";
 import { compactSession, getContextSummary } from "../context/service.js";
 import {
   archiveSession,
@@ -82,8 +82,8 @@ export function registerSessionsIpc(): void {
   );
 
   handleIpc(IPC_CHANNELS.groupsList, async () => listGroups());
-  handleIpc(IPC_CHANNELS.groupsCreate, async (_event, name: string) =>
-    createGroup(name),
+  handleIpc(IPC_CHANNELS.groupsCreate, async (_event, input: SessionGroupCreateInput) =>
+    createGroup(input),
   );
   handleIpc(
     IPC_CHANNELS.groupsRename,

@@ -11,6 +11,7 @@ import type {
   SessionGroup,
   WindowFrameState,
   SendMessageInput,
+  SessionGroupCreateInput,
   TrimSessionMessagesInput,
 } from "../shared/contracts.js";
 import type { AgentEvent, ConfirmationResponse } from "../shared/agent-events.js";
@@ -42,7 +43,8 @@ const desktopApi: DesktopApi = {
   },
   groups: {
     list: (): Promise<SessionGroup[]> => ipcRenderer.invoke(IPC_CHANNELS.groupsList),
-    create: (name: string): Promise<SessionGroup> => ipcRenderer.invoke(IPC_CHANNELS.groupsCreate, name),
+    create: (input: SessionGroupCreateInput): Promise<SessionGroup> =>
+      ipcRenderer.invoke(IPC_CHANNELS.groupsCreate, input),
     rename: (groupId: string, name: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.groupsRename, groupId, name),
     delete: (groupId: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.groupsDelete, groupId),
   },

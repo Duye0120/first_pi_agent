@@ -5,6 +5,7 @@ import { app } from "electron";
 import type {
   RightPanelState,
   SessionGroup,
+  SessionGroupCreateInput,
   WindowUiState,
 } from "../shared/contracts.js";
 import {
@@ -137,22 +138,34 @@ export function setRightPanelState(partial: Partial<RightPanelState>): void {
 }
 
 export function listGroups(): SessionGroup[] {
-  return readJsonFile(getGroupsPath(), [] as SessionGroup[]);
+  const groups = readJsonFile(getGroupsPath(), [] as Array<Partial<SessionGroup>>);
+  return groups
+    .filter((group) => typeof group.id === "string" && typeof group.name === "string")
+    .map((group) => ({
+      id: group.id as string,
+      name: group.name as string,
+      path: typeof group.path === "string" ? group.path : "",
+    }));
 }
 
 function writeGroups(groups: SessionGroup[]): void {
   atomicWrite(getGroupsPath(), JSON.stringify(groups, null, 2));
 }
 
-export function createGroup(name: string): SessionGroup {
-  const trimmedName = name.trim();
+export function createGroup(input: SessionGroupCreateInput): SessionGroup {
+  const trimmedName = input.name.trim();
+  const trimmedPath = input.path.trim();
   if (!trimmedName) {
     throw new Error("分组名不能为空。");
+  }
+  if (!trimmedPath) {
+    throw new Error("项目目录不能为空。");
   }
 
   const group: SessionGroup = {
     id: randomUUID(),
     name: trimmedName,
+    path: trimmedPath,
   };
   const groups = listGroups();
   groups.push(group);
