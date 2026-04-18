@@ -517,3 +517,156 @@
 
 - 提交计划区现在只保留一处 skill 来源提示。
 - 生成中的状态反馈回到按钮脉冲和面板内容本身，信息层级更干净。
+
+## Skills 列表默认保持收起
+
+**时间**: 16:45:12
+
+### 改了什么
+
+1. 去掉 `Skills` 页面首次加载时自动展开第一条 skill 的逻辑。
+2. 调整过滤后的展开态修正逻辑，当前展开项失效时直接收起，不再自动跳到第一条。
+
+### 为什么改
+
+- 用户希望进入页面时列表默认保持收起，由用户自己决定展开哪一项。
+- 自动展开首项会制造页面噪声，也会让过滤切换时出现不必要的状态跳转。
+
+### 涉及文件
+
+- `src/renderer/src/components/assistant-ui/settings/skills-section.tsx`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- `Skills` 页首次进入时默认全收起。
+- 过滤或刷新后，展开态只在原条目仍然存在时保留。
+
+## 聊天关键修复第一轮落地
+
+**时间**: 19:28
+
+### 改了什么
+
+1. 扩展 settings 合同与深合并逻辑，新增 `network.proxy` 和 `network.timeoutMs`，并把代理配置接到 main 启动与 settings 热更新。
+2. 新增全局网络代理模块，`web_search / web_fetch` 已改为读取统一网络超时。
+3. 把聊天 prepare 阶段切到 `resolveWithFailover()`，并在 execute 阶段补上真正的 provider/network failover 与 transcript metadata 留痕。
+4. 给 prompt control plane 新增 `learnings` layer，直接读取 memdir `learnings` topic 注入 prompt，同时把 learning summary/detail 改成动作建议。
+5. 新增 session search 后端、IPC、preload 和前端 API 面，索引源直接读取 `session.json / transcript.jsonl / context-snapshot.json`。
+6. 新增 session 级 `pendingRedirectDraft` 持久化、queued redirect 主链路，以及聊天输入区上方的引导卡片 UI。
+7. 重写 `docs/critical-chat-fixes-plan.md`，把计划文档收成 `P0 / P1 / P2` 并纠正文档落点。
+
+### 为什么改
+
+- 当前聊天链路最缺的是网络可用性、故障转移、跨会话 learnings 和记忆外可发现性。
+- 引导能力需要避开 active turn 并发 prompt，queued redirect 更稳，也更符合现有 run 生命周期。
+- 这些改动横跨 shared/main/renderer，必须先把合同、持久化和 IPC 一起收口，后续才能继续扩前端入口。
+
+### 涉及文件
+
+- `src/shared/contracts.ts`
+- `src/shared/ipc.ts`
+- `src/main/settings.ts`
+- `src/main/index.ts`
+- `src/main/network/proxy.ts`
+- `src/main/network/undici.ts`
+- `src/main/tools/web-fetch.ts`
+- `src/main/tools/web-search.ts`
+- `src/main/failover.ts`
+- `src/main/chat/prepare.ts`
+- `src/main/chat/execute.ts`
+- `src/main/chat/finalize.ts`
+- `src/main/chat/service.ts`
+- `src/main/prompt-control-plane.ts`
+- `src/main/context/engine.ts`
+- `src/main/learning/engine.ts`
+- `src/main/session/meta.ts`
+- `src/main/session/service.ts`
+- `src/main/session/facade.ts`
+- `src/main/session/search.ts`
+- `src/main/ipc/sessions.ts`
+- `src/main/ipc/chat.ts`
+- `src/preload/index.ts`
+- `src/renderer/src/App.tsx`
+- `src/renderer/src/components/AssistantThreadPanel.tsx`
+- `src/renderer/src/components/assistant-ui/thread.tsx`
+- `src/renderer/src/components/assistant-ui/settings/general-section.tsx`
+- `docs/critical-chat-fixes-plan.md`
+- `docs/changes/2026-04-17/changes.md`
+
+### 结果
+
+- Chela 的聊天主链路现在已经具备网络代理、双层 failover、固定 learnings 注入、session search 后端和 queued redirect 基础能力。
+- 当前轮没有新增可见搜索入口，也没有做 mid-turn 模型热切，模型切换语义已经在文档里收口到“下一条消息生效”。
+
+## critical-chat-fixes 审查整改与优化
+
+**时间**: 18:40
+
+### 改了什么
+
+1. **P0 阻断修复 · undici 路径**: 把 src/main/network/undici.ts 里写死的 .pnpm/undici@7.22.0 绝对路径换成标准 `import { ... } from "undici"`；并把 undici 升级成 package.json 直接依赖（^7.22.0）避免未来 hoist 版本漂移。
+2. **P0 阻断修复 · web-search timeout 作用域**: 在 src/main/tools/web-search.ts 里把 controller 和 timeout 声明移出 try 外层，保证 finally 里的 clearTimeout 能拿到引用，不再触发 TS2304。
+3. **P0 阻断修复 · worker-service 类型**: 重写 tryParseCommitPlanJson 的解析循环，用 for...of 显式构造 CommitPlanGroup，按 reason 是否为空决定是否赋值，彻底去掉 satisfies + filter + type predicate 组合带来的 TS2677 / TS2345。
+4. **P2-2 引导 UI 复核**: 确认 RedirectDraftCard 和 composer 「引导」按钮已经在 thread.tsx / AssistantThreadPanel.tsx 接好，pendingRedirectDraft 可点可删，正跑时输入文字会出现「引导」入口；desktopApi.chat.queueRedirect / clearRedirectDraft 链路全通。
+5. **优化 · 设置写入失败有日志**: src/main/settings.ts 里 updateSettings 动态 import network/proxy.js 的 catch 改成 appLogger.warn，不再静默吞掉代理失败。
+6. **优化 · 重命名同步 session 索引**: src/main/session/service.ts 的 renamePersistedSession 结束前调一次 indexSessionSearchDocument(sessionId)，重命名后搜索立刻命中新标题。
+7. **优化 · failover 错误分类更精准**: src/main/failover.ts 的 RETRIABLE_PATTERNS 里去掉裸 500/502/503 字符串，改为 /\b5\d{2}\b/ 正则，避免命中「上下文 500 token」这类误报，同时覆盖 501/504 等真 5xx。
+8. **优化 · failover 候选去重**: src/main/chat/execute.ts 构造 candidateEntryIds 时把 context.failover.prepare.failedEntries 过滤掉，执行链不会再回踩已经在 prepare 阶段失败的 entry。
+9. **优化 · session search 支持中文**: src/main/session/search.ts 的 tokenize 针对汉字段落改用 bigram 分词，「旁路」「鉴权」这类短语现在能被正确索引和检索。
+
+### 为什么改
+
+- 上一轮交付评审发现 3 个严重级阻断（undici 路径、web-search 超时作用域、worker-service 类型）让整条链路实际没法 pnpm check，必须先拔掉。
+- P2-2 引导草稿的 main/preload 全套都已经接好，需要复核 renderer 是否把 UI 也打通，避免只剩后端能力没人用。
+- 其余优化都是上一轮审查里标出的可提升点，统一随手收掉，避免后面再回来补丁。
+
+### 涉及文件
+
+- package.json（新增 undici 直接依赖）
+- src/main/network/undici.ts
+- src/main/tools/web-search.ts
+- src/main/worker-service.ts
+- src/main/settings.ts
+- src/main/session/service.ts
+- src/main/session/search.ts
+- src/main/failover.ts
+- src/main/chat/execute.ts
+- src/shared/contracts.ts（SkillInstallResult 调整）
+- src/renderer/src/App.tsx（DeepPartialSettings 补形）
+- src/renderer/src/components/assistant-ui/settings/general-section.tsx（网络设置 partial cast）
+- docs/changes/2026-04-17/changes.md
+
+### 结果
+
+- pnpm check 全绿（main + renderer 两套 tsconfig 都 pass）。
+- 代理 / fail-over / learnings / session search / redirect 草稿这几条 critical 路径都具备可发布条件。
+- 中文检索、错误分类、候选去重同步上线，长期准确度更稳。
+
+## 网络与 failover 二轮优化
+
+**时间**: 19:20
+
+### 改了什么
+
+1. **failover.ts**：把 429 从纯字符串匹配收成 `\b(?:5\d{2}|429)\b` 正则，配合上一轮的 5xx 边界，彻底排除 "1429" 之类的子串误判。
+2. **failover.ts withRetry**：改成指数退避 + 满抖动（waitMs = baseDelay * 2^attempt + Math.random()*baseDelay，上限 15s），多个会话同时撞到 rate limit 时不会再卡在同一个重试时刻。
+3. **settings.ts updateSettings**：`applyGlobalNetworkSettings()` 现在只在 `network.timeoutMs` 或 `proxy.{enabled,url,noProxy}` 真实变化时触发，调字体、改主题等无关设置不再重建 dispatcher、不再丢连接池。
+
+### 为什么改
+
+- `429` 字符串裸匹配在错误信息里偶尔会被无关数字命中。
+- 固定 1s 重试在多会话场景下容易同步爆量。
+- 用户每动一次设置就重建一次全局 undici 连接池纯属浪费，也容易在密集调整时把正在飞的请求打断。
+
+### 涉及文件
+
+- src/main/failover.ts
+- src/main/settings.ts
+- docs/changes/2026-04-17/changes.md
+
+### 结果
+
+- pnpm check 全绿。
+- failover 重试更稳，错误分类更准。
+- 改无关设置不会再触发底层网络层抖动。
