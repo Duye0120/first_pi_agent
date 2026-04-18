@@ -134,10 +134,10 @@ function EmptyPanelState({
   description: string;
 }) {
   return (
-    <div className="grid min-h-[220px] place-items-center rounded-[var(--radius-shell)] border border-border bg-[color:var(--color-control-panel-bg)] px-6 py-7 text-center">
+    <div className="grid min-h-[220px] place-items-center rounded-[var(--radius-shell)] px-6 py-7 text-center">
       <div className="max-w-[260px]">
         <p className="text-sm font-medium text-foreground">{title}</p>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground opacity-80">{description}</p>
       </div>
     </div>
   );

@@ -620,7 +620,13 @@ export function SkillsSection() {
       setInstalledSkills(nextSkills);
       setError(null);
       startTransition(() => {
-        setExpandedSkillId((current) => current ?? nextSkills[0]?.id ?? null);
+        setExpandedSkillId((current) => {
+          if (!current) {
+            return null;
+          }
+
+          return nextSkills.some((skill) => skill.id === current) ? current : null;
+        });
       });
     } catch (nextError) {
       setError(
@@ -739,7 +745,7 @@ export function SkillsSection() {
       expandedSkillId !== null &&
       !filteredInstalledSkills.some((skill) => skill.id === expandedSkillId)
     ) {
-      setExpandedSkillId(filteredInstalledSkills[0]?.id ?? null);
+      setExpandedSkillId(null);
     }
   }, [expandedSkillId, filteredInstalledSkills]);
 
