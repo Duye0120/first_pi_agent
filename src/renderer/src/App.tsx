@@ -167,6 +167,10 @@ function clearStoredStrings(keys: string[]) {
   }
 }
 
+function getProjectNameFromPath(projectPath: string) {
+  return projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? projectPath;
+}
+
 type DeepPartialSettings = {
   modelRouting?: {
     chat?: Partial<Settings["modelRouting"]["chat"]>;
@@ -354,6 +358,9 @@ export default function App() {
   const rightPanelStateRef = useRef(rightPanelState);
   const rightPanelToggleInFlightRef = useRef(false);
   const summariesRef = useRef<ChatSessionSummary[]>([]);
+  const archivedSummariesRef = useRef<ChatSessionSummary[]>([]);
+  const groupsRef = useRef<SessionGroup[]>([]);
+  const settingsRef = useRef<Settings | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const sessionCacheRef = useRef<Record<string, ChatSession>>({});
   const appliedCustomThemeKeysRef = useRef<string[]>([]);
@@ -374,6 +381,18 @@ export default function App() {
   useEffect(() => {
     summariesRef.current = summaries;
   }, [summaries]);
+
+  useEffect(() => {
+    archivedSummariesRef.current = archivedSummaries;
+  }, [archivedSummaries]);
+
+  useEffect(() => {
+    groupsRef.current = groups;
+  }, [groups]);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
@@ -751,6 +770,40 @@ export default function App() {
     return { sessionSummaries, archivedList };
   }, [desktopApi]);
 
+  const refreshGroups = useCallback(async () => {
+    if (!desktopApi) {
+      return [] as SessionGroup[];
+    }
+
+    const nextGroups = await desktopApi.groups.list();
+    setGroups(nextGroups);
+    return nextGroups;
+  }, [desktopApi]);
+
+  const switchWorkspacePath = useCallback(
+    async (nextWorkspace: string) => {
+      const normalizedWorkspace = nextWorkspace.trim();
+      if (!desktopApi || !normalizedWorkspace) {
+        return;
+      }
+
+      if (settingsRef.current?.workspace === normalizedWorkspace) {
+        return;
+      }
+
+      setSettings((current) =>
+        current
+          ? mergeSettingsState(current, { workspace: normalizedWorkspace })
+          : current,
+      );
+
+      await desktopApi.settings.update({ workspace: normalizedWorkspace });
+      await refreshGitOverview();
+      await refreshGitBranchSummary();
+    },
+    [desktopApi, refreshGitBranchSummary, refreshGitOverview],
+  );
+
   const bootApp = useCallback(async () => {
     if (!desktopApi) {
       setBootError(
@@ -788,6 +841,8 @@ export default function App() {
         setSettings(settings);
         setCurrentModelId(settings.modelRouting.chat.modelId);
         setThinkingLevel(settings.thinkingLevel);
+        void refreshGitBranchSummary();
+        void refreshGitOverview();
       }
 
       const storedSessionId = readStoredString([
@@ -817,7 +872,15 @@ export default function App() {
     } finally {
       setBooting(false);
     }
-  }, [clearActiveSession, desktopApi, hydrateSession, refreshContextSummary, refreshInterruptedApprovalGroups]);
+  }, [
+    clearActiveSession,
+    desktopApi,
+    hydrateSession,
+    refreshContextSummary,
+    refreshGitBranchSummary,
+    refreshGitOverview,
+    refreshInterruptedApprovalGroups,
+  ]);
 
   // 用 ref 持有键盘快捷键需要的动态值，避免 effect 因这些值变化而重新执行 bootApp
   const kbStateRef = useRef({
@@ -897,6 +960,11 @@ export default function App() {
         return;
       }
 
+      const targetGroup = groupsRef.current.find((group) => group.id === groupId);
+      if (targetGroup?.path.trim()) {
+        await switchWorkspacePath(targetGroup.path);
+      }
+
       const nextSession = await desktopApi.sessions.create();
       await desktopApi.sessions.setGroup(nextSession.id, groupId);
       const groupedSession =
@@ -910,13 +978,30 @@ export default function App() {
       void refreshContextSummary(groupedSession.id);
       void refreshInterruptedApprovalGroups(groupedSession.id);
     },
-    [desktopApi, hydrateSession, refreshContextSummary, refreshInterruptedApprovalGroups, refreshSessionLists],
+    [
+      desktopApi,
+      hydrateSession,
+      refreshContextSummary,
+      refreshInterruptedApprovalGroups,
+      refreshSessionLists,
+      switchWorkspacePath,
+    ],
   );
 
   const selectSession = useCallback(
     async (sessionId: string) => {
       if (!desktopApi) {
         return;
+      }
+
+      const summary =
+        summariesRef.current.find((item) => item.id === sessionId) ??
+        archivedSummariesRef.current.find((item) => item.id === sessionId);
+      const projectPath = summary?.groupId
+        ? groupsRef.current.find((group) => group.id === summary.groupId)?.path.trim()
+        : "";
+      if (projectPath) {
+        await switchWorkspacePath(projectPath);
       }
 
       const cachedSession = sessionCacheRef.current[sessionId];
@@ -932,7 +1017,7 @@ export default function App() {
         void refreshContextSummary(sessionId);
       }
     },
-    [desktopApi, hydrateSession, refreshContextSummary],
+    [desktopApi, hydrateSession, refreshContextSummary, switchWorkspacePath],
   );
 
   const archiveSession = useCallback(
@@ -1024,104 +1109,6 @@ export default function App() {
     [clearActiveSession, desktopApi, refreshSessionLists, removeCachedSession, selectSession],
   );
 
-  const renameSession = useCallback(
-    async (sessionId: string, title: string) => {
-      if (!desktopApi) {
-        return;
-      }
-
-      const nextTitle = title.trim();
-      if (!nextTitle) {
-        return;
-      }
-
-      const updatedAt = new Date().toISOString();
-      await desktopApi.sessions.rename(sessionId, nextTitle);
-
-      setSummaries((prev) =>
-        prev.map((summary) =>
-          summary.id === sessionId
-            ? {
-              ...summary,
-              title: nextTitle,
-              updatedAt,
-            }
-            : summary,
-        ),
-      );
-
-      setArchivedSummaries((prev) =>
-        prev.map((summary) =>
-          summary.id === sessionId
-            ? {
-              ...summary,
-              title: nextTitle,
-              updatedAt,
-            }
-            : summary,
-        ),
-      );
-
-      setSessionCache((current) => {
-        const session = current[sessionId];
-        if (!session) {
-          return current;
-        }
-
-        return {
-          ...current,
-          [sessionId]: {
-            ...session,
-            title: nextTitle,
-            updatedAt,
-          },
-        };
-      });
-
-      setActiveSession((current) =>
-        current && current.id === sessionId
-          ? {
-            ...current,
-            title: nextTitle,
-            updatedAt,
-          }
-          : current,
-      );
-    },
-    [desktopApi],
-  );
-
-  const createGroup = useCallback(
-    async (name: string) => {
-      if (!desktopApi) return;
-      const group = await desktopApi.groups.create(name);
-      setGroups((prev) => [...prev, group]);
-    },
-    [desktopApi],
-  );
-
-  const renameGroup = useCallback(
-    async (groupId: string, name: string) => {
-      if (!desktopApi) return;
-      await desktopApi.groups.rename(groupId, name);
-      setGroups((prev) =>
-        prev.map((g) => (g.id === groupId ? { ...g, name } : g)),
-      );
-    },
-    [desktopApi],
-  );
-
-  const deleteGroup = useCallback(
-    async (groupId: string) => {
-      if (!desktopApi) return;
-      await desktopApi.groups.delete(groupId);
-      setGroups((prev) => prev.filter((g) => g.id !== groupId));
-      // Refresh summaries so groupId is cleared on all affected sessions
-      await refreshSessionLists();
-    },
-    [desktopApi, refreshSessionLists],
-  );
-
   const setSessionPinned = useCallback(
     async (sessionId: string, pinned: boolean) => {
       if (!desktopApi) {
@@ -1134,49 +1121,86 @@ export default function App() {
     [desktopApi, refreshSessionLists],
   );
 
-  const setSessionGroup = useCallback(
-    async (sessionId: string, groupId: string | null) => {
-      if (!desktopApi) return;
-      await desktopApi.sessions.setGroup(sessionId, groupId);
-      // Update summary in state optimistically
-      setSummaries((prev) =>
-        prev.map((s) =>
-          s.id === sessionId ? { ...s, groupId: groupId ?? undefined } : s,
-        ),
-      );
-      setSessionCache((current) => {
-        const session = current[sessionId];
-        if (!session) {
-          return current;
-        }
+  const renameSession = useCallback(
+    async (sessionId: string) => {
+      if (!desktopApi) {
+        return;
+      }
 
-        const nextSession = { ...session };
-        if (groupId === null) {
-          delete nextSession.groupId;
-        } else {
-          nextSession.groupId = groupId;
-        }
+      const currentTitle =
+        summariesRef.current.find((summary) => summary.id === sessionId)?.title ??
+        archivedSummariesRef.current.find((summary) => summary.id === sessionId)?.title ??
+        sessionCacheRef.current[sessionId]?.title ??
+        "";
+      const nextTitle = window.prompt("重命名聊天", currentTitle);
+      if (nextTitle === null) {
+        return;
+      }
 
-        return {
-          ...current,
-          [sessionId]: nextSession,
-        };
-      });
-      setActiveSession((current) => {
-        if (!current || current.id !== sessionId) {
-          return current;
-        }
+      const trimmedTitle = nextTitle.trim();
+      if (!trimmedTitle || trimmedTitle === currentTitle.trim()) {
+        return;
+      }
 
-        const nextSession = { ...current };
-        if (groupId === null) {
-          delete nextSession.groupId;
-        } else {
-          nextSession.groupId = groupId;
-        }
-        return nextSession;
-      });
+      await desktopApi.sessions.rename(sessionId, trimmedTitle);
+      await refreshSessionLists();
+
+      if (activeSessionIdRef.current === sessionId) {
+        await reloadSession(sessionId);
+      }
     },
-    [desktopApi],
+    [desktopApi, refreshSessionLists, reloadSession],
+  );
+
+  const renameProject = useCallback(
+    async (groupId: string) => {
+      if (!desktopApi) {
+        return;
+      }
+
+      const currentName =
+        groupsRef.current.find((group) => group.id === groupId)?.name ?? "";
+      const nextName = window.prompt("重命名项目", currentName);
+      if (nextName === null) {
+        return;
+      }
+
+      const trimmedName = nextName.trim();
+      if (!trimmedName || trimmedName === currentName.trim()) {
+        return;
+      }
+
+      await desktopApi.groups.rename(groupId, trimmedName);
+      await refreshGroups();
+    },
+    [desktopApi, refreshGroups],
+  );
+
+  const deleteProject = useCallback(
+    async (groupId: string) => {
+      if (!desktopApi) {
+        return;
+      }
+
+      const projectName =
+        groupsRef.current.find((group) => group.id === groupId)?.name ?? "当前项目";
+      const confirmed = window.confirm(
+        `删除项目“${projectName}”？项目下聊天会保留，并移动到“聊天”区。`,
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      await desktopApi.groups.delete(groupId);
+      await refreshGroups();
+      await refreshSessionLists();
+
+      const activeId = activeSessionIdRef.current;
+      if (activeId) {
+        await reloadSession(activeId);
+      }
+    },
+    [desktopApi, refreshGroups, refreshSessionLists, reloadSession],
   );
 
   const enrichSelectedFiles = useCallback(
@@ -1493,12 +1517,24 @@ export default function App() {
 
   const handleSettingsChange = useCallback(
     (partial: Partial<Settings>) => {
+      if (partial.workspace && Object.keys(partial).length === 1) {
+        void switchWorkspacePath(partial.workspace);
+        return;
+      }
+
       setSettings((current) =>
         current ? mergeSettingsState(current, partial) : current,
       );
-      void desktopApi?.settings.update(partial);
+
+      void (async () => {
+        await desktopApi?.settings.update(partial);
+
+        if (partial.workspace) {
+          await switchWorkspacePath(partial.workspace);
+        }
+      })();
     },
-    [desktopApi],
+    [desktopApi, switchWorkspacePath],
   );
 
   const handleModelChange = useCallback(
@@ -1556,17 +1592,52 @@ export default function App() {
   );
 
   const handleGitStateChanged = useCallback(async () => {
-    if (diffPanelOpen) {
-      await refreshGitOverview();
-      return;
-    }
-
+    await refreshGitOverview();
     await refreshGitBranchSummary();
-  }, [diffPanelOpen, refreshGitBranchSummary, refreshGitOverview]);
+  }, [refreshGitBranchSummary, refreshGitOverview]);
 
   const handleRefreshGitOverview = useCallback(async () => {
     await refreshGitOverview();
   }, [refreshGitOverview]);
+
+  const handleCreateProject = useCallback(async () => {
+    if (!desktopApi) {
+      return;
+    }
+
+    const nextWorkspace = await desktopApi.workspace.pickFolder();
+    if (!nextWorkspace) {
+      return;
+    }
+
+    const existingGroup = groupsRef.current.find(
+      (group) => group.path === nextWorkspace,
+    );
+    if (existingGroup) {
+      await createSessionInGroup(existingGroup.id);
+      return;
+    }
+
+    const group = await desktopApi.groups.create({
+      name: getProjectNameFromPath(nextWorkspace),
+      path: nextWorkspace,
+    });
+    setGroups((current) => [...current, group]);
+    await switchWorkspacePath(nextWorkspace);
+    await createSessionInGroup(group.id);
+  }, [createSessionInGroup, desktopApi, switchWorkspacePath]);
+
+  const handleSelectProject = useCallback(
+    async (groupId: string) => {
+      const targetGroup = groupsRef.current.find((group) => group.id === groupId);
+      if (!targetGroup?.path.trim()) {
+        return;
+      }
+
+      await switchWorkspacePath(targetGroup.path);
+    },
+    [switchWorkspacePath],
+  );
 
   const hasAnyRunningSessions = runningSessionIds.length > 0;
   const mountedSessionIds = useMemo(() => {
@@ -1833,24 +1904,36 @@ export default function App() {
           >
             <aside className="chela-sidebar-content relative h-full min-h-0 overflow-hidden bg-transparent" data-collapsed={sidebarCollapsed ? "true" : undefined}>
               <Sidebar
+                groups={groups}
                 summaries={summaries}
+                archivedSummaries={archivedSummaries}
                 activeSessionId={activeSessionId}
                 runningSessionIds={runningSessionIds}
+                onCreateProject={() => {
+                  void handleCreateProject();
+                }}
+                onCreateProjectSession={(groupId) => {
+                  void createSessionInGroup(groupId);
+                }}
+                onSelectProject={(groupId) => {
+                  void handleSelectProject(groupId);
+                }}
                 onSelectSession={selectSession}
                 onNewSession={createNewSession}
-                onOpenSettings={() => openSettingsView("general")}
+                onOpenSettings={() => openSettingsView("workspace")}
+                onRenameSession={(sessionId) => {
+                  void renameSession(sessionId);
+                }}
+                onRenameProject={(groupId) => {
+                  void renameProject(groupId);
+                }}
                 onArchiveSession={archiveSession}
                 onUnarchiveSession={unarchiveSession}
                 onDeleteSession={deleteSessionPermanently}
-                onRenameSession={renameSession}
+                onDeleteProject={(groupId) => {
+                  void deleteProject(groupId);
+                }}
                 onToggleSessionPinned={setSessionPinned}
-                onCreateSessionInGroup={createSessionInGroup}
-                archivedSummaries={archivedSummaries}
-                groups={groups}
-                onCreateGroup={createGroup}
-                onRenameGroup={renameGroup}
-                onDeleteGroup={deleteGroup}
-                onSetSessionGroup={setSessionGroup}
                 viewMode={mainView === "settings" ? "settings" : "threads"}
                 activeSettingsSection={settingsSection}
                 onSelectSettingsSection={openSettingsView}
