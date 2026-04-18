@@ -1,4 +1,5 @@
 import { getActiveServers, loadMcpConfig } from "../mcp/config.js";
+import { getMemdirStore } from "./memory/service.js";
 import type { ProviderType } from "../shared/contracts.js";
 
 export type PromptLayer =
@@ -6,6 +7,7 @@ export type PromptLayer =
   | "workspace"
   | "runtime"
   | "semantic-memory"
+  | "learnings"
   | "session"
   | "turn";
 
@@ -45,6 +47,7 @@ const LAYER_ORDER: Record<PromptLayer, number> = {
   workspace: 20,
   runtime: 30,
   "semantic-memory": 40,
+  learnings: 45,
   session: 50,
   turn: 60,
 };
@@ -279,6 +282,55 @@ export function buildSemanticMemorySection(content: string): PromptSection | nul
     trimPriority: 10,
     writableBack: "semantic",
     content,
+  });
+}
+
+export function buildLearningsSection(): PromptSection | null {
+  const store = getMemdirStore();
+  const topicContent = store.readTopic("learnings").trim();
+
+  if (!topicContent) {
+    return null;
+  }
+
+  const blocks = topicContent
+    .split(/^###\s+/m)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .filter((block) => !block.startsWith("# "))
+    .slice(-4)
+    .map((block) => {
+      const [headingLine, ...detailLines] = block.split("\n");
+      const heading = headingLine.trim();
+      const detail = detailLines
+        .filter((line) => !line.trim().startsWith("_source:"))
+        .join("\n")
+        .trim();
+      const detailPreview =
+        detail.length > 260 ? `${detail.slice(0, 260).trimEnd()}…` : detail;
+
+      return [
+        `- ${heading}`,
+        detailPreview ? `  > ${detailPreview.replace(/\n/g, "\n  > ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    });
+
+  if (blocks.length === 0) {
+    return null;
+  }
+
+  return createSection({
+    id: "learnings",
+    layer: "learnings",
+    role: "memory",
+    authority: "reference",
+    priority: 45,
+    cacheScope: "turn",
+    trimPriority: 12,
+    writableBack: false,
+    content: ["## Recent Learnings", ...blocks].join("\n"),
   });
 }
 

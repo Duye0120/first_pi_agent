@@ -3,6 +3,7 @@ import { getSemanticMemoryPromptSection } from "../memory/service.js";
 import {
   assemblePromptSections,
   buildPlatformConstitutionSection,
+  buildLearningsSection,
   buildRuntimeCapabilitySection,
   buildSemanticMemorySection,
   buildSessionSnapshotSection,
@@ -185,6 +186,7 @@ function buildPromptSections(
     }),
     buildAmbientContextSection(input.workspacePath),
     buildSemanticMemorySection(semanticMemory),
+    buildLearningsSection(),
     buildSessionSnapshotSection(snapshot),
     buildTurnIntentPatchSection(input.latestUserText),
   ].filter((section): section is PromptSection => !!section);

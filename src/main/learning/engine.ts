@@ -122,38 +122,36 @@ async function processSignal(signal: LearningSignal): Promise<void> {
 
     switch (signal.type) {
       case "tool_repeated_failure":
-        summary = `[学习] 工具 ${signal.toolName} 频繁失败，需注意参数校验`;
+        summary = `工具 ${signal.toolName} 连续失败，执行前先校验参数并准备替代方案`;
         detail = [
-          `信号类型: ${signal.type}`,
-          `工具: ${signal.toolName}`,
-          `描述: ${signal.message}`,
-          `建议: 使用该工具前先验证参数有效性，或考虑替代工具`,
+          `动作建议：调用 ${signal.toolName} 前先确认参数完整、格式正确、目标资源存在。`,
+          `失败信号：${signal.message}`,
+          `推荐动作：优先补参数校验；风险高时直接选择替代工具或调整方案。`,
         ].join("\n");
         break;
 
       case "retry_after_reject":
-        summary = `[学习] 工具 ${signal.toolName} 常被用户拒绝，优先尝试其他方案`;
+        summary = `工具 ${signal.toolName} 常被用户拒绝，先说明影响再决定是否调用`;
         detail = [
-          `信号类型: ${signal.type}`,
-          `工具: ${signal.toolName}`,
-          `描述: ${signal.message}`,
-          `建议: 减少使用该工具，或在使用前先征求用户意见`,
+          `动作建议：调用 ${signal.toolName} 前先说明原因、影响和替代路径。`,
+          `拒绝信号：${signal.message}`,
+          `推荐动作：优先选择侵入性更低的方案，必要时先征求用户确认。`,
         ].join("\n");
         break;
 
       case "tool_discovery_opportunity":
-        summary = `[学习] 用户可能不知道工具 ${signal.toolName} 的存在`;
-        detail = signal.message;
+        summary = `适合主动提示工具 ${signal.toolName} 的可用性`;
+        detail = `动作建议：在相关场景主动说明 ${signal.toolName} 可以解决的问题。\n${signal.message}`;
         break;
 
       case "tool_misuse_pattern":
-        summary = `[学习] 工具 ${signal.toolName} 的参数使用存在常见错误模式`;
-        detail = signal.message;
+        summary = `工具 ${signal.toolName} 存在高频误用模式，调用前先自检`;
+        detail = `动作建议：执行 ${signal.toolName} 前先自检关键参数和边界条件。\n${signal.message}`;
         break;
 
       default:
-        summary = `[学习] ${signal.message}`;
-        detail = `信号类型: ${signal.type}, 工具: ${signal.toolName}`;
+        summary = signal.message;
+        detail = `动作建议：结合 ${signal.toolName} 的历史信号，优先规避已知重复问题。`;
     }
 
     store.save({
