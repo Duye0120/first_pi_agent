@@ -347,6 +347,12 @@ export type AssistantMessage = ChatMessage;
 export type SessionGroup = {
   id: string;
   name: string;
+  path: string;
+};
+
+export type SessionGroupCreateInput = {
+  name: string;
+  path: string;
 };
 
 export type ChatSession = {
@@ -781,7 +787,7 @@ export type DesktopApi = {
   };
   groups: {
     list: () => Promise<SessionGroup[]>;
-    create: (name: string) => Promise<SessionGroup>;
+    create: (input: SessionGroupCreateInput) => Promise<SessionGroup>;
     rename: (groupId: string, name: string) => Promise<void>;
     delete: (groupId: string) => Promise<void>;
   };
