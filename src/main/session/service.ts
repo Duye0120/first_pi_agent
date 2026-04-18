@@ -52,6 +52,10 @@ import {
   appendRunFinishedEvent as appendRunFinishedTranscriptEvent,
   appendUserMessageEvent as appendUserMessageTranscriptEvent,
 } from "./transcript-writer.js";
+import {
+  indexSessionSearchDocument,
+  removeSessionSearchDocument,
+} from "./search.js";
 
 export type {
   PersistedSessionMeta,
@@ -133,6 +137,8 @@ function materializeSession(meta: PersistedSessionMeta): ChatSession {
     archived: meta.archived,
     groupId: meta.groupId,
     pinned: meta.pinned,
+    pendingRedirectDraft: meta.pendingRedirectDraft || undefined,
+    pendingRedirectUpdatedAt: meta.pendingRedirectUpdatedAt,
   };
 }
 
@@ -375,8 +381,11 @@ export function saveSessionProjection(session: ChatSession): void {
   meta.pinned = session.pinned;
   meta.draft = session.draft;
   meta.attachments = session.attachments;
+  meta.pendingRedirectDraft = session.pendingRedirectDraft ?? "";
+  meta.pendingRedirectUpdatedAt = session.pendingRedirectUpdatedAt;
   writeMeta(meta);
   updateIndexWithMeta(meta);
+  indexSessionSearchDocument(session.id);
 }
 
 export function createPersistedSession(): ChatSession {
@@ -389,6 +398,7 @@ export function createPersistedSession(): ChatSession {
   atomicWrite(getTranscriptPath(session.id), "");
   writeSnapshot(createEmptySnapshot(session.id));
   updateIndexWithMeta(meta);
+  indexSessionSearchDocument(session.id);
 
   return materializeSession(meta);
 }
@@ -400,6 +410,7 @@ export function deletePersistedSession(sessionId: string): void {
     rmSync(sessionDir, { recursive: true, force: true });
   }
   removeFromIndex(sessionId);
+  removeSessionSearchDocument(sessionId);
 }
 
 export function trimPersistedSessionMessages(
@@ -469,6 +480,7 @@ export function trimPersistedSessionMessages(
       updatedAt,
     ),
   );
+  indexSessionSearchDocument(sessionId);
 
   return materializeSession(meta);
 }
@@ -477,12 +489,14 @@ export function archivePersistedSession(sessionId: string): void {
   updateSessionMeta(sessionId, (meta) => {
     meta.archived = true;
   });
+  removeSessionSearchDocument(sessionId);
 }
 
 export function unarchivePersistedSession(sessionId: string): void {
   updateSessionMeta(sessionId, (meta) => {
     meta.archived = false;
   });
+  indexSessionSearchDocument(sessionId);
 }
 
 export function renamePersistedSession(
@@ -494,6 +508,7 @@ export function renamePersistedSession(
     meta.title = title;
     meta.titleManuallySet = options?.manual !== false;
   });
+  indexSessionSearchDocument(sessionId);
 }
 
 export function setPersistedSessionGroup(
@@ -515,6 +530,28 @@ export function setPersistedSessionPinned(sessionId: string, pinned: boolean): v
   });
 }
 
+export function setPersistedRedirectDraft(sessionId: string, text: string): void {
+  const nextText = text.trim();
+  updateSessionMeta(sessionId, (meta) => {
+    meta.pendingRedirectDraft = nextText;
+    meta.pendingRedirectUpdatedAt = nextText
+      ? new Date().toISOString()
+      : undefined;
+  });
+}
+
+export function clearPersistedRedirectDraft(sessionId: string): void {
+  updateSessionMeta(sessionId, (meta) => {
+    meta.pendingRedirectDraft = "";
+    delete meta.pendingRedirectUpdatedAt;
+  });
+}
+
+export function getPersistedRedirectDraft(sessionId: string): string {
+  ensureSessionStorageReady();
+  return readMeta(sessionId)?.pendingRedirectDraft?.trim() ?? "";
+}
+
 export function getPersistedSnapshot(sessionId: string): SessionMemorySnapshot {
   ensureSessionStorageReady();
   return readSnapshot(sessionId);
@@ -532,6 +569,7 @@ export function writePersistedSnapshot(snapshot: SessionMemorySnapshot): void {
   writeMeta(meta);
   writeSnapshot(snapshot);
   updateIndexWithMeta(meta);
+  indexSessionSearchDocument(snapshot.sessionId);
 }
 
 export function loadTranscriptEvents(sessionId: string): SessionTranscriptEvent[] {
@@ -544,7 +582,13 @@ export function updateSessionMeta(
   updater: (meta: PersistedSessionMeta) => void,
 ): PersistedSessionMeta | null {
   ensureSessionStorageReady();
-  return updateMeta(sessionId, updater);
+  const meta = updateMeta(sessionId, updater);
+  if (meta) {
+    indexSessionSearchDocument(sessionId);
+  } else {
+    removeSessionSearchDocument(sessionId);
+  }
+  return meta;
 }
 
 export function appendUserMessageEvent(

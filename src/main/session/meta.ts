@@ -45,6 +45,8 @@ export type PersistedSessionMeta = {
   autoCompactFailureCount: number;
   autoCompactBlockedAt?: string;
   todos?: SessionTodoItem[];
+  pendingRedirectDraft?: string;
+  pendingRedirectUpdatedAt?: string;
 };
 
 export function createMetaFromSession(session: ChatSession): PersistedSessionMeta {
@@ -65,6 +67,7 @@ export function createMetaFromSession(session: ChatSession): PersistedSessionMet
     snapshotRevision: 0,
     autoCompactFailureCount: 0,
     todos: [],
+    pendingRedirectDraft: "",
   };
 }
 
@@ -84,6 +87,14 @@ export function normalizePersistedSessionMeta(
       ? Math.max(0, meta.autoCompactFailureCount)
       : 0,
     todos: Array.isArray(meta.todos) ? meta.todos.map(normalizeTodoItem) : [],
+    pendingRedirectDraft:
+      typeof meta.pendingRedirectDraft === "string"
+        ? meta.pendingRedirectDraft
+        : "",
+    pendingRedirectUpdatedAt:
+      typeof meta.pendingRedirectUpdatedAt === "string"
+        ? meta.pendingRedirectUpdatedAt
+        : undefined,
   };
 }
 

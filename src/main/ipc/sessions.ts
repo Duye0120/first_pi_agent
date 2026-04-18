@@ -3,6 +3,7 @@ import type { ChatSession } from "../../shared/contracts.js";
 import { compactSession, getContextSummary } from "../context/service.js";
 import {
   archiveSession,
+  rebuildSessionSearchIndex,
   createSession,
   deleteSession,
   listArchivedSessions,
@@ -10,6 +11,7 @@ import {
   loadSession,
   renameSession,
   saveSession,
+  searchSessionSummaries,
   setSessionGroup,
   setSessionPinned,
   unarchiveSession,
@@ -61,6 +63,14 @@ export function registerSessionsIpc(): void {
     IPC_CHANNELS.sessionsSetPinned,
     async (_event, sessionId: string, pinned: boolean) =>
       setSessionPinned(sessionId, pinned),
+  );
+  handleIpc(
+    IPC_CHANNELS.sessionsSearch,
+    async (_event, query: string, limit?: number) =>
+      searchSessionSummaries(query, limit),
+  );
+  handleIpc(IPC_CHANNELS.sessionsReindexSearch, async () =>
+    rebuildSessionSearchIndex(),
   );
   handleIpc(
     IPC_CHANNELS.contextGetSummary,

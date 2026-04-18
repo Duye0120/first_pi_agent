@@ -181,6 +181,14 @@ export type Settings = {
     codeFontSize: number;
     codeFontFamily: string;
   };
+  network: {
+    proxy: {
+      enabled: boolean;
+      url: string;
+      noProxy: string;
+    };
+    timeoutMs: number;
+  };
   workspace: string;
 };
 
@@ -311,8 +319,8 @@ export type SkillInstallResult = {
   ok: boolean;
   message: string;
   installedSkillId: string | null;
-  installedSkill: InstalledSkillSummary | null;
-  skills: InstalledSkillSummary[];
+  installedSkill: InstalledSkillDetail | null;
+  skills: InstalledSkillDetail[];
 };
 
 export type RunSource = "user" | "renderer" | "system" | "subagent";
@@ -352,6 +360,8 @@ export type ChatSession = {
   archived?: boolean;
   groupId?: string;
   pinned?: boolean;
+  pendingRedirectDraft?: string;
+  pendingRedirectUpdatedAt?: string;
 };
 
 export type ChatSessionSummary = {
@@ -414,6 +424,7 @@ export type SessionTranscriptEvent =
     runKind: RunKind;
     modelEntryId: string;
     thinkingLevel: string;
+    metadata?: Record<string, unknown>;
   }
   | {
     seq: number;
@@ -493,6 +504,7 @@ export type SessionTranscriptEvent =
     type: "run_finished";
     finalState: "completed" | "aborted" | "failed";
     reason?: string;
+    metadata?: Record<string, unknown>;
   };
 
 export type AgentRunScope = {
@@ -583,6 +595,19 @@ export type InterruptedApprovalGroup = {
 export type SendMessageInput = AgentRunScope & {
   text: string;
   attachments: SelectedFile[];
+};
+
+export type RedirectMessageInput = {
+  sessionId: string;
+  runId?: string | null;
+  text: string;
+};
+
+export type SessionSearchResult = {
+  sessionId: string;
+  title: string;
+  snippet: string;
+  updatedAt: string;
 };
 
 export type TrimSessionMessagesInput = {
@@ -751,6 +776,8 @@ export type DesktopApi = {
     setGroup: (sessionId: string, groupId: string | null) => Promise<void>;
     rename: (sessionId: string, title: string) => Promise<void>;
     setPinned: (sessionId: string, pinned: boolean) => Promise<void>;
+    search: (query: string, limit?: number) => Promise<SessionSearchResult[]>;
+    reindexSearch: () => Promise<void>;
   };
   groups: {
     list: () => Promise<SessionGroup[]>;
@@ -762,6 +789,8 @@ export type DesktopApi = {
     /** Phase 0: returns mock reply. Phase 1+: returns void, response comes via agent.onEvent */
     send: (input: SendMessageInput) => Promise<AssistantMessage | void>;
     trimSessionMessages: (input: TrimSessionMessagesInput) => Promise<void>;
+    queueRedirect: (input: RedirectMessageInput) => Promise<void>;
+    clearRedirectDraft: (sessionId: string) => Promise<void>;
   };
   context: {
     getSummary: (sessionId: string) => Promise<ContextSummary>;

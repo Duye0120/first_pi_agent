@@ -1,18 +1,25 @@
 import type { ChatSession, ChatSessionSummary } from "../../shared/contracts.js";
 import {
   archivePersistedSession,
+  clearPersistedRedirectDraft,
   createPersistedSession,
   deletePersistedSession,
+  getPersistedRedirectDraft,
   listPersistedArchivedSessions,
   listPersistedSessions,
   loadPersistedSession,
   renamePersistedSession,
   saveSessionProjection,
+  setPersistedRedirectDraft,
   setPersistedSessionGroup,
   setPersistedSessionPinned,
   trimPersistedSessionMessages,
   unarchivePersistedSession,
 } from "./service.js";
+import {
+  reindexSessionSearch,
+  searchSessions,
+} from "./search.js";
 
 export function listSessions(): ChatSessionSummary[] {
   return listPersistedSessions();
@@ -65,4 +72,24 @@ export function renameSession(sessionId: string, title: string): void {
 
 export function setSessionPinned(sessionId: string, pinned: boolean): void {
   setPersistedSessionPinned(sessionId, pinned);
+}
+
+export function setSessionRedirectDraft(sessionId: string, text: string): void {
+  setPersistedRedirectDraft(sessionId, text);
+}
+
+export function clearSessionRedirectDraft(sessionId: string): void {
+  clearPersistedRedirectDraft(sessionId);
+}
+
+export function getSessionRedirectDraft(sessionId: string): string {
+  return getPersistedRedirectDraft(sessionId);
+}
+
+export function searchSessionSummaries(query: string, limit?: number) {
+  return searchSessions(query, limit);
+}
+
+export function rebuildSessionSearchIndex(): void {
+  reindexSessionSearch();
 }

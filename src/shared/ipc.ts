@@ -17,6 +17,8 @@ export const IPC_CHANNELS = {
   sessionsSetGroup: "sessions:set-group",
   sessionsRename: "sessions:rename",
   sessionsSetPinned: "sessions:set-pinned",
+  sessionsSearch: "sessions:search",
+  sessionsReindexSearch: "sessions:reindex-search",
 
   // Groups
   groupsList: "groups:list",
@@ -27,6 +29,8 @@ export const IPC_CHANNELS = {
   // Chat
   chatSend: "chat:send",
   chatTrimSessionMessages: "chat:trim-session-messages",
+  chatQueueRedirect: "chat:queue-redirect",
+  chatClearRedirectDraft: "chat:clear-redirect-draft",
   contextGetSummary: "context:get-summary",
   contextCompact: "context:compact",
 
