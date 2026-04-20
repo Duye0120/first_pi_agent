@@ -4,6 +4,7 @@ import {
   ArchiveBoxIcon,
   ArrowUturnLeftIcon,
   BoltIcon,
+  CircleStackIcon,
   Cog6ToothIcon,
   FolderIcon,
   FolderOpenIcon,
@@ -13,7 +14,7 @@ import {
   SwatchIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
-import { SquarePen } from "lucide-react";
+import { Loader2, SquarePen } from "lucide-react";
 import type {
   ChatSessionSummary,
   SessionGroup,
@@ -21,11 +22,16 @@ import type {
 
 import { formatRelativeTime } from "@renderer/lib/session";
 import type { SettingsSection } from "@renderer/components/assistant-ui/settings/types";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@renderer/components/ui/tooltip";
 
 type SidebarProps = {
   groups: SessionGroup[];
   summaries: ChatSessionSummary[];
-  archivedSummaries: ChatSessionSummary[];
+  archivedSummaries?: ChatSessionSummary[];
   activeSessionId: string | null;
   runningSessionIds: string[];
   onNewSession: () => void;
@@ -65,14 +71,16 @@ const settingsItems: {
   label: string;
   icon: typeof Cog6ToothIcon;
 }[] = [
-  { id: "general", label: "通用", icon: AdjustmentsHorizontalIcon },
-  { id: "network", label: "网络", icon: BoltIcon },
-  { id: "ai_model", label: "模型", icon: SparklesIcon },
-  { id: "workspace", label: "工作区", icon: FolderIcon },
-  { id: "skills", label: "Skills", icon: PuzzlePieceIcon },
-  { id: "interface", label: "界面与终端", icon: SwatchIcon },
-  { id: "system", label: "数据与系统", icon: Cog6ToothIcon },
-];
+    { id: "general", label: "通用", icon: AdjustmentsHorizontalIcon },
+    { id: "network", label: "网络", icon: BoltIcon },
+    { id: "ai_model", label: "模型", icon: SparklesIcon },
+    { id: "workspace", label: "工作区", icon: FolderIcon },
+    { id: "memory", label: "记忆", icon: CircleStackIcon },
+    { id: "skills", label: "Skills", icon: PuzzlePieceIcon },
+    { id: "interface", label: "界面与终端", icon: SwatchIcon },
+    { id: "archived", label: "已归档会话", icon: ArchiveBoxIcon },
+    { id: "system", label: "数据与系统", icon: Cog6ToothIcon },
+  ];
 
 function SidebarFooterAction({
   icon: Icon,
@@ -98,7 +106,7 @@ function SidebarFooterAction({
 function SidebarImpl({
   groups,
   summaries,
-  archivedSummaries,
+  archivedSummaries = [],
   activeSessionId,
   runningSessionIds,
   onNewSession,
@@ -293,44 +301,66 @@ function SidebarImpl({
             },
             archived
               ? {
-                  key: "restore",
-                  label: "恢复聊天",
-                  onSelect: () => onUnarchiveSession(summary.id),
-                }
+                key: "restore",
+                label: "恢复聊天",
+                onSelect: () => onUnarchiveSession(summary.id),
+              }
               : {
-                  key: "pin",
-                  label: summary.pinned ? "取消置顶" : "置顶聊天",
-                  onSelect: () =>
-                    onToggleSessionPinned(summary.id, !summary.pinned),
-                },
+                key: "pin",
+                label: summary.pinned ? "取消置顶" : "置顶聊天",
+                onSelect: () =>
+                  onToggleSessionPinned(summary.id, !summary.pinned),
+              },
             archived
               ? {
-                  key: "delete",
-                  label: "删除聊天",
-                  tone: "danger",
-                  onSelect: () => onDeleteSession(summary.id),
-                }
+                key: "delete",
+                label: "删除聊天",
+                tone: "danger",
+                onSelect: () => onDeleteSession(summary.id),
+              }
               : {
-                  key: "archive",
-                  label: "归档聊天",
-                  onSelect: () => setArchiveConfirmFor(summary.id),
-                },
+                key: "archive",
+                label: "归档聊天",
+                onSelect: () => setArchiveConfirmFor(summary.id),
+              },
             !archived
               ? {
-                  key: "delete",
-                  label: "删除聊天",
-                  tone: "danger",
-                  onSelect: () => onDeleteSession(summary.id),
-                }
+                key: "delete",
+                label: "删除聊天",
+                tone: "danger",
+                onSelect: () => onDeleteSession(summary.id),
+              }
               : null,
           ].filter(Boolean) as SidebarContextMenuAction[])
         }
-        className={`group relative flex items-center gap-2 rounded-[var(--radius-shell)] px-2 py-1.5 transition ${
-          active
+        className={`group relative flex items-center gap-2 rounded-[var(--radius-shell)] px-2 py-1.5 transition ${active
             ? "bg-[color:var(--color-control-selected-bg)]"
             : "hover:bg-[color:var(--color-control-bg-hover)]"
-        } ${options?.indent ? "ml-5" : ""}`}
+          }`}
       >
+        {/* 左侧固定占位：running 显示 spinner；否则 pin 按钮（pinned 常显，未 pinned 时 hover 显示） */}
+        {isRunning ? (
+          <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-[color:var(--chela-accent)]" />
+          </span>
+        ) : !archived ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSessionPinned(summary.id, !summary.pinned);
+            }}
+            className={`flex h-3.5 w-3.5 shrink-0 cursor-pointer items-center justify-center rounded transition ${summary.pinned
+                ? "text-[color:var(--chela-text-tertiary)]"
+                : "text-transparent group-hover:text-[color:var(--chela-text-tertiary)]"
+              }`}
+            aria-label={summary.pinned ? "取消置顶" : "置顶聊天"}
+          >
+            <MapPinIcon className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <span className="h-3.5 w-3.5 shrink-0" />
+        )}
         <button
           type="button"
           onClick={() => {
@@ -342,41 +372,30 @@ function SidebarImpl({
           }}
           className="min-w-0 flex-1 cursor-pointer text-left"
         >
-          <div className="flex items-center gap-2">
-            {isRunning ? (
-              <span className="inline-flex size-1.5 shrink-0 rounded-full bg-[color:var(--chela-accent)] animate-pulse" />
-            ) : null}
-            {summary.pinned ? (
-              <MapPinIcon className="h-3.5 w-3.5 shrink-0 text-[color:var(--chela-text-tertiary)]" />
-            ) : null}
-            <span
-              className={`min-w-0 truncate text-[12px] ${
-                active
-                  ? "font-medium text-[color:var(--color-control-selected-text)]"
-                  : "text-[color:var(--chela-text-primary)]"
+          <span
+            className={`block min-w-0 truncate text-[12px] ${active
+                ? "font-medium text-[color:var(--color-control-selected-text)]"
+                : "text-[color:var(--chela-text-primary)]"
               }`}
-            >
-              {summary.title}
-            </span>
-          </div>
+          >
+            {summary.title}
+          </span>
         </button>
 
         <div className="relative w-[64px] shrink-0">
           <span
-            className={`block truncate pr-1 text-right text-[10px] text-[color:var(--chela-text-tertiary)] transition-opacity ${
-              isArchiveConfirming
+            className={`block truncate pr-1 text-right text-[10px] text-[color:var(--chela-text-tertiary)] transition-opacity ${isArchiveConfirming
                 ? "invisible"
                 : "group-hover:opacity-0 group-focus-within:opacity-0"
-            }`}
+              }`}
           >
             {formatRelativeTime(summary.updatedAt)}
           </span>
           <div
-            className={`absolute inset-y-0 right-0 flex items-center gap-1 transition-opacity ${
-              isArchiveConfirming
+            className={`absolute inset-y-0 right-0 flex items-center gap-1 transition-opacity ${isArchiveConfirming
                 ? "pointer-events-none opacity-0"
                 : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
-            }`}
+              }`}
           >
             {archived ? (
               <>
@@ -405,21 +424,6 @@ function SidebarImpl({
               </>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setArchiveConfirmFor(null);
-                    onToggleSessionPinned(summary.id, !summary.pinned);
-                  }}
-                  className={`cursor-pointer rounded-[var(--radius-shell)] p-1 transition ${
-                    summary.pinned
-                      ? "text-[color:var(--chela-text-primary)]"
-                      : "text-[color:var(--chela-text-tertiary)] hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
-                  }`}
-                  aria-label={summary.pinned ? "取消置顶" : "置顶聊天"}
-                >
-                  <MapPinIcon className="h-3.5 w-3.5" />
-                </button>
                 <button
                   type="button"
                   onClick={(event) => {
@@ -474,11 +478,10 @@ function SidebarImpl({
                 key={id}
                 type="button"
                 onClick={() => onSelectSettingsSection?.(id)}
-                className={`chela-list-item flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-3 py-2 text-left text-[12px] transition ${
-                  active
+                className={`chela-list-item flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-3 py-2 text-left text-[12px] transition ${active
                     ? "chela-list-item-active bg-[color:var(--color-control-bg-hover)] font-medium"
                     : "text-[color:var(--chela-text-secondary)] hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
-                }`}
+                  }`}
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="truncate">{label}</span>
@@ -533,27 +536,30 @@ function SidebarImpl({
           </div>
         ) : (
           <div className="space-y-4">
-            <button
-              type="button"
-              onClick={onNewSession}
-              className="chela-list-item flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius-shell)] px-3 py-2 text-left text-[12px] font-medium text-[color:var(--chela-text-secondary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
-            >
-              <SquarePen className="h-4 w-4 shrink-0" strokeWidth={1.8} />
-              <span>新建聊天</span>
-            </button>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={onNewSession}
+                className="chela-list-item flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[var(--radius-shell)] px-3 py-2 text-left text-[12px] font-medium text-[color:var(--chela-text-secondary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
+              >
+                <SquarePen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+                <span>新建聊天</span>
+              </button>
+              <button
+                type="button"
+                onClick={onCreateProject}
+                className="chela-list-item flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[var(--radius-shell)] px-3 py-2 text-left text-[12px] font-medium text-[color:var(--chela-text-secondary)] transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)]"
+              >
+                <FolderIcon className="h-3.5 w-3.5 shrink-0" />
+                <span>新建项目</span>
+              </button>
+            </div>
 
             <section className="space-y-2">
-              <div className="flex items-center justify-between gap-2 px-1">
+              <div className="px-1">
                 <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--chela-text-tertiary)]">
                   项目
                 </span>
-                <button
-                  type="button"
-                  onClick={onCreateProject}
-                  className="cursor-pointer text-[11px] font-medium text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
-                >
-                  新建项目
-                </button>
               </div>
 
               <div className="space-y-1">
@@ -596,7 +602,7 @@ function SidebarImpl({
                               },
                             ])
                           }
-                          className="flex items-center gap-1 rounded-[var(--radius-shell)] px-2 py-1.5 transition hover:bg-[color:var(--color-control-bg-hover)]"
+                          className="group flex items-center gap-1 rounded-[var(--radius-shell)] px-2 py-1.5 transition hover:bg-[color:var(--color-control-bg-hover)]"
                         >
                           <button
                             type="button"
@@ -635,6 +641,19 @@ function SidebarImpl({
                               </span>
                             ) : null}
                           </button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onCreateProjectSession(group.id); }}
+                                className="ml-auto flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius-shell)] text-[color:var(--chela-text-tertiary)] opacity-0 transition hover:bg-[color:var(--color-control-bg-hover)] hover:text-[color:var(--chela-text-primary)] group-hover:opacity-100"
+                                aria-label="新建聊天"
+                              >
+                                <SquarePen className="h-3.5 w-3.5" strokeWidth={1.8} />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">在此项目新建聊天</TooltipContent>
+                          </Tooltip>
                         </div>
 
                         {isExpanded ? (
@@ -658,17 +677,10 @@ function SidebarImpl({
             </section>
 
             <section className="space-y-2">
-              <div className="flex items-center justify-between gap-2 px-1">
+              <div className="px-1">
                 <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--chela-text-tertiary)]">
                   聊天
                 </span>
-                <button
-                  type="button"
-                  onClick={onNewSession}
-                  className="cursor-pointer text-[11px] font-medium text-[color:var(--chela-text-secondary)] transition hover:text-[color:var(--chela-text-primary)]"
-                >
-                  新建聊天
-                </button>
               </div>
 
               <div className="space-y-1">
@@ -688,11 +700,6 @@ function SidebarImpl({
 
       <div className="shrink-0 px-3 pb-3 pt-1">
         <SidebarFooterAction
-          icon={ArchiveBoxIcon}
-          label="已归档聊天"
-          onClick={() => setShowArchived(true)}
-        />
-        <SidebarFooterAction
           icon={Cog6ToothIcon}
           label="设置"
           onClick={onOpenSettings}
@@ -704,20 +711,18 @@ function SidebarImpl({
   return (
     <div className="relative h-full overflow-hidden">
       <div
-        className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${
-          isSettings
+        className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${isSettings
             ? "pointer-events-auto translate-x-0 opacity-100"
             : "pointer-events-none -translate-x-2 opacity-0"
-        }`}
+          }`}
       >
         {settingsSidebar}
       </div>
       <div
-        className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${
-          !isSettings
+        className={`absolute inset-0 will-change-[opacity,transform] transition-[opacity,transform] duration-200 ease-out ${!isSettings
             ? "pointer-events-auto translate-x-0 opacity-100"
             : "pointer-events-none translate-x-2 opacity-0"
-        }`}
+          }`}
       >
         {threadsSidebar}
       </div>
@@ -737,11 +742,10 @@ function SidebarImpl({
                 setContextMenu(null);
                 action.onSelect();
               }}
-              className={`flex w-full cursor-pointer items-center rounded-[calc(var(--radius-shell)-4px)] px-2.5 py-1.5 text-left text-[12px] transition ${
-                action.tone === "danger"
+              className={`flex w-full cursor-pointer items-center rounded-[calc(var(--radius-shell)-4px)] px-2.5 py-1.5 text-left text-[12px] transition ${action.tone === "danger"
                   ? "text-destructive hover:bg-destructive/10"
                   : "text-[color:var(--chela-text-primary)] hover:bg-[color:var(--color-control-bg-hover)]"
-              }`}
+                }`}
             >
               {action.label}
             </button>
