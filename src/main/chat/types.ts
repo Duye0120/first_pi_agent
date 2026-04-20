@@ -1,4 +1,7 @@
-import type { SendMessageInput } from "../../shared/contracts.js";
+import type {
+  GitDiffOverview,
+  SendMessageInput,
+} from "../../shared/contracts.js";
 import type { AgentHandle } from "../agent.js";
 import type { ElectronAdapter } from "../adapter.js";
 import type { HarnessRunScope } from "../harness/types.js";
@@ -31,4 +34,5 @@ export type ChatRunContext = {
   handle: AgentHandle | null;
   runCreated: boolean;
   transcriptStarted: boolean;
+  beforeDiffOverview: GitDiffOverview | null;
 };

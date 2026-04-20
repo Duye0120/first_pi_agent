@@ -7,7 +7,12 @@ import type {
   ConfirmationResponse,
 } from "../shared/agent-events.js";
 import type { HarnessApprovalResolution } from "./harness/types.js";
-import type { AgentStep, ChatMessage, RuntimeSkillUsage } from "../shared/contracts.js";
+import type {
+  AgentStep,
+  ChatMessage,
+  RunChangeSummary,
+  RuntimeSkillUsage,
+} from "../shared/contracts.js";
 import { extractRuntimeSkillUsages } from "../shared/skill-usage.js";
 import { IPC_CHANNELS } from "../shared/ipc.js";
 import { getSettings } from "./settings.js";
@@ -21,7 +26,7 @@ import {
 } from "./session/service.js";
 
 type TerminalEventFallback =
-  | { type: "agent_end" }
+  | { type: "agent_end"; runChangeSummary?: RunChangeSummary | null }
   | { type: "agent_error"; message: string };
 
 type RunBuffer = {
@@ -468,7 +473,15 @@ export class ElectronAdapter {
     }
   }
 
-  queueTerminalEnd(): void {
+  queueTerminalEnd(runChangeSummary?: RunChangeSummary | null): void {
+    if (this.pendingTerminalEvent?.type === "agent_end") {
+      this.pendingTerminalEvent = {
+        ...this.pendingTerminalEvent,
+        ...(runChangeSummary ? { runChangeSummary } : {}),
+      };
+      return;
+    }
+
     if (this.terminalEventFlushed) {
       return;
     }
@@ -478,6 +491,7 @@ export class ElectronAdapter {
       sessionId: this.scope.sessionId,
       runId: this.scope.runId,
       timestamp: Date.now(),
+      runChangeSummary,
     };
   }
 
@@ -514,7 +528,7 @@ export class ElectronAdapter {
       if (fallback?.type === "agent_error") {
         this.queueTerminalError(fallback.message);
       } else {
-        this.queueTerminalEnd();
+        this.queueTerminalEnd(fallback?.runChangeSummary);
       }
     }
 
@@ -528,6 +542,7 @@ export class ElectronAdapter {
   buildAssistantMessage(
     status: "completed" | "error" | "cancelled",
     fallbackText?: string,
+    runChangeSummary?: RunChangeSummary | null,
   ): ChatMessage | null {
     const finalText =
       this.buffer.finalText.trim() || (fallbackText ? fallbackText.trim() : "");
@@ -553,9 +568,12 @@ export class ElectronAdapter {
       status: status === "completed" ? "done" : "error",
       usage: this.buffer.usage,
       meta:
-        this.buffer.skillUsages.length > 0
+        this.buffer.skillUsages.length > 0 || runChangeSummary
           ? {
-              skillUsages: this.buffer.skillUsages,
+              ...(this.buffer.skillUsages.length > 0
+                ? { skillUsages: this.buffer.skillUsages }
+                : {}),
+              ...(runChangeSummary ? { runChangeSummary } : {}),
             }
           : undefined,
       steps,

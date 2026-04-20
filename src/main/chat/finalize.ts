@@ -1,5 +1,6 @@
 import { completeRun, destroyAgent } from "../agent.js";
 import { PRIMARY_AGENT_OWNER } from "../agent-owners.js";
+import { getGitDiffSnapshot } from "../git.js";
 import { HarnessRunCancelledError } from "../harness/runtime.js";
 import { harnessRuntime } from "../harness/singleton.js";
 import { appLogger } from "../logger.js";
@@ -13,6 +14,7 @@ import {
 import { indexSessionSearchDocument } from "../session/search.js";
 import { bus } from "../event-bus.js";
 import { WorkerService } from "../worker-service.js";
+import { buildRunChangeSummary } from "./run-change-summary.js";
 import type { ChatRunContext } from "./types.js";
 
 async function maybeAutoRenameSessionTitle(
@@ -64,10 +66,33 @@ async function maybeAutoRenameSessionTitle(
   }
 }
 
+async function resolveRunChangeSummary(context: ChatRunContext) {
+  try {
+    const afterDiffOverview = await getGitDiffSnapshot(context.settings.workspace);
+    return buildRunChangeSummary(context.beforeDiffOverview, afterDiffOverview);
+  } catch (error) {
+    appLogger.warn({
+      scope: "chat.send",
+      message: "生成本轮 diff 摘要失败",
+      data: {
+        sessionId: context.input.sessionId,
+        runId: context.input.runId,
+      },
+      error,
+    });
+    return null;
+  }
+}
+
 export async function finalizeCompletedChatRun(
   context: ChatRunContext,
 ): Promise<void> {
-  const assistantMessage = context.adapter.buildAssistantMessage("completed");
+  const runChangeSummary = await resolveRunChangeSummary(context);
+  const assistantMessage = context.adapter.buildAssistantMessage(
+    "completed",
+    undefined,
+    runChangeSummary,
+  );
   if (assistantMessage) {
     appendAssistantMessageEvent({
       sessionId: context.input.sessionId,
@@ -86,11 +111,12 @@ export async function finalizeCompletedChatRun(
     finalState: "completed",
     metadata: {
       requestedModelEntryId: context.requestedModelEntryId,
-      resolvedModelEntryId: context.handle?.modelEntryId ?? context.resolvedModel.entry.id,
-      prepareFailedEntries: context.failover.prepare.failedEntries,
-      executeAttemptedEntryIds: context.failover.execute.attemptedEntryIds,
-    },
-  });
+        resolvedModelEntryId: context.handle?.modelEntryId ?? context.resolvedModel.entry.id,
+        prepareFailedEntries: context.failover.prepare.failedEntries,
+        executeAttemptedEntryIds: context.failover.execute.attemptedEntryIds,
+        ...(runChangeSummary ? { runChangeSummary } : {}),
+      },
+    });
   harnessRuntime.finishRun(context.runScope, "completed");
   indexSessionSearchDocument(context.input.sessionId);
   if (assistantMessage?.content) {
@@ -108,18 +134,28 @@ export async function finalizeCompletedChatRun(
       runId: context.input.runId,
     },
   });
-  context.adapter.flushTerminalEvent({ type: "agent_end" });
+  context.adapter.queueTerminalEnd(runChangeSummary);
+  context.adapter.flushTerminalEvent({
+    type: "agent_end",
+    runChangeSummary,
+  });
 }
 
 export async function finalizeFailedChatRun(
   context: ChatRunContext,
   err: unknown,
 ): Promise<void> {
+  const runChangeSummary = await resolveRunChangeSummary(context);
+
   if (
     err instanceof HarnessRunCancelledError ||
     harnessRuntime.isCancelRequested(context.runScope)
   ) {
-    const cancelledMessage = context.adapter.buildAssistantMessage("cancelled");
+    const cancelledMessage = context.adapter.buildAssistantMessage(
+      "cancelled",
+      undefined,
+      runChangeSummary,
+    );
     if (cancelledMessage && context.transcriptStarted) {
       appendAssistantMessageEvent({
         sessionId: context.input.sessionId,
@@ -139,6 +175,7 @@ export async function finalizeFailedChatRun(
           resolvedModelEntryId:
             context.handle?.modelEntryId ?? context.resolvedModel.entry.id,
           executeAttemptedEntryIds: context.failover.execute.attemptedEntryIds,
+          ...(runChangeSummary ? { runChangeSummary } : {}),
         },
       });
     }
@@ -158,7 +195,11 @@ export async function finalizeFailedChatRun(
         runId: context.input.runId,
       },
     });
-    context.adapter.flushTerminalEvent({ type: "agent_end" });
+    context.adapter.queueTerminalEnd(runChangeSummary);
+    context.adapter.flushTerminalEvent({
+      type: "agent_end",
+      runChangeSummary,
+    });
     return;
   }
 
@@ -167,6 +208,7 @@ export async function finalizeFailedChatRun(
   const failedMessage = context.adapter.buildAssistantMessage(
     "error",
     errorMessage,
+    runChangeSummary,
   );
   if (failedMessage && context.transcriptStarted) {
     appendAssistantMessageEvent({
@@ -189,6 +231,7 @@ export async function finalizeFailedChatRun(
         prepareFailedEntries: context.failover.prepare.failedEntries,
         executeAttemptedEntryIds: context.failover.execute.attemptedEntryIds,
         lastExecuteFailoverError: context.failover.execute.lastError,
+        ...(runChangeSummary ? { runChangeSummary } : {}),
       },
     });
   }

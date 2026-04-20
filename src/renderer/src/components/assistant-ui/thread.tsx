@@ -26,8 +26,10 @@ import {
   BotIcon,
   BrainCircuitIcon,
   CheckIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronUpIcon,
   CopyIcon,
   LoaderCircleIcon,
   PencilIcon,
@@ -42,6 +44,7 @@ import type {
   ModelEntry,
   PendingApprovalGroup,
   PendingApprovalNotice,
+  RunChangeSummary,
   RuntimeSkillUsage,
   ProviderSource,
   SelectedFile,
@@ -55,6 +58,7 @@ import {
   UserMessageAttachments,
 } from "@renderer/components/assistant-ui/attachment";
 import { BranchSwitcher } from "@renderer/components/assistant-ui/branch-switcher";
+import { Badge } from "@renderer/components/assistant-ui/badge";
 import { Button } from "@renderer/components/assistant-ui/button";
 import {
   InterruptedApprovalNoticeBar,
@@ -1144,6 +1148,143 @@ const MessageError: FC = () => {
   );
 };
 
+const runChangeLabels: Record<
+  RunChangeSummary["files"][number]["changeKind"],
+  string
+> = {
+  added: "新增",
+  updated: "调整",
+  reverted: "恢复",
+};
+
+const runChangeStatusLabels: Record<
+  RunChangeSummary["files"][number]["status"],
+  string
+> = {
+  modified: "变更",
+  deleted: "删除",
+  untracked: "新增",
+};
+
+function formatSignedCount(value: number, sign: "+" | "-") {
+  return `${sign}${new Intl.NumberFormat("zh-CN").format(value)}`;
+}
+
+const RunChangeStatusPill: FC<{
+  status: RunChangeSummary["files"][number]["status"];
+}> = ({ status }) => {
+  const variant = {
+    modified: "warning",
+    deleted: "destructive",
+    untracked: "success",
+  } as const;
+
+  return (
+    <Badge variant={variant[status]} className="justify-center px-2.5">
+      {runChangeStatusLabels[status]}
+    </Badge>
+  );
+};
+
+const AssistantMessageRunChangeSummary: FC = () => {
+  const summary = useAuiState((s) => {
+    const custom = s.message.metadata?.custom as
+      | {
+          runChangeSummary?: RunChangeSummary | null;
+        }
+      | undefined;
+    return custom?.runChangeSummary ?? null;
+  });
+  const [expanded, setExpanded] = useState(true);
+
+  if (!summary || summary.fileCount === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)]/92 p-3 shadow-[0_8px_20px_rgba(15,23,42,0.05)]">
+      <button
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        className="flex w-full items-start justify-between gap-3 rounded-[calc(var(--radius-shell)-4px)] px-1 py-1 text-left transition hover:bg-[color:var(--color-control-bg-hover)]/75"
+      >
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[14px] font-semibold text-[color:var(--chela-text-primary)]">
+              {summary.fileCount} 个文件已更改
+            </p>
+            <Badge variant="secondary" className="px-2 py-0.5 text-[10px]">
+              本轮增量
+            </Badge>
+          </div>
+          <p className="mt-1 text-[12px] leading-5 text-[color:var(--chela-text-tertiary)]">
+            这张卡片展示当前回复带来的代码改动，位置固定在消息正文底部。
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="rounded-[calc(var(--radius-shell)-2px)] bg-[color:var(--color-control-bg)] px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+                文件
+              </p>
+              <p className="mt-2 text-base font-semibold text-foreground">
+                {summary.fileCount}
+              </p>
+            </div>
+            <div className="rounded-[calc(var(--radius-shell)-2px)] bg-[color:var(--color-control-bg)] px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+                新增
+              </p>
+              <p className="mt-2 text-base font-semibold text-[color:var(--color-diff-add-text)]">
+                {formatSignedCount(summary.additions, "+")}
+              </p>
+            </div>
+            <div className="rounded-[calc(var(--radius-shell)-2px)] bg-[color:var(--color-control-bg)] px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
+                删除
+              </p>
+              <p className="mt-2 text-base font-semibold text-[color:var(--color-diff-del-text)]">
+                {formatSignedCount(summary.deletions, "-")}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <span className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-control-bg)] text-[color:var(--chela-text-tertiary)]">
+          {expanded ? (
+            <ChevronUpIcon className="size-4" />
+          ) : (
+            <ChevronDownIcon className="size-4" />
+          )}
+        </span>
+      </button>
+
+      {expanded ? (
+        <div className="mt-3 space-y-2">
+          {summary.files.map((file) => (
+            <div
+              key={`${file.changeKind}:${file.path}`}
+              className="flex flex-wrap items-center gap-2 rounded-[calc(var(--radius-shell)-2px)] bg-[color:var(--color-control-bg)] px-3 py-2"
+            >
+              <Badge variant="secondary" className="px-2 py-0.5 text-[10px]">
+                {runChangeLabels[file.changeKind]}
+              </Badge>
+              <RunChangeStatusPill status={file.status} />
+              <code className="min-w-0 flex-1 truncate text-[12px] leading-5 text-foreground">
+                {file.path}
+              </code>
+              <span className="text-[12px] font-medium text-[color:var(--color-diff-add-text)]">
+                {formatSignedCount(file.additions, "+")}
+              </span>
+              <span className="text-[12px] font-medium text-[color:var(--color-diff-del-text)]">
+                {formatSignedCount(file.deletions, "-")}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const AssistantMessage: FC = () => {
   return (
     <MessagePrimitive.Root
@@ -1163,6 +1304,7 @@ const AssistantMessage: FC = () => {
           }}
         />
         <MessageError />
+        <AssistantMessageRunChangeSummary />
       </div>
 
       <div className="mt-2 ml-3 flex min-h-6 items-center">

@@ -4,6 +4,7 @@ import { PRIMARY_AGENT_OWNER } from "../agent-owners.js";
 import { harnessRuntime } from "../harness/singleton.js";
 import { appLogger } from "../logger.js";
 import { resolveWithFailover } from "../failover.js";
+import { getGitDiffSnapshot } from "../git.js";
 import { getSettings } from "../settings.js";
 import {
   appendRunStartedEvent,
@@ -55,6 +56,7 @@ export function createChatRunContext(input: SendMessageInput): ChatRunContext {
     handle: null,
     runCreated: false,
     transcriptStarted: false,
+    beforeDiffOverview: null,
   };
 }
 
@@ -110,6 +112,21 @@ export async function prepareChatRun(context: ChatRunContext): Promise<void> {
     },
   });
   context.transcriptStarted = true;
+
+  try {
+    context.beforeDiffOverview = await getGitDiffSnapshot(settings.workspace);
+  } catch (error) {
+    context.beforeDiffOverview = null;
+    appLogger.warn({
+      scope: "chat.send",
+      message: "读取运行前 diff 快照失败",
+      data: {
+        sessionId: input.sessionId,
+        runId: input.runId,
+      },
+      error,
+    });
+  }
 
   harnessRuntime.assertRunActive(runScope);
 

@@ -1,3 +1,5 @@
+import type { RunChangeSummary } from "./contracts.js";
+
 // ── Agent Event Types ──────────────────────────────────────────
 // Discriminated union of all events emitted by the agent engine
 // via IPC to the renderer. Maps 1:1 with pi-agent-core's subscribe events.
@@ -43,6 +45,7 @@ export interface AgentEndEvent extends AgentEventScope {
   timestamp: number;
   totalTokens?: number;
   cost?: number;
+  runChangeSummary?: RunChangeSummary | null;
 }
 
 export interface TurnStartEvent extends AgentEventScope {

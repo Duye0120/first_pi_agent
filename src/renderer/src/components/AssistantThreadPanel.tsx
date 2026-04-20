@@ -21,6 +21,7 @@ import type {
   GitBranchSummary,
   InterruptedApprovalGroup,
   PendingApprovalGroup,
+  RunChangeSummary,
   RuntimeSkillUsage,
   ThinkingLevel,
 } from "@shared/contracts";
@@ -82,6 +83,7 @@ function createResponse(id: string): AgentResponse {
     steps: [],
     finalText: "",
     skillUsages: [],
+    runChangeSummary: null,
     startedAt: Date.now(),
   };
 }
@@ -163,6 +165,21 @@ function getToolResultText(result: unknown): string | null {
 
 function getToolResultDisplay(result: unknown): unknown {
   return getToolResultText(result) ?? result;
+}
+
+function buildRuntimeMessageCustomMetadata(response: AgentResponse) {
+  return response.skillUsages && response.skillUsages.length > 0
+    ? {
+        skillUsages: response.skillUsages,
+        ...(response.runChangeSummary
+          ? { runChangeSummary: response.runChangeSummary }
+          : {}),
+      }
+    : response.runChangeSummary
+      ? {
+          runChangeSummary: response.runChangeSummary,
+        }
+      : undefined;
 }
 
 type ActivityThreadAssistantMessagePart = ThreadAssistantMessagePart & {
@@ -272,6 +289,9 @@ function toThreadMessage(message: ChatMessage): ThreadMessageLike {
       metadata: {
         custom: {
           rawMessageId: message.id,
+          ...(message.meta?.runChangeSummary
+            ? { runChangeSummary: message.meta.runChangeSummary as RunChangeSummary }
+            : {}),
           ...(skillUsages.length > 0 ? { skillUsages } : {}),
         },
       },
@@ -655,12 +675,7 @@ function SessionRuntime({
           content: buildAssistantParts(response.steps, response.finalText),
           status: buildRuntimeStatus(response),
           metadata: {
-            custom:
-              response.skillUsages && response.skillUsages.length > 0
-                ? {
-                    skillUsages: response.skillUsages,
-                  }
-                : undefined,
+            custom: buildRuntimeMessageCustomMetadata(response),
           },
         });
       };
@@ -700,12 +715,7 @@ function SessionRuntime({
           content: buildAssistantParts(response.steps, response.finalText),
           status: buildRuntimeStatus(response),
           metadata: {
-            custom:
-              response.skillUsages && response.skillUsages.length > 0
-                ? {
-                    skillUsages: response.skillUsages,
-                  }
-                : undefined,
+            custom: buildRuntimeMessageCustomMetadata(response),
           },
         };
 
@@ -842,6 +852,7 @@ function SessionRuntime({
             break;
 
           case "agent_end":
+            response.runChangeSummary = event.runChangeSummary ?? null;
             finalize("completed");
             void refreshPendingApprovalGroups(currentSession.id);
             void latestReloadSessionRef.current(currentSession.id);
