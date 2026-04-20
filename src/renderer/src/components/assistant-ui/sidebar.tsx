@@ -458,7 +458,7 @@ function SidebarImpl({
   };
 
   const settingsSidebar = (
-    <aside className="flex h-full flex-col bg-transparent text-[13px] text-[color:var(--chela-text-primary)]">
+    <aside className="flex h-full flex-col bg-transparent text-[13px] text-[color:var(--chela-text-primary)] min-w-[200px]">
       <div className="px-4 pb-2 pt-4">
         <p className="text-[11px] uppercase tracking-[0.14em] text-[color:var(--chela-text-tertiary)]">
           设置
@@ -499,8 +499,8 @@ function SidebarImpl({
   );
 
   const threadsSidebar = (
-    <aside className="flex h-full min-h-0 flex-col bg-transparent text-[13px] text-[color:var(--chela-text-primary)]">
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-3">
+    <aside className="flex h-full min-h-0 flex-col bg-transparent text-[13px] text-[color:var(--chela-text-primary)] min-w-[200px]">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2 pt-3">
         {showArchived ? (
           <div className="space-y-3">
             <button
@@ -682,20 +682,21 @@ function SidebarImpl({
               </div>
             </section>
 
-            <section className="space-y-1 pt-1">
-              <SidebarFooterAction
-                icon={ArchiveBoxIcon}
-                label="已归档聊天"
-                onClick={() => setShowArchived(true)}
-              />
-              <SidebarFooterAction
-                icon={Cog6ToothIcon}
-                label="设置"
-                onClick={onOpenSettings}
-              />
-            </section>
           </div>
         )}
+      </div>
+
+      <div className="shrink-0 px-3 pb-3 pt-1">
+        <SidebarFooterAction
+          icon={ArchiveBoxIcon}
+          label="已归档聊天"
+          onClick={() => setShowArchived(true)}
+        />
+        <SidebarFooterAction
+          icon={Cog6ToothIcon}
+          label="设置"
+          onClick={onOpenSettings}
+        />
       </div>
     </aside>
   );

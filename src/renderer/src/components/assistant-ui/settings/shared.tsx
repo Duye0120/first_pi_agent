@@ -48,6 +48,28 @@ export function SettingsCard({
   );
 }
 
+export function SettingsBlock({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="px-6 py-4">
+      <div className="mb-3">
+        <p className="text-[13px] font-semibold tracking-[-0.01em] text-foreground">{label}</p>
+        {hint ? (
+          <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{hint}</p>
+        ) : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export function SettingsRow({
   label,
   hint,

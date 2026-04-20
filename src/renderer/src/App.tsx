@@ -67,8 +67,10 @@ const SETTINGS_SECTION_IDS: SettingsSection[] = [
   "network",
   "ai_model",
   "workspace",
+  "memory",
   "skills",
   "interface",
+  "archived",
   "system",
 ];
 
@@ -190,6 +192,7 @@ type DeepPartialSettings = {
     proxy?: Partial<Settings["network"]["proxy"]>;
     timeoutMs?: Settings["network"]["timeoutMs"];
   };
+  memory?: Partial<Settings["memory"]>;
   workspace?: Settings["workspace"];
 };
 
@@ -256,6 +259,10 @@ function mergeSettingsState(
         ...current.network.proxy,
         ...partial.network?.proxy,
       },
+    },
+    memory: {
+      ...current.memory,
+      ...partial.memory,
     },
   };
 }
@@ -1906,7 +1913,6 @@ export default function App() {
               <Sidebar
                 groups={groups}
                 summaries={summaries}
-                archivedSummaries={archivedSummaries}
                 activeSessionId={activeSessionId}
                 runningSessionIds={runningSessionIds}
                 onCreateProject={() => {
@@ -1928,7 +1934,6 @@ export default function App() {
                   void renameProject(groupId);
                 }}
                 onArchiveSession={archiveSession}
-                onUnarchiveSession={unarchiveSession}
                 onDeleteSession={deleteSessionPermanently}
                 onDeleteProject={(groupId) => {
                   void deleteProject(groupId);
