@@ -712,11 +712,15 @@ export default function App() {
 
   const hydrateSession = useCallback((session: ChatSession) => {
     cacheSession(session);
+    // R2: 同步更新 ref，避免下面这种 race —
+    // hydrateSession(sessB) → 等 useEffect 同步 ref → 期间 persistSession(sessA) 看到 ref 仍是 sessA → 把 active 回退到 sessA。
+    activeSessionIdRef.current = session.id;
     setActiveSession(session);
     localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, session.id);
   }, [cacheSession]);
 
   const clearActiveSession = useCallback(() => {
+    activeSessionIdRef.current = null;
     setActiveSession(null);
     clearStoredStrings([
       ACTIVE_SESSION_STORAGE_KEY,

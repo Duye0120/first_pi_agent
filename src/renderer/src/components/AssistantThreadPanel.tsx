@@ -468,6 +468,9 @@ function SessionRuntime({
   const activeRunUnsubscribeRef = useRef<(() => void) | null>(null);
   const pendingApprovalRequestSerialRef = useRef(0);
   const pendingApprovalSignatureRef = useRef("");
+  // R14: confirmation_request 可能在短时间内连续发送多个，合并为一次 IPC 调用。
+  const pendingApprovalDebounceRef = useRef<number | null>(null);
+  const pendingApprovalLatestSessionIdRef = useRef<string | null>(null);
   const cancelRunRef = useRef<(() => void) | null>(null);
   const activeRunTokenRef = useRef<string | null>(null);
   const activeRunScopeRef = useRef<AgentRunScope | null>(null);
@@ -543,6 +546,32 @@ function SessionRuntime({
     },
     [desktopApi],
   );
+
+  // R14: confirmation_request 风暴去重 — 100ms trailing debounce，连续 N 个事件只触发一次 IPC。
+  const scheduleApprovalRefresh = useCallback(
+    (sessionId: string) => {
+      pendingApprovalLatestSessionIdRef.current = sessionId;
+      if (pendingApprovalDebounceRef.current !== null) {
+        return;
+      }
+      pendingApprovalDebounceRef.current = window.setTimeout(() => {
+        pendingApprovalDebounceRef.current = null;
+        const targetSessionId = pendingApprovalLatestSessionIdRef.current;
+        if (!targetSessionId) return;
+        void refreshPendingApprovalGroups(targetSessionId);
+      }, 100);
+    },
+    [refreshPendingApprovalGroups],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (pendingApprovalDebounceRef.current !== null) {
+        window.clearTimeout(pendingApprovalDebounceRef.current);
+        pendingApprovalDebounceRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     void refreshPendingApprovalGroups(session.id);
@@ -707,10 +736,12 @@ function SessionRuntime({
 
   const handleGuideQueuedMessage = useCallback(
     async (text: string) => {
+      // 先把新消息入队并移到队首，再触发取消。
+      // 顺序不能颠倒：如果 cancel 在 trigger 移到队首之前完成，run 结束后
+      // 自动派发 effect 会看到旧队首并误派发，引导就失效了。
       const queuedId = await handleEnqueueQueuedMessage(text);
-      const triggerPromise = handleTriggerQueuedMessage(queuedId);
+      await handleTriggerQueuedMessage(queuedId);
       cancelRunRef.current?.();
-      await triggerPromise;
     },
     [handleEnqueueQueuedMessage, handleTriggerQueuedMessage],
   );
@@ -870,12 +901,13 @@ function SessionRuntime({
             break;
 
           case "confirmation_request":
-            void refreshPendingApprovalGroups(currentSession.id);
+            // R14: 风暴场景下走 debounce 合并；用户体感无感知（100ms 延迟可忽略）。
+            scheduleApprovalRefresh(currentSession.id);
             break;
 
           case "run_state_changed":
             if (event.state !== "awaiting_confirmation") {
-              void refreshPendingApprovalGroups(currentSession.id);
+              scheduleApprovalRefresh(currentSession.id);
             }
             break;
 
@@ -905,20 +937,27 @@ function SessionRuntime({
           case "message_end":
             receivedMessageEnd = true;
             response.usage = event.usage;
+            // R17: message_end 的 finalThinking 是模型确认的最终版本，必须无条件替换 deltas 累积的内容；
+            // 否则断流或 deltas 不完整时，UI 会停留在 partial state，AGENTS.md 强约束要求兜底恢复。
             if (typeof event.finalThinking === "string" && event.finalThinking.trim()) {
               const existingThinkingStep = getLatestThinkingStep(response.steps);
 
               if (existingThinkingStep) {
-                if (!existingThinkingStep.thinkingText?.trim()) {
-                  existingThinkingStep.thinkingText = event.finalThinking;
+                existingThinkingStep.thinkingText = event.finalThinking;
+                if (existingThinkingStep.status === "executing") {
+                  existingThinkingStep.status = "success";
+                  existingThinkingStep.endedAt = Date.now();
                 }
               } else {
                 const thinkingStep = createStep("thinking");
                 thinkingStep.thinkingText = event.finalThinking;
+                thinkingStep.status = "success";
+                thinkingStep.endedAt = Date.now();
                 response.steps.push(thinkingStep);
               }
             }
-            if (typeof event.finalText === "string") {
+            // R17: finalText 同样是最终版本；仅在非空时覆盖，避免某些 provider 给空串清掉 deltas。
+            if (typeof event.finalText === "string" && event.finalText.length > 0) {
               response.finalText = event.finalText;
             }
             publish();
