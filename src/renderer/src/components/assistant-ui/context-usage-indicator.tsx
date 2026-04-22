@@ -8,6 +8,10 @@ type ContextUsageIndicatorProps = {
   className?: string;
 };
 
+function hasMeasuredUsage(summary: ContextUsageSummary) {
+  return summary.remainingRatio !== null || summary.usageMessageCount > 0;
+}
+
 function getIndicatorTone(summary: ContextUsageSummary) {
   if (summary.remainingRatio !== null) {
     const usedRatio = 1 - summary.remainingRatio;
@@ -30,6 +34,17 @@ function getIndicatorTone(summary: ContextUsageSummary) {
   return "var(--color-context-indicator-rest)";
 }
 
+function getIndicatorLabel(summary: ContextUsageSummary) {
+  const progress = getIndicatorProgress(summary);
+  const percent = Math.round(progress * 100);
+
+  if (hasMeasuredUsage(summary)) {
+    return `上下文使用率 ${percent}%`;
+  }
+
+  return "上下文使用率 0%，当前显示灰色空环";
+}
+
 function getIndicatorProgress(summary: ContextUsageSummary) {
   if (summary.remainingRatio !== null) {
     return 1 - summary.remainingRatio;
@@ -44,10 +59,12 @@ export function ContextUsageIndicator({
   strokeWidth = 3,
   className,
 }: ContextUsageIndicatorProps) {
-  const radius = (size - strokeWidth) / 2;
+  const normalizedStrokeWidth = (strokeWidth / size) * 100;
+  const radius = 50 - normalizedStrokeWidth / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = getIndicatorProgress(summary);
   const dashOffset = circumference * (1 - progress);
+  const measured = hasMeasuredUsage(summary);
 
   return (
     <span
@@ -56,28 +73,34 @@ export function ContextUsageIndicator({
         className,
       )}
       style={{ width: size, height: size }}
-      aria-hidden="true"
+      role="img"
+      aria-label={getIndicatorLabel(summary)}
     >
       <svg
         width={size}
         height={size}
-        viewBox={`0 0 ${size} ${size}`}
+        viewBox="0 0 100 100"
         className="-rotate-90"
       >
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={50}
+          cy={50}
           r={radius}
           fill="none"
-          strokeWidth={strokeWidth}
-          style={{ stroke: "var(--color-context-indicator-track)" }}
+          strokeWidth={normalizedStrokeWidth}
+          style={{
+            stroke: measured
+              ? "var(--color-context-indicator-track)"
+              : "var(--color-context-indicator-rest)",
+            opacity: measured ? 1 : 0.7,
+          }}
         />
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={50}
+          cy={50}
           r={radius}
           fill="none"
-          strokeWidth={strokeWidth}
+          strokeWidth={normalizedStrokeWidth}
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={dashOffset}

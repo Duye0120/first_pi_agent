@@ -16,13 +16,104 @@ export type SelectableModelOption = {
   source: ProviderSource;
 };
 
+type ProviderDirectorySnapshot = {
+  sources: ProviderSource[];
+  entries: ModelEntry[];
+};
+
+type LoadProviderDirectoryOptions = {
+  force?: boolean;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+};
+
 let providerDirectoryCache:
-  | { sources: ProviderSource[]; entries: ModelEntry[] }
+  | ProviderDirectorySnapshot
   | null = null;
 let providerDirectoryPromise:
-  | Promise<{ sources: ProviderSource[]; entries: ModelEntry[] }>
+  | Promise<ProviderDirectorySnapshot>
   | null = null;
 const PROVIDER_DIRECTORY_UPDATED_EVENT = "chela:provider-directory-updated";
+const PROVIDER_DIRECTORY_REQUEST_TIMEOUT_MS = 5_000;
+
+function createAbortError(message: string): Error {
+  const error = new Error(message);
+  error.name = "AbortError";
+  return error;
+}
+
+function withAbortAndTimeout<T>(
+  factory: () => Promise<T>,
+  options: { signal?: AbortSignal; timeoutMs: number },
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const { signal, timeoutMs } = options;
+
+    if (signal?.aborted) {
+      reject(createAbortError("已取消加载模型目录。"));
+      return;
+    }
+
+    const timer = globalThis.setTimeout(() => {
+      cleanup();
+      reject(new Error(`加载模型目录超时（>${timeoutMs}ms）。`));
+    }, timeoutMs);
+
+    const handleAbort = () => {
+      cleanup();
+      reject(createAbortError("已取消加载模型目录。"));
+    };
+
+    const cleanup = () => {
+      globalThis.clearTimeout(timer);
+      signal?.removeEventListener("abort", handleAbort);
+    };
+
+    signal?.addEventListener("abort", handleAbort, { once: true });
+
+    factory()
+      .then((value) => {
+        cleanup();
+        resolve(value);
+      })
+      .catch((error) => {
+        cleanup();
+        reject(error);
+      });
+  });
+}
+
+function canReuseSharedProviderDirectoryPromise(
+  options?: LoadProviderDirectoryOptions,
+): boolean {
+  return (
+    !options?.force &&
+    !options?.signal &&
+    (options?.timeoutMs === undefined ||
+      options.timeoutMs === PROVIDER_DIRECTORY_REQUEST_TIMEOUT_MS)
+  );
+}
+
+function fetchProviderDirectory(
+  desktopApi: DesktopApi,
+  options?: LoadProviderDirectoryOptions,
+): Promise<ProviderDirectorySnapshot> {
+  return withAbortAndTimeout(
+    () =>
+      Promise.all([
+        desktopApi.providers.listSources(),
+        desktopApi.models.listEntries(),
+      ]).then(([sources, entries]) => {
+        providerDirectoryCache = { sources, entries };
+        return providerDirectoryCache;
+      }),
+    {
+      signal: options?.signal,
+      timeoutMs:
+        options?.timeoutMs ?? PROVIDER_DIRECTORY_REQUEST_TIMEOUT_MS,
+    },
+  );
+}
 
 function deriveLegacyModelEntryName(modelId: string): string {
   return modelId
@@ -76,23 +167,26 @@ export function resolveModelEntryName(
 
 export async function loadProviderDirectory(
   desktopApi: DesktopApi,
-  options?: { force?: boolean },
+  options?: LoadProviderDirectoryOptions,
 ) {
   if (!options?.force && providerDirectoryCache) {
     return providerDirectoryCache;
   }
 
-  if (!options?.force && providerDirectoryPromise) {
+  const canReuseSharedPromise = canReuseSharedProviderDirectoryPromise(options);
+
+  if (canReuseSharedPromise && providerDirectoryPromise) {
     return providerDirectoryPromise;
   }
 
-  providerDirectoryPromise = Promise.all([
-    desktopApi.providers.listSources(),
-    desktopApi.models.listEntries(),
-  ]).then(([sources, entries]) => {
-    providerDirectoryCache = { sources, entries };
+  const request = fetchProviderDirectory(desktopApi, options);
+
+  if (!canReuseSharedPromise) {
+    return request;
+  }
+
+  providerDirectoryPromise = request.finally(() => {
     providerDirectoryPromise = null;
-    return providerDirectoryCache;
   });
 
   return providerDirectoryPromise;

@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useState,
@@ -28,6 +29,37 @@ type BranchSwitcherProps = {
   disabled?: boolean;
   onBranchChanged?: () => void | Promise<void>;
 };
+
+const BRANCH_CACHE_TTL_MS = 5 * 60_000;
+let cachedBranches: GitBranchEntry[] | null = null;
+let cachedBranchesAt = 0;
+let branchLoadPromise: Promise<GitBranchEntry[]> | null = null;
+
+function hasFreshBranchCache(): boolean {
+  return !!cachedBranches && Date.now() - cachedBranchesAt < BRANCH_CACHE_TTL_MS;
+}
+
+function syncBranchCache(branches: GitBranchEntry[]): GitBranchEntry[] {
+  cachedBranches = sortBranches(branches);
+  cachedBranchesAt = Date.now();
+  return cachedBranches;
+}
+
+function readBranchCache(currentBranchName: string | null | undefined): GitBranchEntry[] | null {
+  if (!cachedBranches) {
+    return null;
+  }
+
+  return currentBranchName
+    ? markCurrentBranch(cachedBranches, currentBranchName)
+    : cachedBranches;
+}
+
+function invalidateBranchCache(): void {
+  cachedBranches = null;
+  cachedBranchesAt = 0;
+  branchLoadPromise = null;
+}
 
 function formatBranchLabel(branchSummary: GitBranchSummary | null) {
   if (!branchSummary) {
@@ -89,6 +121,7 @@ export function BranchSwitcher({
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [hasLoadedBranches, setHasLoadedBranches] = useState(false);
+  const deferredQuery = useDeferredValue(query);
 
   const branchLabel = formatBranchLabel(branchSummary);
   const isGitRepo = !!branchSummary?.branchName;
@@ -98,19 +131,40 @@ export function BranchSwitcher({
       return;
     }
 
+    const cached = hasFreshBranchCache()
+      ? readBranchCache(branchSummary?.branchName)
+      : null;
+
+    if (cached) {
+      setBranches(cached);
+      setHasLoadedBranches(true);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const nextBranches = await window.desktopApi.git.listBranches();
-      setBranches(sortBranches(nextBranches));
+      if (!branchLoadPromise) {
+        branchLoadPromise = window.desktopApi.git
+          .listBranches()
+          .then((nextBranches) => syncBranchCache(nextBranches))
+          .finally(() => {
+            branchLoadPromise = null;
+          });
+      }
+
+      const nextBranches = await branchLoadPromise;
+      setBranches(
+        readBranchCache(branchSummary?.branchName) ?? nextBranches,
+      );
       setHasLoadedBranches(true);
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     } finally {
       setLoading(false);
     }
-  }, [isGitRepo]);
+  }, [branchSummary?.branchName, isGitRepo]);
 
   useEffect(() => {
     if (!open || !isGitRepo || hasLoadedBranches || loading) {
@@ -125,9 +179,18 @@ export function BranchSwitcher({
       return;
     }
 
+    invalidateBranchCache();
     setBranches([]);
     setHasLoadedBranches(false);
   }, [isGitRepo]);
+
+  useEffect(() => {
+    if (!hasLoadedBranches) {
+      return;
+    }
+
+    syncBranchCache(branches);
+  }, [branches, hasLoadedBranches]);
 
   useEffect(() => {
     if (!branchSummary?.branchName || !hasLoadedBranches) {
@@ -157,7 +220,7 @@ export function BranchSwitcher({
   }, [branchSummary?.branchName, hasLoadedBranches]);
 
   const filteredBranches = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = deferredQuery.trim().toLowerCase();
     if (!normalizedQuery) {
       return branches;
     }
@@ -165,7 +228,7 @@ export function BranchSwitcher({
     return branches.filter((branch) =>
       branch.name.toLowerCase().includes(normalizedQuery),
     );
-  }, [branches, query]);
+  }, [branches, deferredQuery]);
 
   const resetPanelState = useCallback(() => {
     setQuery("");
@@ -198,6 +261,7 @@ export function BranchSwitcher({
       try {
         await window.desktopApi.git.switchBranch(branchName);
         setBranches((current) => markCurrentBranch(current, branchName));
+        setHasLoadedBranches(true);
         await onBranchChanged?.();
         handleOpenChange(false);
       } catch (nextError) {
