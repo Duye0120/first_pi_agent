@@ -882,7 +882,7 @@ export type DesktopApi = {
     /** Phase 0: returns mock reply. Phase 1+: returns void, response comes via agent.onEvent */
     send: (input: SendMessageInput) => Promise<AssistantMessage | void>;
     trimSessionMessages: (input: TrimSessionMessagesInput) => Promise<void>;
-    enqueueQueuedMessage: (input: EnqueueQueuedMessageInput) => Promise<void>;
+    enqueueQueuedMessage: (input: EnqueueQueuedMessageInput) => Promise<QueuedMessage>;
     triggerQueuedMessage: (input: TriggerQueuedMessageInput) => Promise<void>;
     removeQueuedMessage: (input: RemoveQueuedMessageInput) => Promise<void>;
   };

@@ -35,13 +35,13 @@ export async function sendChatMessage(input: SendMessageInput): Promise<void> {
 
 export async function enqueueQueuedMessage(
   input: EnqueueQueuedMessageInput,
-): Promise<void> {
+): Promise<import("../../shared/contracts.js").QueuedMessage> {
   const nextText = input.text.trim();
   if (!nextText) {
     throw new Error("排队消息不能为空。");
   }
 
-  enqueueSessionQueuedMessage(input.sessionId, nextText);
+  return enqueueSessionQueuedMessage(input.sessionId, nextText);
 }
 
 export async function triggerQueuedMessage(
