@@ -191,13 +191,26 @@ export function resolveShell(selection: string): ResolvedShell {
   };
 }
 
+function sanitizeShellPayload(command: string): string {
+  return command.replace(/\0/g, "").replace(/\r\n|\n\r|\r/g, "\n").trim();
+}
+
+function flattenInlineShellCommand(command: string, separator: string): string {
+  const lines = sanitizeShellPayload(command)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return lines.join(separator);
+}
+
 function buildPowerShellCommand(command: string): string {
   return [
     "[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)",
     "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
     "$OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
     "if ($null -ne $PSStyle) { $PSStyle.OutputRendering = 'PlainText' }",
-    command,
+    flattenInlineShellCommand(command, "; "),
   ].join("; ");
 }
 
@@ -212,6 +225,8 @@ function buildPosixArgs(shellCommand: string, command: string): string[] {
 }
 
 export function buildShellExecSpawn(shell: ResolvedShell, command: string): ShellSpawn {
+  const sanitizedCommand = sanitizeShellPayload(command);
+
   switch (shell.family) {
     case "powershell":
       return {
@@ -229,28 +244,33 @@ export function buildShellExecSpawn(shell: ResolvedShell, command: string): Shel
     case "cmd":
       return {
         command: shell.command,
-        args: ["/d", "/s", "/c", `chcp 65001>nul & ${command}`],
+        args: [
+          "/d",
+          "/s",
+          "/c",
+          `chcp 65001>nul & ${flattenInlineShellCommand(sanitizedCommand, " & ")}`,
+        ],
       };
     case "git-bash":
       return {
         command: shell.command,
-        args: ["--login", "-c", command],
+        args: ["--login", "-c", sanitizedCommand],
       };
     case "wsl":
       return {
         command: shell.command,
-        args: ["bash", "-lc", command],
+        args: ["bash", "-lc", sanitizedCommand],
       };
     case "posix":
       return {
         command: shell.command,
-        args: buildPosixArgs(shell.command, command),
+        args: buildPosixArgs(shell.command, sanitizedCommand),
       };
     case "custom":
     default:
       return {
         command: shell.command,
-        args: buildPosixArgs(shell.command, command),
+        args: buildPosixArgs(shell.command, sanitizedCommand),
       };
   }
 }

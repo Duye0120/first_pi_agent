@@ -1,6 +1,7 @@
 import * as pty from "node-pty";
 import type { BrowserWindow } from "electron";
 import { IPC_CHANNELS } from "../shared/ipc.js";
+import { appLogger } from "./logger.js";
 import { resolveShell } from "./shell.js";
 import { getSettings } from "./settings.js";
 
@@ -12,6 +13,26 @@ type TerminalInstance = {
 
 const terminals = new Map<string, TerminalInstance>();
 let mainWindow: BrowserWindow | null = null;
+
+function safeSendToRenderer(channel: string, terminalId: string, payload: string | number): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  try {
+    mainWindow.webContents.send(channel, terminalId, payload);
+  } catch (error) {
+    appLogger.warn({
+      scope: "terminal",
+      message: "向渲染进程发送终端事件失败",
+      data: {
+        channel,
+        terminalId,
+      },
+      error,
+    });
+  }
+}
 
 export function setTerminalWindow(window: BrowserWindow): void {
   mainWindow = window;
@@ -32,15 +53,11 @@ export function createTerminal(options?: { cwd?: string }): string {
   });
 
   ptyProcess.onData((data: string) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_CHANNELS.terminalData, id, data);
-    }
+    safeSendToRenderer(IPC_CHANNELS.terminalData, id, data);
   });
 
   ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_CHANNELS.terminalExit, id, exitCode);
-    }
+    safeSendToRenderer(IPC_CHANNELS.terminalExit, id, exitCode);
     terminals.delete(id);
   });
 

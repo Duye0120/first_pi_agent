@@ -10,10 +10,35 @@ import {
 
 // ── File System ────────────────────────────────────────────────
 
+function resolvePathWithSymlinks(targetPath: string): string {
+  const absolutePath = path.resolve(targetPath);
+  const pendingSegments: string[] = [];
+  let currentPath = absolutePath;
+
+  while (!fs.existsSync(currentPath)) {
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) {
+      return path.normalize(absolutePath);
+    }
+
+    pendingSegments.unshift(path.basename(currentPath));
+    currentPath = parentPath;
+  }
+
+  try {
+    const resolvedExistingPath = path.normalize(fs.realpathSync.native(currentPath));
+    return path.normalize(path.join(resolvedExistingPath, ...pendingSegments));
+  } catch {
+    return path.normalize(absolutePath);
+  }
+}
+
 export function isPathAllowed(targetPath: string, workspacePath: string): boolean {
-  const resolved = path.resolve(targetPath);
-  const wsResolved = path.resolve(workspacePath);
-  return resolved.startsWith(wsResolved + path.sep) || resolved === wsResolved;
+  const resolved = resolvePathWithSymlinks(targetPath);
+  const wsResolved = resolvePathWithSymlinks(workspacePath);
+  const relative = path.relative(wsResolved, resolved);
+
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 export function isPathForbiddenRead(targetPath: string): boolean {

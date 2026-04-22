@@ -13,6 +13,25 @@ const LEGACY_USER_DATA_DIR_NAMES = ["first-pi-agent", "first_pi_agent"];
 
 let mainWindow: BrowserWindow | null = null;
 
+function safeSendToRenderer(channel: string, payload: unknown): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  try {
+    mainWindow.webContents.send(channel, payload);
+  } catch (error) {
+    appLogger.warn({
+      scope: "app.window",
+      message: "向渲染进程发送窗口事件失败",
+      data: {
+        channel,
+      },
+      error,
+    });
+  }
+}
+
 export function configureAppIdentity(): void {
   app.setName(APP_PRODUCT_NAME);
 }
@@ -120,13 +139,13 @@ function notifyWindowState() {
     return;
   }
 
-  mainWindow.webContents.send(
-    IPC_CHANNELS.windowStateChanged,
-    computeWindowFrameState(),
-  );
+  safeSendToRenderer(IPC_CHANNELS.windowStateChanged, computeWindowFrameState());
 }
 
 export function createMainWindow(): BrowserWindow {
+  const devServerUrl = getDevServerUrl();
+  const isDev = Boolean(devServerUrl);
+
   mainWindow = new BrowserWindow({
     width: 1480,
     height: 920,
@@ -140,6 +159,7 @@ export function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      devTools: isDev,
     },
   });
 
@@ -159,6 +179,10 @@ export function createMainWindow(): BrowserWindow {
 
     if (isDevToolsShortcut) {
       event.preventDefault();
+      if (!isDev) {
+        return;
+      }
+
       if (mainWindow?.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools();
       } else {
@@ -179,9 +203,6 @@ export function createMainWindow(): BrowserWindow {
       return;
     }
   });
-
-  const devServerUrl = getDevServerUrl();
-
   if (devServerUrl) {
     void mainWindow.loadURL(devServerUrl);
   } else {
