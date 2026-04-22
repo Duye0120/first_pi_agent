@@ -9,6 +9,7 @@ import {
   stageGitFiles,
   unstageGitFiles,
   commitGitChanges,
+  pullGitChanges,
   pushGitChanges,
 } from "../git.js";
 import { getSettings } from "../settings.js";
@@ -75,6 +76,10 @@ export function registerWorkbenchIpc(): void {
   handleIpc(
     IPC_CHANNELS.gitPush,
     async () => pushGitChanges(getSettings().workspace),
+  );
+  handleIpc(
+    IPC_CHANNELS.gitPull,
+    async () => pullGitChanges(getSettings().workspace),
   );
   handleIpc(IPC_CHANNELS.uiGetState, async () => getUiState());
   handleIpc(

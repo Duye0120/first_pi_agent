@@ -675,6 +675,10 @@ export async function pushGitChanges(workspacePath: string): Promise<void> {
   await runGit(["push"], workspacePath);
 }
 
+export async function pullGitChanges(workspacePath: string): Promise<void> {
+  await runGit(["pull", "--ff-only"], workspacePath);
+}
+
 export async function getLatestCommitSubject(
   workspacePath: string,
 ): Promise<string | null> {
