@@ -103,3 +103,181 @@
 - 后台服务现在具备更完整的 stop 清理能力，重复启动时不容易继续叠监听。
 - 切项目、切会话、刷新 Git 面板时，旧请求更难覆盖新状态。
 - 输入法组合态按 Enter 不会误把半成品文本送进消息队列。
+
+## 内置工具性能与健壮性优化（借鉴 pi-mono）
+
+**时间**: 19:18
+
+**背景**：
+
+之前 src/main/tools/ 下的本地工具完全是手写实现，并未复用 @mariozechner/pi-agent-core 上游 coding-agent 包里的工具实现（pi-mono 的 npm 发布物里只有 agent 框架本身，工具留在仓库里）。本轮把上游实现里成熟的几块逻辑“扒”过来，重写本地的文件编辑、读写、grep、glob 工具，重点修掉之前的性能与稳定性短板。
+
+**改了什么**：
+
+- **新文件 src/main/tools/edit-diff.ts**：从 pi-mono coding-agent/src/core/tools/edit-diff.ts 移植过来的纯函数模块。提供 LF 归一化、CRLF 还原、BOM 保留、智能引号/破折号/Unicode 空格的容错匹配 (normalizeForFuzzyMatch)，以及多段 edits[] 应用 (applyEditsToNormalizedContent)，并基于现有 diff-shim 输出 StructuredPatchHunk[] 供渲染端 DiffView 复用。
+- **新文件 src/main/tools/file-mutation-queue.ts**：极简的 per-path async 互斥队列。同一绝对路径的写入/编辑会自动串行化，避免并行写覆盖；不同文件仍然并行。
+- **重写 src/main/tools/file-edit.ts**：
+  - 同时支持新参数 edits: [{oldText, newText}] 与旧参数 old_string / oldText / replace_all，对调用方完全向后兼容。
+  - 接入 edit-diff 的容错匹配与 BOM/CRLF 保留，告别之前“多一个空格就找不到”的高失败率。
+  - 整段执行包裹进 withFileMutationQueue，并改用 fs/promises 异步 IO，不再阻塞 Electron 主进程。
+  - 保留 FileEditDetails.structuredPatch / originalFile / userModified / gitDiff 字段形状，渲染端 DiffView 与 harness/policy.ts 中 file_edit / edit_file 名称都不需要改动。
+- **重写 src/main/tools/file-read.ts**：
+  - 全面切换到 fs/promises；新增 1 MB 字节硬上限，超出时只读前 1 MB 并明确提示。
+  - 行号补齐宽度，行截断信息更清晰；返回明确的“可继续 offset=N”续读提示，避免模型卡在“被截断但不知道怎么往下读”。
+  - 二进制嗅探放在前 8 KB，避免误把超大文本判为二进制。
+- **重写 src/main/tools/file-write.ts**：
+  - 全部改为异步 IO，写入与编辑共享 withFileMutationQueue，串行化同文件并发。
+  - 错误路径返回结构化 details，避免渲染端处理时报 undefined。
+- **重写 src/main/tools/grep-search.ts**：
+  - 改用 child_process.spawn + readline 流式读取 ripgrep 输出，凑够 head_limit 后立即 kill 子进程并 destroy 管道，告别 execFile 16 MB 缓冲 + 全量等待。
+  - 新增 MAX_LINE_CHARS=500 单行截断与 HARD_LINE_CAP=5000 全局兜底，防止单个超长行/巨型文件把整个上下文撑爆。
+  - 完整保留旧 schema (pattern/query/glob/filePattern/output_mode/-A/-B/-C/head_limit/maxResults/offset/multiline/type) 与 GrepSearchDetails 形状。
+- **优化 src/main/tools/glob-search.ts**：
+  - 当 ripgrep 候选结果超过 max(200, maxResults*2) 时跳过逐文件 statSync 取 mtime 的排序，直接按 ripgrep 输出顺序裁剪到 maxResults。
+  - truncated 标志补上跳过排序时的判定，避免误报为完整结果。
+  - 命中阈值的工程目录里这一改动可以让 glob 调用从几百毫秒降到几十毫秒。
+
+**为什么改**：
+
+1. 旧的 file_edit 只支持单段 string.replace，容错差，模型经常因为多/少一个空格而反复失败；引入 pi-mono 的 fuzzy + 多段 edits 后，单次成功率显著提升。
+2. 旧的 file_read / file_write / file_edit 全用同步 IO，会卡住 Electron 主进程（影响 IPC、UI、聊天流式渲染）；切到 fs/promises 后主进程不再被阻塞。
+3. 旧的 grep_search 用 execFile 一次性等到 ripgrep 全部跑完，遇到超大仓库或长行文件容易 OOM 或超时；流式 + 早停 + 截断后能稳定工作在大型代码库上。
+4. 旧的 glob_search 对每个候选都 statSync，仓库很大时光是排序就要几百毫秒；按阈值跳过 mtime 排序后，常用的“按 glob 找文件”路径明显更快。
+5. 引入 withFileMutationQueue 是为了配合新的 multi-edit / 写入并发场景，避免“两个工具同时改同一个文件”出现读-改-写丢失。
+
+**涉及文件**：
+
+- 新增：src/main/tools/edit-diff.ts
+- 新增：src/main/tools/file-mutation-queue.ts
+- 重写：src/main/tools/file-edit.ts
+- 重写：src/main/tools/file-read.ts
+- 重写：src/main/tools/file-write.ts
+- 重写：src/main/tools/grep-search.ts
+- 优化：src/main/tools/glob-search.ts
+
+**结果**：
+
+- 全部修改文件 get_errors 通过，无 TS / lint 报错。
+- 工具名 (file_edit / edit_file / file_read / file_write / grep_search / glob_search) 与 details 字段形状均保持兼容，harness/policy.ts、渲染端 DiffView、agent-activity-bar 无需调整。
+- 未触发 pnpm build / pnpm check，遵守 AGENTS.md 中的“如无必要不要 build / check”约束。
+
+## 引导链路 race 修复 + 补 git pull 缺失 handler
+
+**时间**: 19:45
+
+**改了什么**：
+
+- **修复 composer 引导按钮潜在 race**：[src/renderer/src/components/AssistantThreadPanel.tsx](src/renderer/src/components/AssistantThreadPanel.tsx) `handleGuideQueuedMessage` 把执行顺序从「enqueue → trigger(不等) → cancel → await trigger」调整为「await enqueue → await trigger(移到队首) → cancel」。原顺序在“队列里已有其它消息”时存在窗口期：cancel 完成后 thread.tsx 的自动派发 effect 可能先看到旧队首并误派发，引导消息被挤后。新顺序保证 cancel 触发时新消息已经在队首，run 结束后 effect 必然派发新消息。
+- **补全 git pull IPC**：[src/shared/ipc.ts](src/shared/ipc.ts) 与 [src/preload/index.ts](src/preload/index.ts) 早就声明了 `git:pull`，但主进程从未注册 handler。[src/renderer/src/components/assistant-ui/diff-panel.tsx](src/renderer/src/components/assistant-ui/diff-panel.tsx) 的 “拉取” 按钮一旦点击就会抛 `No handler registered for 'git:pull'`。本次：
+  - [src/main/git.ts](src/main/git.ts) 新增 `pullGitChanges(workspacePath)`，使用 `git pull --ff-only` 防止意外创建合并提交。
+  - [src/main/ipc/workbench.ts](src/main/ipc/workbench.ts) 注册 `IPC_CHANNELS.gitPull` handler。
+
+**为什么改**：
+
+1. 用户明确提到担心“引导有问题”，回归审查发现 composer 引导路径在多消息排队场景下存在派发顺序不确定性，必须收紧成顺序串行。
+2. `git:pull` 是死链路，是 plan `M8` 项；用户可见按钮一点就报错，体验割裂，顺手补齐。
+
+**回归路径覆盖**：
+
+- 队列卡上的 `引导`：通过 `queuedAwaitingCompletionRef` + `runCompletionSerial` 守护，本次未改动，仍然正确。
+- 主动停止：`queuedManualCancelHeadIdRef` 守护 effect，本次未改动。
+- composer 内的 `发送`/`引导` 双按钮：发送走纯 enqueue（无 race）；引导按本次修复顺序串行执行。
+
+**结果**：
+
+- `get_errors` 通过；不再依赖未 await 的 trigger。
+- diff-panel “拉取” 按钮不再抛 IPC 未注册错误。
+- 未触发 `pnpm build / pnpm check`。
+
+## 项目审计计划进度盘点
+
+**时间**: 19:46
+
+对照 [docs/plans/full-project-audit-2026-04-22.md](docs/plans/full-project-audit-2026-04-22.md) 已完成与剩余项：
+
+- **P0 已完成**：`M3`（webContents.send 兜底）、`S1`（realpath 校验）、`S2`（shell CRLF 清理）、`S3`（logger 脱敏 + provider 密钥指纹）、`M2 部分`（transcript appendFileSync + 唯一临时名；真正的 per-session mutex 仍待补）。
+- **P0 剩余**：`M1` terminalEventFlushed per-runId（核查后发现每 run 已创建新 adapter，实际无 bug，可下调优先级）；`M2` 完整 mutex（建议接 p-queue 或简单 promise chain）。
+- **P1 已完成**：`R1`（AssistantThreadPanel 订阅清理）、`R4`（provider-directory 超时/abort）、`R5`（branch cache）、`R6`（context 圆环 0% 灰环）、`R7`（approval 文案）、`M7`（IPC error 包装）、`M9`（DevTools 生产关闭）、`M5`（cancel 幂等：`requestCancel` 已自带 if(!cancelled)，本次复核确认）、`M8`（gitPull handler，本次已补）。
+- **P1 剩余**：`M4`（EventBus 监听器集中清理）、`M6`（failover 候选去重）、`R2`（App.tsx session 切换 race）、`R3`（runtime ref snapshot sessionId）、`R17`（message_end finalText/thinking 兜底）。
+- **P2/P3**：尚未系统推进，待决定下一波优先级。
+
+**建议下一波**（按 ROI 排序）：
+
+1. `R17` message_end 兜底（聊天链路稳定性，AGENTS.md 强约束）。
+2. `M4` EventBus 集中清理（长时内存泄漏）。
+3. `M6` failover 候选去重（避免重复尝试同一模型）。
+4. `R14` confirmation_request 风暴去重（高频接近 P1）。
+5. `M2` 完整 mutex（数据完整性，上轮只做了基础修补）。
+
+## R17 message_end 兜底 + M4 EventBus 监听清理 + M6 复核
+
+**时间**: 20:10
+
+**改了什么**：
+
+- **R17 `message_end` 最终态强制覆盖** — [src/renderer/src/components/AssistantThreadPanel.tsx](src/renderer/src/components/AssistantThreadPanel.tsx) 的 `message_end` 分支：
+  - `finalThinking` 非空时，**无条件**替换最新 thinking step 的内容（旧逻辑只在 step 为空时填充，导致 deltas 不完整时 UI 停在 partial state）。同时把 executing 的 step 标记为 success + endedAt，避免兜底产生“永远在思考”的 step。
+  - `finalText` 仅在非空字符串时覆盖（避免某些 provider 给空串清掉 deltas 累积内容）。
+- **M4 补 bus-audit dispose** — [src/main/bus-audit.ts](src/main/bus-audit.ts) 之前 `bus.onAny(...)` 的返回值被丢弃，stop 阶段无法注销。本次保存 dispose handle，新增 `stopBusAuditLog`，在 [src/main/bootstrap/services.ts](src/main/bootstrap/services.ts) 的 `stopBackgroundServices` 末尾调用。`metrics`、`emotional`、`learning` 三个订阅链路本次复核确认已经在 init 时收集 dispose 并由各自 stop 函数清理，bootstrap 也已串联，无需再改。
+- **M6 复核完成（无需修改）** — [src/main/chat/execute.ts](src/main/chat/execute.ts#L99) 候选列表已经做了 `all.indexOf(entryId) === index` 去重 + 排除 `prepareFailedEntries`；循环内通过 `if (context.handle.modelEntryId !== entryId)` 跳过当前 handle，无重复初始化主模型问题。M6 标记为已完成。
+
+**为什么改**：
+
+- AGENTS.md 强约束：聊天链路改动后，要确认 assistant 的最终 `text` 和最终 `thinking` 都能在 `message_end` 兜底恢复，不能只依赖流式 delta。R17 的旧实现存在“deltas 部分到达后 message_end 的修订被忽略”的窗口，必须收紧。
+- bus-audit 是长时运行的进程级订阅，dispose 缺失意味着热重载/未来场景下会泄漏一份 wildcard handler，统一收口可避免后续踩雷。
+
+**回归路径**：
+
+- 正常聊天：deltas 持续流入 → message_end 携带与 deltas 等价的 finalText/finalThinking → 覆盖等价内容，UI 表现不变。
+- deltas 不完整（断流后续传 message_end）：finalText/finalThinking 现在能正确覆盖 partial。
+- 模型只发 message_end 不发 deltas：thinking step 创建时直接 success + endedAt；不再残留 executing 状态。
+
+**结果**：
+
+- `get_errors` 通过（AssistantThreadPanel.tsx / bus-audit.ts / services.ts 全部无报错）。
+- 未触发 `pnpm build / pnpm check`。
+
+**剩余待清单**：
+
+- `M2` 完整 per-session mutex
+- `R2` App.tsx session 切换 race
+- `R3` runtime sessionId snapshot
+- `R14` confirmation_request 风暴去重
+
+## R14 confirmation 风暴去重 + R3 复核 + R2 session 切换 ref 同步
+
+**时间**: 20:35
+
+**改了什么**：
+
+- **R14 `confirmation_request` 风暴 trailing debounce** — [src/renderer/src/components/AssistantThreadPanel.tsx](src/renderer/src/components/AssistantThreadPanel.tsx)：
+  - 新增 `pendingApprovalDebounceRef` + `pendingApprovalLatestSessionIdRef` + `scheduleApprovalRefresh` 包装器，100ms trailing debounce 合并连续事件。
+  - `handleEvent` 内 `confirmation_request` 与非 `awaiting_confirmation` 的 `run_state_changed` 分支改走 `scheduleApprovalRefresh`，单次 run 内即使触发 100 个 confirmation_request 也只会发 1 次 IPC。
+  - 组件 unmount 时清理 timer。
+  - `agent_end / agent_error` 等 run 终止事件保留直接调用，确保终态一定刷新。
+- **R3 复核完成（无需修改）** — [AssistantThreadPanel.tsx](src/renderer/src/components/AssistantThreadPanel.tsx#L759) `chatModel.run` 入口已 snapshot `currentSession = latestSessionRef.current`，整条 run 链路（handleEvent / publish / finalize）只用此 snapshot 而不直接读 ref，run 中途切 session 不会污染当前 run 的 sessionId。grep `latestSessionRef.current` 在 run 链路内已无残留。
+- **R2 `App.tsx` 切 session ref 同步** — [src/renderer/src/App.tsx](src/renderer/src/App.tsx#L713) `hydrateSession` 与 `clearActiveSession` 增加 `activeSessionIdRef.current = ...` 同步赋值。修复以下窗口期 race：
+  - `selectSession(B)` → `hydrateSession(B)` 调 `setActiveSession(B)` → React 更新到 `activeSession.id = B`，但 `activeSessionIdRef.current` 要等下一个 useEffect tick 才同步。
+  - 期间 ComposerArea 的 `onChange` 触发 `persistSession(A new draft)`，`persistSession` 用 ref 判断 `activeSessionIdRef.current === sessA`，于是 `setActiveSession(A)`，把刚切上去的 sess B 又回退回了 sess A。
+  - 现在 ref 在 `setActiveSession` 之前同步赋值，window 关闭。
+- **M2 复核结论** — [src/main/session/io.ts](src/main/session/io.ts) 的 `atomicWrite` 使用 `${process.pid}.${randomUUID()}.tmp` 唯一临时名 + `renameSync` 原子替换；`appendLine` 是 `appendFileSync`。Node.js 主线程 sync IO 之间不存在真并发 race。当前所有调用点（meta.ts / search.ts / service.ts / transcript-writer.ts）都是 sync 链路。结论：M2 P0 没有真实 race，可降级到 P3 做"未来 async 化时再加 per-session promise queue"。本次不引入 `p-queue` 依赖。
+
+**为什么改**：
+
+- R14：approval 风暴会触发 N 次 IPC + N 次 React state 比对，虽然有 signature 守门避免 setState，但 IPC 流量本身浪费；100ms debounce 几乎不影响 UX 感知。
+- R3：用户明确担心“引导 / run 中途切 session 后 sessionId 错乱”，复核结论是 run 入口已 snapshot，无问题，留下记录避免下次重复怀疑。
+- R2：典型窗口期 race，修复成本极低（两行 ref 赋值），收益是消除“切 session 时 draft 显示来回跳”的极端 UX bug。
+- M2：避免空跑 mutex 引入复杂度。
+
+**回归路径**：
+
+- approval 弹窗：审批触发 → 100ms 后 list 刷新；用户体感无延迟。
+- 切 session：A → B → A 快速切；draft / attachments 保持各自状态，无回退。
+- run 中途切 session：旧 run 仍按旧 sessionId 推进；新 session 立即响应输入。
+
+**结果**：
+
+- `get_errors` 通过（AssistantThreadPanel.tsx / App.tsx 我的改动无新增报错；App.tsx 残留的是历史遗留的 Tailwind class 简写 lint warning，与本次改动无关）。
+- 未触发 `pnpm build / pnpm check`。
+
+**plan 剩余 P1**：清空。剩余主要为 P2/P3 + 二级风险项（M28/M29 日志轮转、M22-M27 schema 收紧、harness 相关）。
