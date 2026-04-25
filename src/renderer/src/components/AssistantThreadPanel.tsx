@@ -617,6 +617,7 @@ function SessionRuntime({
   const latestSessionRef = useRef(session);
   const latestPersistSessionRef = useRef(onPersistSession);
   const latestReloadSessionRef = useRef(onReloadSession);
+  const draftPersistTimerRef = useRef<number | null>(null);
   const latestRunStateChangeRef = useRef(onRunStateChange);
   const activeRunUnsubscribeRef = useRef<(() => void) | null>(null);
   const pendingApprovalRequestSerialRef = useRef(0);
@@ -656,6 +657,33 @@ function SessionRuntime({
   useEffect(() => {
     latestReloadSessionRef.current = onReloadSession;
   }, [onReloadSession]);
+
+  useEffect(() => () => {
+    if (draftPersistTimerRef.current !== null) {
+      window.clearTimeout(draftPersistTimerRef.current);
+      draftPersistTimerRef.current = null;
+    }
+  }, []);
+
+  const handleDraftChange = useCallback((draft: string) => {
+    if (draftPersistTimerRef.current !== null) {
+      window.clearTimeout(draftPersistTimerRef.current);
+    }
+
+    const sourceSession = latestSessionRef.current;
+    draftPersistTimerRef.current = window.setTimeout(() => {
+      draftPersistTimerRef.current = null;
+      if (sourceSession.draft === draft) {
+        return;
+      }
+
+      latestPersistSessionRef.current({
+        ...sourceSession,
+        draft,
+        updatedAt: new Date().toISOString(),
+      });
+    }, 250);
+  }, []);
 
   useEffect(() => {
     latestRunStateChangeRef.current = onRunStateChange;
@@ -1233,12 +1261,15 @@ function SessionRuntime({
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <Thread
+        sessionId={session.id}
+        draft={session.draft}
         attachments={session.attachments}
         isPickingFiles={isPickingFiles}
         terminalOpen={terminalOpen}
         onAttachFiles={onAttachFiles}
         onPasteFiles={onPasteFiles}
         onRemoveAttachment={onRemoveAttachment}
+        onDraftChange={handleDraftChange}
         currentModelId={currentModelId}
         thinkingLevel={thinkingLevel}
         onModelChange={onModelChange}

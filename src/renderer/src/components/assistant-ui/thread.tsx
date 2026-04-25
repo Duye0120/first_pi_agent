@@ -119,6 +119,8 @@ import type { ChatRunStage } from "@renderer/lib/chat-run-status";
 import { cn } from "@renderer/lib/utils";
 
 type ThreadProps = {
+  sessionId: string;
+  draft?: string;
   attachments?: SelectedFile[];
   isPickingFiles?: boolean;
   terminalOpen?: boolean;
@@ -126,6 +128,7 @@ type ThreadProps = {
   onAttachFiles?: () => void;
   onPasteFiles?: (files: File[]) => void;
   onRemoveAttachment?: (attachmentId: string) => void;
+  onDraftChange?: (draft: string) => void;
   currentModelId?: string;
   thinkingLevel?: ThinkingLevel;
   onModelChange?: (modelEntryId: string) => void;
@@ -272,6 +275,8 @@ function collectClipboardFiles(dataTransfer: DataTransfer): File[] {
 }
 
 export const Thread: FC<ThreadProps> = ({
+  sessionId,
+  draft = "",
   attachments = [],
   isPickingFiles = false,
   terminalOpen = false,
@@ -279,6 +284,7 @@ export const Thread: FC<ThreadProps> = ({
   onAttachFiles = () => undefined,
   onPasteFiles = () => undefined,
   onRemoveAttachment = () => undefined,
+  onDraftChange = () => undefined,
   currentModelId = "builtin:anthropic:claude-sonnet-4-20250514",
   thinkingLevel = "off",
   onModelChange = () => undefined,
@@ -306,8 +312,28 @@ export const Thread: FC<ThreadProps> = ({
   onBranchChanged = () => undefined,
   disableGlobalSideEffects = false,
 }) => {
+  const aui = useAui();
+  const composerText = useAuiState((state) => state.composer.text);
   const viewportRef = useRef<HTMLDivElement>(null);
   const visibleRef = useRef(visible);
+  const hydratedDraftSessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (hydratedDraftSessionIdRef.current === sessionId) {
+      return;
+    }
+
+    hydratedDraftSessionIdRef.current = sessionId;
+    aui.composer().setText(draft);
+  }, [aui, draft, sessionId]);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    onDraftChange(composerText);
+  }, [composerText, onDraftChange, visible]);
 
   useEffect(() => {
     visibleRef.current = visible;

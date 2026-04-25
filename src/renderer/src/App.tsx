@@ -833,11 +833,14 @@ export default function App() {
         return;
       }
 
-      setSettings((current) =>
-        current
-          ? mergeSettingsState(current, { workspace: normalizedWorkspace })
-          : current,
-      );
+      const nextSettings = settingsRef.current
+        ? mergeSettingsState(settingsRef.current, { workspace: normalizedWorkspace })
+        : null;
+
+      if (nextSettings) {
+        settingsRef.current = nextSettings;
+        setSettings(nextSettings);
+      }
 
       await desktopApi.settings.update({ workspace: normalizedWorkspace });
       await refreshGitOverview();
@@ -880,6 +883,7 @@ export default function App() {
       setArchivedSummaries(archivedList);
       setGroups(groupList);
       if (settings) {
+        settingsRef.current = settings;
         setSettings(settings);
         setCurrentModelId(settings.modelRouting.chat.modelId);
         setThinkingLevel(settings.thinkingLevel);
