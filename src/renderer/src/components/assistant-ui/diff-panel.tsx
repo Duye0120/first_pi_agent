@@ -4,6 +4,8 @@ import {
   ImageIcon,
   RefreshCwIcon,
   XIcon,
+  ColumnsIcon,
+  ListIcon,
   UploadIcon,
   DownloadIcon,
   CheckIcon,
@@ -78,12 +80,14 @@ type DiffWorkbenchContentProps = {
 };
 
 type DiffWorkbenchDraft = {
+  layout: "vertical" | "horizontal";
   selectedDiffSource: GitDiffSource;
   commitPlanGroups: CommitPlanCardState[];
   commitPlanSkillUsage: RuntimeSkillUsage | null;
 };
 
 const DEFAULT_DIFF_WORKBENCH_DRAFT: DiffWorkbenchDraft = {
+  layout: "vertical",
   selectedDiffSource: "all",
   commitPlanGroups: [],
   commitPlanSkillUsage: null,
@@ -612,6 +616,9 @@ export function DiffWorkbenchContent({
   onRefresh,
   className,
 }: DiffWorkbenchContentProps) {
+  // ── State: diff layout ──────────────────────────────────────────────
+  const [layout, setLayout] = useState<"vertical" | "horizontal">(diffWorkbenchDraft.layout);
+
   // ── State: diff source & expansion ──────────────────────────────────
   const [selectedDiffSource, setSelectedDiffSource] = useState<GitDiffSource>(
     diffWorkbenchDraft.selectedDiffSource,
@@ -652,6 +659,7 @@ export function DiffWorkbenchContent({
 
   useEffect(() => {
     diffWorkbenchDraft = {
+      layout,
       selectedDiffSource,
       commitPlanGroups,
       commitPlanSkillUsage,
@@ -659,6 +667,7 @@ export function DiffWorkbenchContent({
   }, [
     commitPlanGroups,
     commitPlanSkillUsage,
+    layout,
     selectedDiffSource,
   ]);
 
@@ -1133,7 +1142,7 @@ export function DiffWorkbenchContent({
         <div key={file.path} id={getDiffFileDomId(file.path)} className="scroll-mt-2">
           <DiffFileCard
             file={file}
-            layout="vertical"
+            layout={layout}
             expanded={expandedDiffPaths.has(file.path)}
             onExpandedChange={(open) => {
               setExpandedDiffPaths((current) => {
@@ -1239,6 +1248,28 @@ export function DiffWorkbenchContent({
             </Button>
           </TooltipTrigger>
           <TooltipContent>刷新 diff</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setLayout((prev) => (prev === "vertical" ? "horizontal" : "vertical"))}
+              className="h-7 rounded-[var(--radius-shell)] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
+              aria-label="切换 diff 对比方向"
+            >
+              {layout === "vertical" ? (
+                <ColumnsIcon className="size-3.5" />
+              ) : (
+                <ListIcon className="size-3.5" />
+              )}
+              <span>{layout === "vertical" ? "横向对比" : "竖向对比"}</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {layout === "vertical" ? "切换为横向对比" : "切换为竖向对比"}
+          </TooltipContent>
         </Tooltip>
 
         <div className="w-[1px] h-4 bg-border/50 mx-1 shrink-0" />
