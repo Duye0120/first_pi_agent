@@ -4,16 +4,12 @@ import {
   ImageIcon,
   RefreshCwIcon,
   XIcon,
-  ColumnsIcon,
-  ListIcon,
   UploadIcon,
   DownloadIcon,
   CheckIcon,
   PlusIcon,
   MinusIcon,
   SparklesIcon,
-  FolderTreeIcon,
-  ListTreeIcon,
   TrashIcon,
   CheckCheckIcon,
   ChevronDownIcon,
@@ -31,7 +27,6 @@ import { getRuntimeSkillUsage } from "@shared/skill-usage";
 import { Badge } from "@renderer/components/assistant-ui/badge";
 import { Button } from "@renderer/components/assistant-ui/button";
 import { DiffView } from "@renderer/components/DiffView";
-import { FileTreeView } from "@renderer/components/assistant-ui/diff-tree";
 import { SkillUsageStrip } from "@renderer/components/assistant-ui/skill-usage-strip";
 import {
   SelectContent,
@@ -80,27 +75,16 @@ type DiffWorkbenchContentProps = {
   isLoading: boolean;
   onRefresh: () => void | Promise<void>;
   className?: string;
-  panelWidth?: number;
 };
 
 type DiffWorkbenchDraft = {
-  treeWidth: number;
-  commitPanelHeight: number;
-  layout: "vertical" | "horizontal";
-  viewMode: "tree" | "list";
   selectedDiffSource: GitDiffSource;
-  activeFile: string | null;
   commitPlanGroups: CommitPlanCardState[];
   commitPlanSkillUsage: RuntimeSkillUsage | null;
 };
 
 const DEFAULT_DIFF_WORKBENCH_DRAFT: DiffWorkbenchDraft = {
-  treeWidth: 350,
-  commitPanelHeight: 240,
-  layout: "vertical",
-  viewMode: "tree",
   selectedDiffSource: "all",
-  activeFile: null,
   commitPlanGroups: [],
   commitPlanSkillUsage: null,
 };
@@ -164,6 +148,10 @@ function SectionSurface({
 
 function formatSignedCount(value: number, sign: "+" | "-") {
   return `${sign}${new Intl.NumberFormat("zh-CN").format(value)}`;
+}
+
+function getDiffFileDomId(path: string) {
+  return `diff-file-${encodeURIComponent(path)}`;
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -301,12 +289,16 @@ function DiffFileCard({
   onExpandedChange,
   layout,
   className,
+  selected,
+  onSelectedChange,
 }: {
   file: GitDiffFile;
   expanded: boolean;
   onExpandedChange: (open: boolean) => void;
   layout?: "vertical" | "horizontal";
   className?: string;
+  selected?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
 }) {
   return (
     <Collapsible
@@ -314,27 +306,45 @@ function DiffFileCard({
       onOpenChange={onExpandedChange}
       className={cn("flex flex-col min-h-0 overflow-hidden rounded-[var(--radius-shell)] border border-border bg-[color:var(--color-control-panel-bg)]", className)}
     >
-      <CollapsibleTrigger
+      <div
         className={cn(
           "flex shrink-0 w-full items-start gap-3 px-3 py-2 text-left transition-colors",
           expanded ? "bg-[color:var(--color-control-bg-hover)]" : "hover:bg-[color:var(--color-control-bg-hover)]/80",
         )}
       >
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-foreground">{file.path}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <DiffKindMeta kind={file.kind} />
-            <DiffStatusPill status={file.status} />
-          </div>
-        </div>
+        {onSelectedChange ? (
+          <input
+            type="checkbox"
+            checked={selected === true}
+            onChange={(event) => onSelectedChange(event.currentTarget.checked)}
+            className="mt-1 size-4 shrink-0 rounded border-border bg-background accent-foreground"
+            aria-label={`选择 ${file.path}`}
+          />
+        ) : null}
 
-        <div className="flex shrink-0 items-center gap-3 pl-2">
-          <div className="text-right text-[11px] leading-5">
-            <p className="font-medium text-diff-add-text">{formatSignedCount(file.additions, "+")}</p>
-            <p className="font-medium text-diff-del-text">{formatSignedCount(file.deletions, "-")}</p>
+        <CollapsibleTrigger className="flex min-w-0 flex-1 items-start gap-3 text-left">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">{file.path}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <DiffKindMeta kind={file.kind} />
+              <DiffStatusPill status={file.status} />
+            </div>
           </div>
-        </div>
-      </CollapsibleTrigger>
+
+          <div className="flex shrink-0 items-center gap-3 pl-2">
+            <div className="text-right text-[11px] leading-5">
+              <p className="font-medium text-diff-add-text">{formatSignedCount(file.additions, "+")}</p>
+              <p className="font-medium text-diff-del-text">{formatSignedCount(file.deletions, "-")}</p>
+            </div>
+            <ChevronDownIcon
+              className={cn(
+                "mt-1 size-3.5 shrink-0 text-muted-foreground transition-transform",
+                expanded && "rotate-180",
+              )}
+            />
+          </div>
+        </CollapsibleTrigger>
+      </div>
 
       <CollapsibleContent className="flex flex-col flex-1 min-h-0 overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
         <div className="flex flex-col flex-1 min-h-0">
@@ -601,27 +611,7 @@ export function DiffWorkbenchContent({
   isLoading,
   onRefresh,
   className,
-  panelWidth,
 }: DiffWorkbenchContentProps) {
-  // ── State: layout & sizing ──────────────────────────────────────────
-  const { size: treeWidth, handleMouseDown: handleTreeResize } = useResizable({
-    axis: "horizontal",
-    initial: diffWorkbenchDraft.treeWidth,
-    min: 200,
-    max: Math.max(200, (panelWidth ?? (typeof window !== "undefined" ? window.innerWidth : 900)) - 200),
-  });
-
-  const { size: commitPanelHeight, handleMouseDown: handleCommitResize } = useResizable({
-    axis: "vertical",
-    initial: diffWorkbenchDraft.commitPanelHeight,
-    min: 150,
-    max: 500,
-    invert: true,
-  });
-
-  const [layout, setLayout] = useState<"vertical" | "horizontal">(diffWorkbenchDraft.layout);
-  const [viewMode, setViewMode] = useState<"tree" | "list">(diffWorkbenchDraft.viewMode);
-
   // ── State: diff source & expansion ──────────────────────────────────
   const [selectedDiffSource, setSelectedDiffSource] = useState<GitDiffSource>(
     diffWorkbenchDraft.selectedDiffSource,
@@ -630,7 +620,7 @@ export function DiffWorkbenchContent({
   // ── State: file selection ───────────────────────────────────────────
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [selectedPathsChanged, setSelectedPathsChanged] = useState(false);
-  const [activeFile, setActiveFile] = useState<string | null>(diffWorkbenchDraft.activeFile);
+  const [expandedDiffPaths, setExpandedDiffPaths] = useState<Set<string>>(new Set());
 
   // ── State: commit plan ──────────────────────────────────────────────
   const [commitPlanGroups, setCommitPlanGroups] = useState(diffWorkbenchDraft.commitPlanGroups);
@@ -662,24 +652,14 @@ export function DiffWorkbenchContent({
 
   useEffect(() => {
     diffWorkbenchDraft = {
-      treeWidth,
-      commitPanelHeight,
-      layout,
-      viewMode,
       selectedDiffSource,
-      activeFile,
       commitPlanGroups,
       commitPlanSkillUsage,
     };
   }, [
-    activeFile,
-    commitPanelHeight,
     commitPlanGroups,
     commitPlanSkillUsage,
-    layout,
     selectedDiffSource,
-    treeWidth,
-    viewMode,
   ]);
 
   useEffect(() => {
@@ -693,18 +673,8 @@ export function DiffWorkbenchContent({
       return;
     }
 
-    const currentFiles = overview.sources[selectedDiffSource]?.files ?? [];
-    if (currentFiles.length === 0) {
-      setActiveFile(null);
-      return;
-    }
-
-    if (activeFile && currentFiles.some((file) => file.path === activeFile)) {
-      return;
-    }
-
-    setActiveFile(currentFiles[0]?.path ?? null);
-  }, [activeFile, overview, selectedDiffSource]);
+    setExpandedDiffPaths(new Set());
+  }, [overview, selectedDiffSource]);
 
   // ── Handlers: selection ─────────────────────────────────────────────
   const handleToggleSelection = useCallback((paths: string[], isSelected: boolean) => {
@@ -920,7 +890,18 @@ export function DiffWorkbenchContent({
 
   // ── Handlers: file expansion ────────────────────────────────────────
   const handleJumpToFile = useCallback((path: string) => {
-    setActiveFile(path);
+    setExpandedDiffPaths((current) => {
+      const next = new Set(current);
+      next.add(path);
+      return next;
+    });
+
+    window.requestAnimationFrame(() => {
+      document.getElementById(getDiffFileDomId(path))?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   }, []);
 
   // ── Derived values ──────────────────────────────────────────────────
@@ -958,6 +939,8 @@ export function DiffWorkbenchContent({
   );
   const visibleCommitPlanSkillUsage =
     commitPlanSkillUsage ?? (isGeneratingPlan ? pendingCommitPlanSkillUsage : null);
+  const showCommitPlanSection =
+    commitPlanGroups.length > 0 || isGeneratingPlan || commitPlanError !== null;
 
   const stageSelectionControl =
     selectedDiffSource === "unstaged" || selectedDiffSource === "all" ? (
@@ -1073,6 +1056,106 @@ export function DiffWorkbenchContent({
     </div>
   );
 
+  const compactCommitPlanPanel = (
+    <div className="rounded-[calc(var(--radius-shell)+2px)] bg-[color:var(--color-control-panel-bg)] p-2.5 shadow-[var(--color-control-shadow)]">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <p className="shrink-0 text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
+          提交计划
+        </p>
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <Badge variant="secondary">已选 {selectedPaths.size}</Badge>
+          <Badge variant="secondary">计划 {commitPlanGroups.length}</Badge>
+          {visibleCommitPlanSkillUsage ? (
+            <SkillUsageStrip
+              skillUsages={[visibleCommitPlanSkillUsage]}
+              leadLabel="由"
+            />
+          ) : null}
+        </div>
+      </div>
+
+      {commitPlanError ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mt-2 rounded-[var(--radius-shell)] bg-rose-500/8 px-3 py-2 text-[12px] leading-5 text-rose-700"
+        >
+          {commitPlanError}
+        </div>
+      ) : null}
+
+      {showSparklesHint ? (
+        <div className="mt-2 rounded-[var(--radius-shell)] bg-secondary/30 px-3 py-2 text-[12px] leading-5 text-muted-foreground">
+          勾选已更新，重新生成后计划会同步当前文件集合。
+        </div>
+      ) : null}
+
+      <div className="mt-2">
+        {commitPlanGroups.length === 0 ? (
+          isGeneratingPlan ? (
+            <div className="flex min-h-[140px] flex-col items-center justify-center rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)]/50 px-4 py-6 text-center shadow-inner">
+              <SparklesIcon className="mb-3 size-6 shrink-0 animate-pulse text-muted-foreground" />
+              <p className="text-[12px] font-medium text-foreground">AI 正在阅读和分析代码变动</p>
+              <p className="mt-1 text-balance text-[11px] text-muted-foreground">分析完成后会自动生成提交计划。</p>
+            </div>
+          ) : (
+            <div className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-3 py-2.5 text-[12px] leading-5 text-muted-foreground shadow-[var(--color-control-shadow)]">
+              <p className="font-medium text-foreground">
+                {selectedPaths.size > 0 ? "已选文件，点击右上角生成计划。" : "先勾选文件，再生成计划。"}
+              </p>
+              <p className="mt-1">计划会按当前勾选的文件生成。</p>
+            </div>
+          )
+        ) : (
+          <div className="flex flex-col gap-2">
+            {commitPlanGroups.map((group, index) => (
+              <CommitPlanCard
+                key={group.id}
+                group={group}
+                index={index}
+                disabled={isPlanBusy}
+                onJumpToFile={handleJumpToFile}
+                onTitleChange={(value) => handlePlanTitleChange(group.id, value)}
+                onDescriptionChange={(value) => handlePlanDescriptionChange(group.id, value)}
+                onStage={() => void handleStagePlanGroup(group.id)}
+                onCommit={() => void handleCommitPlanGroup(group.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const diffFileList = (
+    <div className="flex flex-col gap-3">
+      {currentSourceSnapshot.files.map((file) => (
+        <div key={file.path} id={getDiffFileDomId(file.path)} className="scroll-mt-2">
+          <DiffFileCard
+            file={file}
+            layout="vertical"
+            expanded={expandedDiffPaths.has(file.path)}
+            onExpandedChange={(open) => {
+              setExpandedDiffPaths((current) => {
+                const next = new Set(current);
+                if (open) {
+                  next.add(file.path);
+                } else {
+                  next.delete(file.path);
+                }
+                return next;
+              });
+            }}
+            selected={selectedPaths.has(file.path)}
+            onSelectedChange={(selected) =>
+              handleToggleSelection([file.path], selected)
+            }
+          />
+        </div>
+      ))}
+    </div>
+  );
+
   function PanelHeader({ children }: { children: React.ReactNode }) {
     return (
       <div className="mb-1 flex items-start justify-between gap-2">
@@ -1156,28 +1239,6 @@ export function DiffWorkbenchContent({
             </Button>
           </TooltipTrigger>
           <TooltipContent>刷新 diff</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setLayout((prev) => (prev === "vertical" ? "horizontal" : "vertical"))}
-              className="h-7 rounded-[var(--radius-shell)] px-2.5 text-[12px] text-muted-foreground bg-secondary/50 border-0 hover:bg-secondary/80 flex items-center gap-1.5 shrink-0"
-              aria-label="切换视图布局"
-            >
-              {layout === "vertical" ? (
-                <ColumnsIcon className="size-3.5" />
-              ) : (
-                <ListIcon className="size-3.5" />
-              )}
-              <span>{layout === "vertical" ? "横向对比" : "垂直对比"}</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {layout === "vertical" ? "切换为横向对比" : "切换为垂直对比"}
-          </TooltipContent>
         </Tooltip>
 
         <div className="w-[1px] h-4 bg-border/50 mx-1 shrink-0" />
@@ -1268,187 +1329,45 @@ export function DiffWorkbenchContent({
               />
             </div>
           ) : (
-            <div className="relative flex min-h-0 flex-1 overflow-hidden">
-              {/* ── Left sidebar: tree + commit panel (siblings) ─────── */}
-              <div
-                className="shrink-0 flex flex-col min-h-0 pr-2"
-                style={{ width: treeWidth }}
-              >
-                {/* ── Tree area (top) ───────────────────────────────── */}
-                <div className="flex-1 flex flex-col min-h-0 pt-1">
-                  <div className="flex items-center justify-between mb-2 shrink-0">
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2.5 text-[12px] text-muted-foreground hover:bg-secondary/80 bg-secondary/50 rounded-[var(--radius-shell)]"
-                        onClick={handleSelectAll}
-                      >
-                        {selectedPaths.size > 0 &&
-                          selectedPaths.size === currentSourceSnapshot.files.length
-                          ? "取消全选"
-                          : "全选"}
-                      </Button>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 rounded-[var(--radius-shell)] text-muted-foreground hover:bg-secondary/80 bg-secondary/50"
-                            onClick={() => setViewMode(v => v === "tree" ? "list" : "tree")}
-                          >
-                            {viewMode === "tree" ? <ListTreeIcon className="size-3.5" /> : <FolderTreeIcon className="size-3.5" />}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>切换{viewMode === "tree" ? '平铺' : '树状'}视图</TooltipContent>
-                      </Tooltip>
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {stageSelectionControl}
-                      {commitPlanActionControls}
-                    </div>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto min-h-0 pr-1">
-                    <FileTreeView
-                      files={currentSourceSnapshot.files}
-                      onSelectFile={(path) => handleJumpToFile(path)}
-                      selectedPaths={selectedPaths}
-                      onToggleSelection={handleToggleSelection}
-                      viewMode={viewMode}
-                    />
-                  </div>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2.5 text-[12px] text-muted-foreground hover:bg-secondary/80 bg-secondary/50 rounded-[var(--radius-shell)]"
+                    onClick={handleSelectAll}
+                  >
+                    {selectedPaths.size > 0 &&
+                      selectedPaths.size === currentSourceSnapshot.files.length
+                      ? "取消全选"
+                      : "全选"}
+                  </Button>
+                  <span className="truncate text-[12px] text-muted-foreground">
+                    {currentSourceSnapshot.files.length} 个文件
+                  </span>
                 </div>
 
-                {/* ── Resizable divider ─────────────────────────────── */}
-                <div
-                  className="h-[2px] w-full cursor-row-resize hover:bg-primary/50 active:bg-primary/50 bg-border/40 transition-colors z-10 shrink-0 my-1 rounded-full"
-                  onMouseDown={handleCommitResize}
-                />
-
-                {/* ── Commit panel (bottom) ────────────────────────── */}
-                <div
-                  className="flex flex-col shrink-0 flex-none pb-2"
-                  style={{ height: commitPanelHeight }}
-                >
-                  <div className="flex min-h-0 flex-1 flex-col rounded-[calc(var(--radius-shell)+2px)] bg-[color:var(--color-control-panel-bg)] p-2.5 shadow-[var(--color-control-shadow)]">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <p className="shrink-0 text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
-                          提交计划
-                      </p>
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                        <Badge variant="secondary">已选 {selectedPaths.size}</Badge>
-                        <Badge variant="secondary">计划 {commitPlanGroups.length}</Badge>
-                        {visibleCommitPlanSkillUsage ? (
-                          <SkillUsageStrip
-                            skillUsages={[visibleCommitPlanSkillUsage]}
-                            leadLabel="由"
-                          />
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {commitPlanError ? (
-                      <div
-                        role="status"
-                        aria-live="polite"
-                        className="mt-2 rounded-[var(--radius-shell)] bg-rose-500/8 px-3 py-2 text-[12px] leading-5 text-rose-700"
-                      >
-                        {commitPlanError}
-                      </div>
-                    ) : null}
-
-                    {showSparklesHint ? (
-                      <div className="mt-2 rounded-[var(--radius-shell)] bg-secondary/30 px-3 py-2 text-[12px] leading-5 text-muted-foreground">
-                        勾选已更新，重新生成后计划会同步当前文件集合。
-                      </div>
-                    ) : null}
-
-                    <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1 relative">
-                      {isGeneratingPlan && commitPlanGroups.length > 0 ? (
-                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-[var(--radius-shell)] backdrop-blur-[2px] bg-background/60 shadow-inner">
-                          <div className="flex flex-col items-center justify-center p-4 rounded-[var(--radius-shell)] bg-background/95 shadow-[var(--color-control-shadow)] border border-border/50">
-                            <SparklesIcon className="size-6 animate-pulse text-[color:var(--color-control-focus-ring)] mb-3" />
-                            <p className="text-[12px] font-medium text-foreground">重新分析与生成中…</p>
-                          </div>
-                        </div>
-                      ) : null}
-                      
-                      {commitPlanGroups.length === 0 ? (
-                        isGeneratingPlan ? (
-                          <div className="flex h-full min-h-[140px] flex-col items-center justify-center rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)]/50 px-4 py-6 text-center shadow-inner">
-                            <SparklesIcon className="size-6 shrink-0 animate-pulse text-muted-foreground mb-3" />
-                            <p className="text-[12px] font-medium text-foreground">AI 正在阅读和分析代码变动</p>
-                            <p className="text-[11px] text-muted-foreground mt-1 text-balance">这可能需要几秒钟，分析完成后将自动为您填入提交信息</p>
-                          </div>
-                        ) : (
-                          <div className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-3 py-2.5 text-[12px] leading-5 text-muted-foreground shadow-[var(--color-control-shadow)]">
-                            <p className="font-medium text-foreground">
-                              {selectedPaths.size > 0 ? "已选文件，点击右上角生成计划。" : "先勾选文件，再生成计划。"}
-                            </p>
-                            <p className="mt-1">
-                              计划会按当前勾选的文件生成。
-                            </p>
-                          </div>
-                        )
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          {commitPlanGroups.map((group, index) => (
-                            <CommitPlanCard
-                              key={group.id}
-                              group={group}
-                              index={index}
-                              disabled={isPlanBusy}
-                              onJumpToFile={handleJumpToFile}
-                              onTitleChange={(value) => handlePlanTitleChange(group.id, value)}
-                              onDescriptionChange={(value) => handlePlanDescriptionChange(group.id, value)}
-                              onStage={() => void handleStagePlanGroup(group.id)}
-                              onCommit={() => void handleCommitPlanGroup(group.id)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {stageSelectionControl}
+                  {commitPlanActionControls}
                 </div>
               </div>
 
-              {/* ── Tree resize handle ──────────────────────────────── */}
-              <div
-                className="w-[2px] cursor-col-resize hover:bg-primary/50 active:bg-primary/50 bg-border/40 transition-colors z-10 shrink-0 self-stretch mr-1 ml-0"
-                onMouseDown={handleTreeResize}
-              />
-
-              {/* ── Right: diff cards ───────────────────────────────── */}
-              <div className="min-h-0 flex flex-col flex-1 overflow-y-auto pl-2">
-                <div className="flex flex-col flex-1 min-h-0 gap-3">
-                  {/* Replace Right Side List mapping with Single Active File viewing or Empty state */}
-                  {(() => {
-                    const activeFileObj = activeFile ? currentSourceSnapshot.files.find(f => f.path === activeFile) : null;
-                    if (!activeFileObj && currentSourceSnapshot.files.length > 0) {
-                      return (
-                        <div className="flex flex-col items-center justify-center flex-1 h-full min-h-[300px] text-muted-foreground/50 gap-3">
-                          <FileIcon className="size-12 opacity-30 stroke-1" />
-                          <div className="text-sm font-medium">点击左侧文件查看 diff 内容</div>
-                        </div>
-                      );
-                    }
-                    if (!activeFileObj) return null; // When empty repo, it's handled above the SectionSurface technically, but just in case
-                    return (
-                      <div key={activeFileObj.path} className="flex flex-col flex-1 h-full min-h-0">
-                        <DiffFileCard
-                          className="flex-1 h-full min-h-0 flex flex-col"
-                          file={activeFileObj}
-                          layout={layout}
-                          expanded={true}
-                          onExpandedChange={() => { }}
-                        />
-                      </div>
-                    );
-                  })()}
+              {showCommitPlanSection ? (
+                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+                  <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                    {compactCommitPlanPanel}
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                    {diffFileList}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                  {diffFileList}
+                </div>
+              )}
             </div>
           )}
         </SectionSurface>
@@ -1494,7 +1413,7 @@ export function DiffPanel(props: DiffPanelProps) {
             <div className="h-full w-[2px] bg-primary/60 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-active:opacity-100" />
           </div>
         ) : null}
-        <DiffWorkbenchContent {...props} panelWidth={panelWidth} />
+        <DiffWorkbenchContent {...props} />
       </aside>
     </>
   );
