@@ -12,6 +12,7 @@ import {
   saveSource,
   setCredentials,
   testSource,
+  fetchSourceModels,
 } from "../providers.js";
 import { handleIpc } from "./handle.js";
 
@@ -32,6 +33,10 @@ export function registerProvidersIpc(): void {
   handleIpc(
     IPC_CHANNELS.providersTestSource,
     async (_event, draft) => testSource(draft),
+  );
+  handleIpc(
+    IPC_CHANNELS.providersFetchModels,
+    async (_event, draft) => fetchSourceModels(draft),
   );
   handleIpc(
     IPC_CHANNELS.providersGetCredentials,

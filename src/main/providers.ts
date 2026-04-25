@@ -59,7 +59,7 @@ type ProviderState = {
 type ResolvedModelEntry = {
   entry: ModelEntry;
   source: ProviderSource;
-  apiKey: string;
+  getApiKey: () => string;
   model: Model<any>;
   runtimeSignature: string;
 };
@@ -1079,8 +1079,184 @@ export async function testSource(
   }
 }
 
+export async function fetchSourceModels(
+  draft: ProviderSourceDraft,
+): Promise<import("../shared/contracts.js").SourceModelsResult> {
+  let normalized: ProviderSource;
+  try {
+    const state = readProviderState();
+    const existing = draft.id
+      ? state.sources.find((item) => item.id === draft.id)
+      : undefined;
+    normalized = validateSourceDraft(draft, existing);
+  } catch (error) {
+    return {
+      success: false,
+      models: [],
+      error: error instanceof Error ? error.message : "拉取模型失败",
+    };
+  }
+
+  const apiKey = (() => {
+    const stored = readProviderState().credentials[normalized.id]?.apiKey?.trim();
+    if (stored) return stored;
+    return isLocalOpenAiCompatibleSource(normalized) ? "local" : "";
+  })();
+
+  if (!apiKey) {
+    return { success: false, models: [], error: "请先保存 API Key。" };
+  }
+
+  try {
+    const ids = await callListModels(normalized, apiKey);
+    const unique = Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+    unique.sort((a, b) => a.localeCompare(b));
+    return { success: true, models: unique };
+  } catch (error) {
+    return {
+      success: false,
+      models: [],
+      error: error instanceof Error ? error.message : "拉取模型失败",
+    };
+  }
+}
+
+async function callListModels(
+  source: ProviderSource,
+  apiKey: string,
+): Promise<string[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    if (source.providerType === "anthropic") {
+      const baseUrl = source.baseUrl ?? "https://api.anthropic.com";
+      const url = joinPath(baseUrl, "/v1/models");
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        signal: controller.signal,
+      });
+      const json = await readJson(response);
+      const data = Array.isArray((json as { data?: unknown }).data)
+        ? ((json as { data: unknown[] }).data)
+        : [];
+      return data
+        .map((item) => (item as { id?: unknown }).id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0);
+    }
+
+    if (source.providerType === "google") {
+      const baseUrl = source.baseUrl ?? "https://generativelanguage.googleapis.com";
+      const url = `${joinPath(baseUrl, "/v1beta/models")}?key=${encodeURIComponent(apiKey)}&pageSize=200`;
+      const response = await fetch(url, {
+        method: "GET",
+        signal: controller.signal,
+      });
+      const json = await readJson(response);
+      const models = Array.isArray((json as { models?: unknown }).models)
+        ? ((json as { models: unknown[] }).models)
+        : [];
+      return models
+        .map((item) => (item as { name?: unknown }).name)
+        .filter((name): name is string => typeof name === "string" && name.length > 0)
+        .map((name) => name.replace(/^models\//, ""));
+    }
+
+    // openai 与 openai-compatible 都按 OpenAI 协议走 /models
+    const baseUrl = source.baseUrl ?? "https://api.openai.com/v1";
+    const url = joinPath(baseUrl, "/models");
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      signal: controller.signal,
+    });
+    const json = await readJson(response);
+    const data = Array.isArray((json as { data?: unknown }).data)
+      ? ((json as { data: unknown[] }).data)
+      : Array.isArray((json as { models?: unknown }).models)
+        ? ((json as { models: unknown[] }).models)
+        : [];
+    return data
+      .map((item) => {
+        if (typeof item === "string") return item;
+        const obj = item as { id?: unknown; name?: unknown; model?: unknown };
+        if (typeof obj.id === "string") return obj.id;
+        if (typeof obj.model === "string") return obj.model;
+        if (typeof obj.name === "string") return obj.name;
+        return "";
+      })
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function joinPath(baseUrl: string, suffix: string): string {
+  const trimmedBase = baseUrl.replace(/\/+$/u, "");
+  const trimmedSuffix = suffix.startsWith("/") ? suffix : `/${suffix}`;
+  return `${trimmedBase}${trimmedSuffix}`;
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!response.ok) {
+    const snippet = text.slice(0, 240).trim();
+    throw new Error(
+      snippet
+        ? `请求失败 ${response.status}: ${snippet}`
+        : `请求失败 ${response.status}`,
+    );
+  }
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new Error("响应不是合法的 JSON。");
+  }
+}
+
 export function listEntries(): ModelEntry[] {
   return readProviderState().entries.map(cloneEntry);
+}
+
+export function resolveEmbeddingProvider(
+  sourceId: string,
+): {
+  providerType: "openai" | "openai-compatible" | "anthropic" | "google";
+  baseUrl: string;
+  apiKey: string;
+} | null {
+  const state = readProviderState();
+  const source = state.sources.find((item) => item.id === sourceId);
+  if (!source || !source.enabled) {
+    return null;
+  }
+  const baseUrl =
+    source.baseUrl ??
+    (source.providerType === "openai"
+      ? "https://api.openai.com/v1"
+      : source.providerType === "anthropic"
+        ? "https://api.anthropic.com"
+        : source.providerType === "google"
+          ? "https://generativelanguage.googleapis.com"
+          : null);
+  if (!baseUrl) {
+    return null;
+  }
+  const apiKey = getApiKeyForSource(state.credentials, source);
+  if (!apiKey) {
+    return null;
+  }
+  return {
+    providerType: source.providerType,
+    baseUrl,
+    apiKey,
+  };
 }
 
 export function listEntriesBySource(sourceId: string): ModelEntry[] {
@@ -1178,7 +1354,7 @@ export function resolveModelEntry(entryId: string): ResolvedModelEntry {
   return {
     entry: cloneEntry(entry),
     source: cloneSource(source),
-    apiKey,
+    getApiKey: () => apiKey,
     model,
     runtimeSignature: JSON.stringify({
       sourceId: source.id,
