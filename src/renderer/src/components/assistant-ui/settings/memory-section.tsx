@@ -3,21 +3,28 @@ import type {
   MemoryListSort,
   MemoryRecord,
   MemoryStats,
+  ModelEntry,
+  ProviderSource,
   Settings,
 } from "@shared/contracts";
 import type { MemoryEmbeddingModelId } from "@shared/memory";
-import { MEMORY_EMBEDDING_MODELS } from "@shared/memory";
+import { MEMORY_EMBEDDING_MODELS, isLocalEmbeddingModelId } from "@shared/memory";
 import { formatDateTimeInTimeZone } from "@shared/timezone";
 import { Button } from "@renderer/components/assistant-ui/button";
 import { Checkbox } from "@renderer/components/assistant-ui/checkbox";
 import { ModelSelector } from "@renderer/components/assistant-ui/model-selector";
 import type { ModelOption } from "@renderer/components/assistant-ui/model-selector";
 import {
-  FieldSelect,
+  loadProviderDirectory,
+  resolveModelEntryName,
+  subscribeProviderDirectoryChanged,
+} from "@renderer/lib/provider-directory";
+import {
   SettingsCard,
   SettingsBlock,
   StatusBadge,
   FieldInput,
+  FieldSelect,
 } from "./shared";
 
 function formatTimestamp(value: string | null, timeZone: string): string {
@@ -98,6 +105,30 @@ export function MemorySection({
   const [memoriesLoading, setMemoriesLoading] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [providerSources, setProviderSources] = useState<ProviderSource[]>([]);
+  const [providerEntries, setProviderEntries] = useState<ModelEntry[]>([]);
+
+  useEffect(() => {
+    if (!desktopApi) return;
+    let cancelled = false;
+    const refresh = () => {
+      void loadProviderDirectory(desktopApi)
+        .then((snapshot) => {
+          if (cancelled) return;
+          setProviderSources(snapshot.sources);
+          setProviderEntries(snapshot.entries);
+        })
+        .catch(() => {
+          /* 忽略加载失败，回落到本地嵌入选项 */
+        });
+    };
+    refresh();
+    const unsubscribe = subscribeProviderDirectoryChanged(refresh);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [desktopApi]);
 
   const loadStats = useCallback(async () => {
     if (!desktopApi) {
@@ -146,26 +177,112 @@ export function MemorySection({
     void loadMemories();
   }, [loadMemories]);
 
-  const selectedModel = useMemo(
-    () =>
-      MEMORY_EMBEDDING_MODELS.find(
-        (entry) => entry.id === settings.memory.embeddingModelId,
-      ) ?? MEMORY_EMBEDDING_MODELS[0],
-    [settings.memory.embeddingModelId],
-  );
   const modelNeedsRebuild =
     !!stats?.indexedModelId &&
     stats.indexedModelId !== settings.memory.embeddingModelId;
 
-  const handleModelChange = useCallback(
+  const LOCAL_GROUP_LABEL = "本地嵌入模型";
+
+  function buildEmbeddingValue(
+    providerId: string | null,
+    modelId: string,
+  ): string {
+    return providerId ? `${providerId}::${modelId}` : `local::${modelId}`;
+  }
+
+  function parseEmbeddingValue(value: string): {
+    providerId: string | null;
+    modelId: string;
+  } {
+    const [head, ...rest] = value.split("::");
+    if (head === "local") {
+      return { providerId: null, modelId: rest.join("::") };
+    }
+    return { providerId: head ?? null, modelId: rest.join("::") };
+  }
+
+  const embeddingOptions = useMemo<ModelOption[]>(() => {
+    const localOptions: ModelOption[] = MEMORY_EMBEDDING_MODELS.map((entry) => ({
+      id: buildEmbeddingValue(null, entry.id),
+      name: entry.label,
+      description: entry.description,
+      groupId: "local",
+      groupLabel: LOCAL_GROUP_LABEL,
+    }));
+
+    const sourceMap = new Map(
+      providerSources.map((source) => [source.id, source]),
+    );
+
+    const remoteOptions: ModelOption[] = providerEntries
+      .filter((entry) => {
+        if (!entry.enabled) return false;
+        const source = sourceMap.get(entry.sourceId);
+        if (!source || !source.enabled) return false;
+        const capability =
+          entry.capabilities.embedding ?? entry.detectedCapabilities.embedding;
+        if (capability === true) return true;
+        // 兜底：模型 ID 含 embed / bge / e5 / m3 时也视为候选嵌入模型，方便用户在未标注 capability 时直接选用。
+        const lowered = entry.modelId.toLowerCase();
+        return /(embed|bge|e5|m3|gte|nomic)/.test(lowered);
+      })
+      .map((entry) => {
+        const source = sourceMap.get(entry.sourceId);
+        const groupLabel = source ? source.name : "其他";
+        return {
+          id: buildEmbeddingValue(entry.sourceId, entry.modelId),
+          name: resolveModelEntryName(entry),
+          description: source ? source.name : entry.modelId,
+          groupId: entry.sourceId,
+          groupLabel,
+        } satisfies ModelOption;
+      });
+
+    return [...localOptions, ...remoteOptions];
+  }, [providerEntries, providerSources]);
+
+  const currentEmbeddingValue = buildEmbeddingValue(
+    settings.memory.embeddingProviderId,
+    settings.memory.embeddingModelId,
+  );
+
+  const currentEmbeddingLabel = useMemo(() => {
+    const found = embeddingOptions.find(
+      (option) => option.id === currentEmbeddingValue,
+    );
+    if (found) {
+      return found.description
+        ? `${found.description} / ${found.name}`
+        : found.name;
+    }
+    if (settings.memory.embeddingProviderId) {
+      const source = providerSources.find(
+        (item) => item.id === settings.memory.embeddingProviderId,
+      );
+      const prefix = source ? `${source.name} / ` : "";
+      return `${prefix}${settings.memory.embeddingModelId}（未启用或已删除）`;
+    }
+    return settings.memory.embeddingModelId;
+  }, [
+    currentEmbeddingValue,
+    embeddingOptions,
+    providerSources,
+    settings.memory.embeddingModelId,
+    settings.memory.embeddingProviderId,
+  ]);
+
+  const handleEmbeddingValueChange = useCallback(
     (value: string) => {
+      const { providerId, modelId } = parseEmbeddingValue(value);
       onSettingsChange({
         memory: {
-          embeddingModelId: value as MemoryEmbeddingModelId,
+          ...settings.memory,
+          embeddingModelId: (modelId || settings.memory.embeddingModelId) as MemoryEmbeddingModelId,
+          embeddingProviderId: providerId,
         },
       } as Partial<Settings>);
     },
-    [onSettingsChange],
+    [onSettingsChange, settings.memory],
   );
 
   const handleRebuild = useCallback(async () => {
@@ -312,24 +429,30 @@ export function MemorySection({
       <SettingsCard>
         <SettingsBlock
           label="嵌入模型"
-          hint="用于语义搜索的嵌入模型。留空则使用默认值。"
+          hint="可选择本地内置模型，或使用已配置 Provider 中的远端嵌入模型（如 Ollama 的 bge-m3）。"
         >
           <div className="space-y-3 sm:max-w-md">
-            <FieldSelect
-              value={settings.memory.embeddingModelId}
-              onChange={(val) => handleMemorySettingChange("embeddingModelId", val)}
-              options={MEMORY_EMBEDDING_MODELS.map((option) => ({
-                value: option.id,
-                label: `${option.label}`,
-              }))}
-            />
+            <ModelSelector.Root
+              models={embeddingOptions}
+              value={currentEmbeddingValue}
+              onValueChange={handleEmbeddingValueChange}
+            >
+              <ModelSelector.Trigger placeholder="选择嵌入模型" />
+              <ModelSelector.Content />
+            </ModelSelector.Root>
             <div className="flex items-center justify-between gap-3 text-[12px] text-muted-foreground">
-              <span>当前选择：{selectedModel.id}</span>
+              <span>当前选择：{currentEmbeddingLabel}</span>
               <StatusBadge
                 ok={!modelNeedsRebuild}
                 text={modelNeedsRebuild ? "待重建索引" : "索引模型一致"}
               />
             </div>
+            {!isLocalEmbeddingModelId(settings.memory.embeddingModelId) &&
+            !settings.memory.embeddingProviderId ? (
+              <p className="text-[12px] text-amber-500">
+                未绑定 Provider，远端嵌入模型将无法调用，请重新选择。
+              </p>
+            ) : null}
           </div>
         </SettingsBlock>
       </SettingsCard>

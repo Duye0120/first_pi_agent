@@ -14,6 +14,7 @@ export function SettingsCard({
   className,
   headerClassName,
   bodyClassName,
+  headerAction,
 }: {
   title?: string;
   description?: string;
@@ -21,6 +22,7 @@ export function SettingsCard({
   className?: string;
   headerClassName?: string;
   bodyClassName?: string;
+  headerAction?: ReactNode;
 }) {
   return (
     <section
@@ -30,16 +32,26 @@ export function SettingsCard({
       )}
     >
       {title || description ? (
-        <div className={cn("px-6 py-5", headerClassName)}>
-          {title ? (
-            <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-foreground">
-              {title}
-            </h2>
-          ) : null}
-          {description ? (
-            <p className="mt-1.5 text-[12px] leading-6 text-muted-foreground">
-              {description}
-            </p>
+        <div
+          className={cn(
+            "flex items-start justify-between gap-3 px-6 py-5",
+            headerClassName,
+          )}
+        >
+          <div className="min-w-0 flex-1">
+            {title ? (
+              <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-foreground">
+                {title}
+              </h2>
+            ) : null}
+            {description ? (
+              <p className="mt-1.5 text-[12px] leading-6 text-muted-foreground">
+                {description}
+              </p>
+            ) : null}
+          </div>
+          {headerAction ? (
+            <div className="shrink-0">{headerAction}</div>
           ) : null}
         </div>
       ) : null}

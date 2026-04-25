@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  DownloadCloudIcon,
   EyeIcon,
   EyeOffIcon,
+  Loader2Icon,
   SlidersHorizontalIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -508,6 +510,12 @@ export function KeysSection({
   const [loading, setLoading] = useState(initialSources.length === 0);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [fetchModelsResult, setFetchModelsResult] = useState<
+    | { kind: "success"; appended: number; total: number }
+    | { kind: "error"; message: string }
+    | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<SourceTestResult | null>(null);
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
@@ -520,6 +528,10 @@ export function KeysSection({
   useEffect(() => {
     hasWorkspacesRef.current = Object.keys(workspaces).length > 0;
   }, [workspaces]);
+
+  useEffect(() => {
+    setFetchModelsResult(null);
+  }, [selectedSourceId]);
 
   const reload = useCallback(
     async (preferredSourceId?: string | null) => {
@@ -848,6 +860,96 @@ export function KeysSection({
       setTesting(false);
     }
   }, [currentWorkspace, desktopApi]);
+
+  const handleFetchModels = useCallback(async () => {
+    if (!desktopApi || !currentWorkspace) return;
+
+    setFetchingModels(true);
+    setFetchModelsResult(null);
+    setError(null);
+
+    try {
+      const result = await desktopApi.providers.fetchModels({
+        id: currentWorkspace.persistedSourceId,
+        name:
+          currentWorkspace.kind === "builtin"
+            ? currentWorkspace.sourceDraft.name
+            : currentWorkspace.sourceDraft.name.trim(),
+        providerType: currentWorkspace.sourceDraft.providerType,
+        mode:
+          currentWorkspace.kind === "builtin"
+            ? currentWorkspace.sourceDraft.mode
+            : "custom",
+        enabled: currentWorkspace.sourceDraft.enabled,
+        baseUrl: currentWorkspace.sourceDraft.baseUrl,
+      });
+
+      if (!result.success) {
+        setFetchModelsResult({
+          kind: "error",
+          message: result.error ?? "拉取模型失败",
+        });
+        return;
+      }
+
+      let appended = 0;
+      updateWorkspace(currentWorkspace.sourceId, (workspace) => {
+        const existingIds = new Set(
+          workspace.entries.map((entry) => entry.modelId.trim().toLowerCase()),
+        );
+        const newEntries: EditableEntry[] = [];
+        for (const rawId of result.models) {
+          const trimmed = rawId.trim();
+          if (!trimmed) continue;
+          const lowered = trimmed.toLowerCase();
+          if (existingIds.has(lowered)) continue;
+          existingIds.add(lowered);
+          const detected = getDetectedMetadata(trimmed);
+          newEntries.push({
+            id: `draft-entry:${crypto.randomUUID()}`,
+            sourceId: workspace.persistedSourceId ?? workspace.sourceId,
+            name: "",
+            modelId: trimmed,
+            enabled: true,
+            builtin: false,
+            capabilities: {
+              vision: null,
+              imageOutput: null,
+              toolCalling: null,
+              reasoning: null,
+              embedding: null,
+            },
+            limits: {
+              contextWindow: null,
+              maxOutputTokens: null,
+            },
+            detectedCapabilities: detected.detectedCapabilities,
+            detectedLimits: detected.detectedLimits,
+            providerOptionsText: "",
+          });
+        }
+        appended = newEntries.length;
+        return {
+          ...workspace,
+          entries: [...workspace.entries, ...newEntries],
+        };
+      });
+
+      setFetchModelsResult({
+        kind: "success",
+        appended,
+        total: result.models.length,
+      });
+    } catch (nextError) {
+      setFetchModelsResult({
+        kind: "error",
+        message:
+          nextError instanceof Error ? nextError.message : "拉取模型失败",
+      });
+    } finally {
+      setFetchingModels(false);
+    }
+  }, [currentWorkspace, desktopApi, updateWorkspace]);
 
   if (loading) {
     return (
@@ -1241,8 +1343,45 @@ export function KeysSection({
                 title="模型目录"
                 description="所有聊天和后续任务都会通过稳定的模型条目来选择模型。"
                 className="bg-shell-panel"
+                headerAction={
+                  currentWorkspace.kind === "custom" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void handleFetchModels()}
+                      disabled={
+                        fetchingModels ||
+                        saving ||
+                        !currentWorkspace.sourceDraft.enabled
+                      }
+                      className="h-8 gap-1.5 rounded-[var(--radius-shell)] px-3 text-[12px]"
+                    >
+                      {fetchingModels ? (
+                        <Loader2Icon className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <DownloadCloudIcon className="h-3.5 w-3.5" />
+                      )}
+                      {fetchingModels ? "拉取中…" : "拉取模型列表"}
+                    </Button>
+                  ) : undefined
+                }
               >
                 <div className="px-5 py-2">
+                  {fetchModelsResult ? (
+                    <div
+                      className={`mb-2 rounded-[var(--radius-shell)] px-3 py-2 text-[12px] ${
+                        fetchModelsResult.kind === "success"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                          : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                      }`}
+                    >
+                      {fetchModelsResult.kind === "success"
+                        ? fetchModelsResult.appended > 0
+                          ? `已新增 ${fetchModelsResult.appended} 个模型条目（共拉取 ${fetchModelsResult.total} 个），保存后生效。`
+                          : `远端返回 ${fetchModelsResult.total} 个模型，全部已存在，未新增条目。`
+                        : fetchModelsResult.message}
+                    </div>
+                  ) : null}
                   {[...currentWorkspace.entries]
                     .sort((a, b) =>
                       a.enabled === b.enabled ? 0 : a.enabled ? -1 : 1,
