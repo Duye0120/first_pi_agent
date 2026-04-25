@@ -309,7 +309,7 @@ async function completeWithMemoryToolModel(input: {
       ],
     },
     {
-      apiKey: resolved.apiKey,
+      apiKey: resolved.getApiKey(),
       maxTokens: input.maxTokens,
     },
   );

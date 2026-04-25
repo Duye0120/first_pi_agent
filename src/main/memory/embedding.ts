@@ -1,10 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  Worker,
-  isMainThread,
-  parentPort,
-  workerData,
-} from "node:worker_threads";
+import { Worker } from "node:worker_threads";
 import type {
   MemoryAddInput,
   MemoryListInput,
@@ -15,376 +10,24 @@ import type {
 } from "../../shared/contracts.js";
 import type { MemoryEmbeddingModelId } from "../../shared/memory.js";
 import { appLogger } from "../logger.js";
-import { QueryVectorCache, rankMemories } from "./retrieval.js";
-import { MemoryStore } from "./store.js";
+import type {
+  EmbeddingProviderInfo,
+  MemoryWorkerInitData,
+  MemoryWorkerRequest,
+  MemoryWorkerResponse,
+  ReadyMessage,
+  WorkerState,
+} from "./embedding-types.js";
 
-type WorkerState = MemoryStats["workerState"];
-
-type MemoryWorkerInitData = {
-  kind: "chela-memory-worker";
-  dbPath: string;
-  cacheDir: string;
-};
-
-type AddRequest = {
-  id: string;
-  type: "add";
-  payload: {
-    input: MemoryAddInput;
-    modelId: MemoryEmbeddingModelId;
-  };
-};
-
-type SearchRequest = {
-  id: string;
-  type: "search";
-  payload: {
-    query: string;
-    limit: number;
-    candidateLimit: number;
-    minScore: number;
-    modelId: MemoryEmbeddingModelId;
-  };
-};
-
-type StatsRequest = {
-  id: string;
-  type: "stats";
-  payload: {
-    selectedModelId: MemoryEmbeddingModelId;
-    candidateLimit: number;
-  };
-};
-
-type ListRequest = {
-  id: string;
-  type: "list";
-  payload: {
-    input?: MemoryListInput;
-  };
-};
-
-type RebuildRequest = {
-  id: string;
-  type: "rebuild";
-  payload: {
-    modelId: MemoryEmbeddingModelId;
-  };
-};
-
-type MemoryWorkerRequest =
-  | AddRequest
-  | SearchRequest
-  | StatsRequest
-  | ListRequest
-  | RebuildRequest;
-
-type ReadyMessage = {
-  type: "ready";
-};
-
-type SuccessResponse =
-  | {
-      id: string;
-      ok: true;
-      result: MemoryRecord;
-    }
-  | {
-      id: string;
-      ok: true;
-      result: MemorySearchResult[];
-    }
-  | {
-      id: string;
-      ok: true;
-      result: MemoryRecord[];
-    }
-  | {
-      id: string;
-      ok: true;
-      result: Omit<MemoryStats, "workerState">;
-    }
-  | {
-      id: string;
-      ok: true;
-      result: MemoryRebuildResult;
-    };
-
-type ErrorResponse = {
-  id: string;
-  ok: false;
-  error: string;
-};
-
-type MemoryWorkerResultResponse = SuccessResponse | ErrorResponse;
-type MemoryWorkerResponse = MemoryWorkerResultResponse | ReadyMessage;
+export type { EmbeddingProviderInfo } from "./embedding-types.js";
 
 type PendingRequest<T> = {
   resolve: (value: T) => void;
   reject: (reason?: unknown) => void;
 };
 
-type FeatureExtractionResult = {
-  data: ArrayLike<number>;
-};
-
-type FeatureExtractionPipeline = (
-  input: string,
-  options: { pooling: "mean"; normalize: boolean },
-) => Promise<FeatureExtractionResult>;
-
-type TransformersModule = {
-  env: {
-    allowLocalModels?: boolean;
-    allowRemoteModels?: boolean;
-    cacheDir?: string;
-  };
-  pipeline: (
-    task: "feature-extraction",
-    modelId: string,
-  ) => Promise<FeatureExtractionPipeline>;
-};
-
-function normalizeText(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function normalizeVector(vector: number[]): number[] {
-  let magnitude = 0;
-  for (const value of vector) {
-    magnitude += value * value;
-  }
-
-  if (magnitude === 0) {
-    return vector.map(() => 0);
-  }
-
-  const denominator = Math.sqrt(magnitude);
-  return vector.map((value) => value / denominator);
-}
-
-async function createEmbeddingRuntime(cacheDir: string) {
-  let activeModelId: string | null = null;
-  let pipelinePromise: Promise<FeatureExtractionPipeline> | null = null;
-  let modelLoaded = false;
-
-  async function getPipeline(
-    modelId: MemoryEmbeddingModelId,
-  ): Promise<FeatureExtractionPipeline> {
-    if (activeModelId === modelId && pipelinePromise) {
-      return pipelinePromise;
-    }
-
-    pipelinePromise = (async () => {
-      try {
-        const transformers = await import("@xenova/transformers") as unknown as TransformersModule;
-        transformers.env.cacheDir = cacheDir;
-        transformers.env.allowLocalModels = true;
-        transformers.env.allowRemoteModels = true;
-        const pipeline = await transformers.pipeline(
-          "feature-extraction",
-          modelId,
-        );
-        modelLoaded = true;
-        return pipeline;
-      } catch (error) {
-        activeModelId = null;
-        pipelinePromise = null;
-        modelLoaded = false;
-        throw error;
-      }
-    })();
-    activeModelId = modelId;
-    return pipelinePromise;
-  }
-
-  return {
-    async encode(
-      text: string,
-      modelId: MemoryEmbeddingModelId,
-    ): Promise<number[]> {
-      const pipeline = await getPipeline(modelId);
-      const result = await pipeline(text, {
-        pooling: "mean",
-        normalize: true,
-      });
-      return normalizeVector(Array.from(result.data, (value) => Number(value)));
-    },
-    isModelLoaded(): boolean {
-      return modelLoaded;
-    },
-  };
-}
-
-async function startMemoryWorker(data: MemoryWorkerInitData): Promise<void> {
-  const port = parentPort;
-  if (!port) {
-    throw new Error("Chela memory worker missing parent port.");
-  }
-
-  const store = new MemoryStore(data.dbPath);
-  const embeddingRuntime = await createEmbeddingRuntime(data.cacheDir);
-  const queryCache = new QueryVectorCache();
-  let queue = Promise.resolve();
-
-  const getQueryVector = async (
-    query: string,
-    modelId: MemoryEmbeddingModelId,
-  ): Promise<number[]> => {
-    const cached = queryCache.get(query, modelId);
-    if (cached) {
-      return cached;
-    }
-
-    const nextVector = await embeddingRuntime.encode(query, modelId);
-    queryCache.set(query, modelId, nextVector);
-    return nextVector;
-  };
-
-  const handleRequest = async (
-    request: MemoryWorkerRequest,
-  ): Promise<MemoryWorkerResultResponse> => {
-    switch (request.type) {
-      case "add": {
-        const content = normalizeText(request.payload.input.content);
-        if (!content) {
-          throw new Error("Memory content cannot be empty.");
-        }
-
-        const record = store.add(
-          {
-            content,
-            metadata: request.payload.input.metadata ?? null,
-          },
-          await embeddingRuntime.encode(content, request.payload.modelId),
-          request.payload.modelId,
-        );
-
-        return { id: request.id, ok: true, result: record };
-      }
-
-      case "search": {
-        const query = normalizeText(request.payload.query);
-        if (!query) {
-          return { id: request.id, ok: true, result: [] };
-        }
-
-        const queryVector = await getQueryVector(query, request.payload.modelId);
-        const candidates = store.listCandidates(request.payload.candidateLimit);
-        const results = rankMemories(
-          queryVector,
-          candidates,
-          request.payload.limit,
-        ).filter((result) => result.score >= request.payload.minScore);
-        store.recordMatches(results.map((result) => result.id));
-
-        return { id: request.id, ok: true, result: results };
-      }
-
-      case "stats": {
-        const stats = store.getStats();
-        return {
-          id: request.id,
-          ok: true,
-          result: {
-            ...stats,
-            dbPath: store.getPath(),
-            selectedModelId: request.payload.selectedModelId,
-            modelLoaded: embeddingRuntime.isModelLoaded(),
-            candidateLimit: request.payload.candidateLimit,
-          },
-        };
-      }
-
-      case "list": {
-        const limit = Math.min(
-          200,
-          Math.max(1, Math.round(request.payload.input?.limit ?? 80)),
-        );
-        const sort = request.payload.input?.sort ?? "confidence_desc";
-        return {
-          id: request.id,
-          ok: true,
-          result: store.listMemories({
-            sort,
-            limit,
-          }),
-        };
-      }
-
-      case "rebuild": {
-        const candidates = store.listAllCandidates();
-        const updates: Array<{ id: number; embedding: number[] }> = [];
-
-        for (const candidate of candidates) {
-          updates.push({
-            id: candidate.id,
-            embedding: await embeddingRuntime.encode(
-              candidate.content,
-              request.payload.modelId,
-            ),
-          });
-        }
-
-        queryCache.clear();
-        const updatedCount = store.rebuildEmbeddings(
-          updates,
-          request.payload.modelId,
-        );
-        const completedAt = new Date().toISOString();
-        return {
-          id: request.id,
-          ok: true,
-          result: {
-            rebuiltCount: updatedCount,
-            modelId: request.payload.modelId,
-            completedAt,
-          },
-        };
-      }
-    }
-  };
-
-  port.postMessage({ type: "ready" } satisfies ReadyMessage);
-
-  port.on("message", (request: MemoryWorkerRequest) => {
-    queue = queue
-      .then(async () => {
-        try {
-          port.postMessage(await handleRequest(request));
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Chela memory worker failed.";
-          port.postMessage({
-            id: request.id,
-            ok: false,
-            error: message,
-          } satisfies ErrorResponse);
-        }
-      })
-      .catch((error) => {
-        const message =
-          error instanceof Error ? error.message : "Chela memory worker queue failed.";
-        port.postMessage({
-          id: request.id,
-          ok: false,
-          error: message,
-        } satisfies ErrorResponse);
-      });
-  });
-}
-
-function isWorkerBootstrapData(value: unknown): value is MemoryWorkerInitData {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    "kind" in value &&
-    value.kind === "chela-memory-worker"
-  );
-}
-
 function isReadyMessage(message: MemoryWorkerResponse): message is ReadyMessage {
-  return "type" in message && message.type === "ready";
+  return "type" in message && (message as { type?: unknown }).type === "ready";
 }
 
 export class MemoryWorkerClient {
@@ -402,6 +45,7 @@ export class MemoryWorkerClient {
   async add(input: {
     input: MemoryAddInput;
     modelId: MemoryEmbeddingModelId;
+    provider: EmbeddingProviderInfo | null;
   }): Promise<MemoryRecord> {
     return this.call<MemoryRecord>({
       id: randomUUID(),
@@ -416,6 +60,7 @@ export class MemoryWorkerClient {
     candidateLimit: number;
     minScore: number;
     modelId: MemoryEmbeddingModelId;
+    provider: EmbeddingProviderInfo | null;
   }): Promise<MemorySearchResult[]> {
     return this.call<MemorySearchResult[]>({
       id: randomUUID(),
@@ -445,6 +90,7 @@ export class MemoryWorkerClient {
 
   async rebuild(input: {
     modelId: MemoryEmbeddingModelId;
+    provider: EmbeddingProviderInfo | null;
   }): Promise<MemoryRebuildResult> {
     return this.call<MemoryRebuildResult>({
       id: randomUUID(),
@@ -460,10 +106,30 @@ export class MemoryWorkerClient {
     }
 
     this.state = "starting";
-    const worker = new Worker(new URL(import.meta.url), {
+    // The worker entry is bundled to a sibling chunk by electron-vite (see
+    // `electron.vite.config.ts`); resolving relative to the current bundle URL
+    // so the worker thread does NOT load the main bundle (which imports
+    // `electron` and would crash inside `worker_threads`).
+    const workerUrl = new URL("./embedding-worker.js", import.meta.url);
+    const worker = new Worker(workerUrl, {
       workerData: this.initData,
+      stderr: true,
+      stdout: true,
     });
     this.worker = worker;
+    const collectStream = (stream: NodeJS.ReadableStream | null, channel: "stdout" | "stderr") => {
+      if (!stream) return;
+      stream.setEncoding("utf8");
+      stream.on("data", (chunk: string) => {
+        appLogger.error({
+          scope: "memory.worker",
+          message: `worker ${channel}`,
+          data: { chunk: chunk.trim() },
+        });
+      });
+    };
+    collectStream(worker.stdout, "stdout");
+    collectStream(worker.stderr, "stderr");
     this.readyPromise = new Promise<void>((resolve, reject) => {
       const handleMessage = (message: MemoryWorkerResponse) => {
         if (!isReadyMessage(message)) {
@@ -495,12 +161,25 @@ export class MemoryWorkerClient {
         return;
       }
 
+      // Worker bootstrap / fatal failures are posted with id="bootstrap" and
+      // have no pending caller; surface them so we can debug worker crashes.
+      if (!message.ok && message.id === "bootstrap") {
+        appLogger.error({
+          scope: "memory.worker",
+          message: "Chela memory worker bootstrap failed",
+          data: { detail: message.error },
+        });
+        this.rejectPending(new Error(message.error));
+        return;
+      }
+
       const pending = this.pending.get(message.id);
       if (!pending) {
         return;
       }
 
       this.pending.delete(message.id);
+
       if (message.ok) {
         pending.resolve(message.result);
         return;
@@ -553,19 +232,4 @@ export class MemoryWorkerClient {
     }
     this.pending.clear();
   }
-}
-
-if (!isMainThread && isWorkerBootstrapData(workerData)) {
-  void startMemoryWorker(workerData).catch((error) => {
-    const message =
-      error instanceof Error ? error.message : "Chela memory worker bootstrap failed.";
-    if (parentPort) {
-      parentPort.postMessage({
-        id: "bootstrap",
-        ok: false,
-        error: message,
-      } satisfies ErrorResponse);
-    }
-    process.exit(1);
-  });
 }

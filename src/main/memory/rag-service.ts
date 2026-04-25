@@ -7,9 +7,11 @@ import type {
   MemorySearchResult,
   MemoryStats,
 } from "../../shared/contracts.js";
-import { MemoryWorkerClient } from "./embedding.js";
+import { MemoryWorkerClient, type EmbeddingProviderInfo } from "./embedding.js";
 import { getSettings } from "../settings.js";
 import { normalizeMemoryMetadata } from "./metadata.js";
+import { isLocalEmbeddingModelId } from "../../shared/memory.js";
+import { resolveEmbeddingProvider } from "../providers.js";
 
 function getMemoryDbPath(): string {
   return join(app.getPath("userData"), "chela-memory.db");
@@ -17,6 +19,17 @@ function getMemoryDbPath(): string {
 
 function getMemoryCacheDir(): string {
   return join(app.getPath("userData"), "cache", "transformers");
+}
+
+function resolveProviderInfo(): EmbeddingProviderInfo | null {
+  const settings = getSettings();
+  if (isLocalEmbeddingModelId(settings.memory.embeddingModelId)) {
+    return null;
+  }
+  if (!settings.memory.embeddingProviderId) {
+    return null;
+  }
+  return resolveEmbeddingProvider(settings.memory.embeddingProviderId);
 }
 
 class ChelaMemoryService {
@@ -34,6 +47,7 @@ class ChelaMemoryService {
         metadata: normalizeMemoryMetadata(input.metadata),
       },
       modelId: settings.memory.embeddingModelId,
+      provider: resolveProviderInfo(),
     });
   }
 
@@ -46,6 +60,7 @@ class ChelaMemoryService {
       candidateLimit: settings.memory.searchCandidateLimit,
       minScore: Math.max(0, Math.min(1, settings.memory.similarityThreshold / 100)),
       modelId: settings.memory.embeddingModelId,
+      provider: resolveProviderInfo(),
     });
   }
 
@@ -70,6 +85,7 @@ class ChelaMemoryService {
     const settings = getSettings();
     return this.workerClient.rebuild({
       modelId: settings.memory.embeddingModelId,
+      provider: resolveProviderInfo(),
     });
   }
 }
