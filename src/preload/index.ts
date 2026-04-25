@@ -100,6 +100,7 @@ const desktopApi: DesktopApi = {
   memory: {
     add: (input) => ipcRenderer.invoke(IPC_CHANNELS.memoryAdd, input),
     search: (query, limit) => ipcRenderer.invoke(IPC_CHANNELS.memorySearch, query, limit),
+    list: (input) => ipcRenderer.invoke(IPC_CHANNELS.memoryList, input),
     getStats: () => ipcRenderer.invoke(IPC_CHANNELS.memoryGetStats),
     rebuild: () => ipcRenderer.invoke(IPC_CHANNELS.memoryRebuild),
   },
