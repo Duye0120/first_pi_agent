@@ -302,3 +302,271 @@
 结果：
 - 单条命令展开后，详情块的状态反馈更贴近参考图。
 - 本轮继续按 AGENTS.md 约束使用文件级诊断，未运行 build。
+
+## 聊天思考行标题精简
+
+时间：2026-04-25 20:29:43
+
+改了什么：
+- 将思考折叠行左侧的 `think` 改为普通文本样式。
+- 移除同一行里的 `思考` 标题文字。
+- 收窄展开内容的左侧缩进，使内容块跟精简后的触发行对齐。
+
+为什么改：
+- 用户反馈 `think` 和 `思考` 语义重复，希望思考区域只保留一个 `think` 入口。
+
+涉及文件：
+- [src/renderer/src/components/assistant-ui/reasoning.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/assistant-ui/reasoning.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 聊天思考行显示为 `think`、状态和展开箭头，信息更紧凑。
+- 本轮继续按 AGENTS.md 约束使用文件级诊断，未运行 build。
+
+## 聊天标题生成链路修正
+
+时间：2026-04-25 20:36:06
+
+改了什么：
+- 聊天自动标题生成改为优先使用 `subagent` 模型路由。
+- 未配置或调用失败时，标题生成继续按 `utility`、`chat` 顺序回退。
+- `saveSessionProjection` 不再把 renderer 的临时 session title 写回持久化 meta。
+
+为什么改：
+- 用户反馈新聊天标题看起来直接使用首条消息截断结果。
+- 现有代码确实先用首条消息生成临时标题，后台生成标题又可能被 renderer 的异步持久化投影覆盖。
+- 标题字段需要由首条用户消息占位、自动标题生成和手动重命名链路集中管理。
+
+涉及文件：
+- [src/main/worker-service.ts](/D:/a_github/first_pi_agent/src/main/worker-service.ts)
+- [src/main/session/service.ts](/D:/a_github/first_pi_agent/src/main/session/service.ts)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 新聊天完成后会优先走 `subagent` 模型生成标题。
+- renderer 的临时首句标题不会在后台自动标题完成后覆盖生成结果。
+- 本轮继续按 AGENTS.md 约束使用文件级诊断，未运行 build。
+
+## 模型目录拉取远端模型列表
+
+时间：2026-04-25 16:18:32
+
+改了什么：
+- 模型设置页 `模型目录` 卡片右上角新增 `拉取模型列表` 按钮，仅在自定义提供商上可用。
+- 主进程 `providers.fetchSourceModels` 按 provider 类型走对应协议拉取远端模型列表：`openai` / `openai-compatible` 走 `GET {baseUrl}/models`，`anthropic` 走 `/v1/models` 配合 `x-api-key` + `anthropic-version`，`google` 走 `v1beta/models?key=...`。
+- 拉取请求统一带 15 秒 AbortController 超时，本地 OpenAI-compatible 源沿用占位 `local` API Key 兜底。
+- 渲染端把远端模型 ID 与现有条目按大小写不敏感去重后追加为草稿条目，命中已知模型元数据的会自动填入 detected 能力和上下文/输出限制。
+- 拉取结果在 `模型目录` 卡片体内以紧凑提示条展示：成功展示新增和合计数量，失败展示远端错误文案。
+- `SettingsCard` 增加 `headerAction` 插槽，标题与右侧动作按钮同行对齐。
+
+为什么改：
+- Ollama / LM Studio / OpenAI 兼容服务的可用模型经常变化，原先只能手动一条条添加。
+- Anthropic 和 Google 也支持 `/models` 列表接口，统一抽象一次后所有 provider 类型都能复用。
+- 拉取的模型默认进入草稿态，用户仍需点击 `保存修改` 才会持久化，避免误覆盖现有模型条目。
+
+涉及文件：
+- [src/shared/contracts.ts](/D:/a_github/first_pi_agent/src/shared/contracts.ts)
+- [src/shared/ipc.ts](/D:/a_github/first_pi_agent/src/shared/ipc.ts)
+- [src/preload/index.ts](/D:/a_github/first_pi_agent/src/preload/index.ts)
+- [src/main/providers.ts](/D:/a_github/first_pi_agent/src/main/providers.ts)
+- [src/main/ipc/providers.ts](/D:/a_github/first_pi_agent/src/main/ipc/providers.ts)
+- [src/renderer/src/components/assistant-ui/settings/shared.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/assistant-ui/settings/shared.tsx)
+- [src/renderer/src/components/assistant-ui/settings/keys-section.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/assistant-ui/settings/keys-section.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 自定义 provider 配好 Base URL 和 API Key 后，可点击 `拉取模型列表` 一键拉满模型目录。
+- 重复模型自动跳过，已知模型自动带上 detected 元数据。
+- 文件级 TypeScript 诊断通过；本轮按 AGENTS.md 约束保持轻量验证，未运行 build。
+
+
+## 记忆嵌入接入 Provider 远端模型
+
+- 时间：2026-04-25 16:42:10
+- 改了什么：记忆/RAG 的嵌入模型不再局限于本地 `Xenova/bge-small-zh`，可以选用任一已配置 Provider 中具备 embedding 能力（或 ID 含 embed/bge/e5/m3/gte/nomic 关键词）的远端模型；嵌入设置中新增 `embeddingProviderId` 与本地模型解耦。
+- 为什么改：用户在 Provider 配置了 Ollama 的 `bge-m3:latest` 等嵌入模型后，希望直接拿来做记忆向量化，避免再下载本地模型，也避免再走一遍冷启动。
+- 涉及文件：
+  - `src/shared/memory.ts`：`MemoryEmbeddingModelId` 改为 `string`，新增 `isLocalEmbeddingModelId`。
+  - `src/shared/contracts.ts`：`Settings.memory` 增加 `embeddingProviderId: string | null`。
+  - `src/main/settings.ts`：默认值与 normalize 处理新字段。
+  - `src/main/providers.ts`：新增 `resolveEmbeddingProvider`，解析远端 base URL 与 API Key（保留 local 占位 key）。
+  - `src/main/memory/embedding.ts`：worker 端新增 `encodeViaProvider`（POST `/embeddings`，兼容 OpenAI 与 Ollama 响应），AddRequest/SearchRequest/RebuildRequest 与 `MemoryWorkerClient` 全链路携带 `provider`。
+  - `src/main/memory/rag-service.ts`：根据 settings 解析 provider，再透传给 worker。
+  - `src/renderer/src/components/assistant-ui/settings/memory-section.tsx`：嵌入选择器换成分组式 `ModelSelector`，本地模型 + 已配置 Provider 中可用的远端嵌入模型分组展示，并补充 Provider 缺失时的提醒。
+- 结果：在“记忆设置”里可以直接选 `Ollama / bge-m3:latest` 这类远端嵌入模型；切换后向量化与检索都会通过 Provider HTTP 接口完成，索引模型变化时仍会触发原有“待重建索引”提示。
+
+## 记忆 worker 拆分独立 entry 修复 BrowserWindow 报错
+
+- 时间：2026-04-25 17:08:30
+- 改了什么：把 `src/main/memory/embedding.ts` 中的 worker 线程逻辑拆分到独立入口 `src/main/memory/embedding-worker.ts`，类型集中到 `embedding-types.ts`；`electron.vite.config.ts` 主进程构建增加二号 input 让 worker 单独打包；`MemoryWorkerClient` 改用 `new URL("./embedding-worker.js", import.meta.url)` 加载 worker。
+- 为什么改：之前 worker 复用主进程同一个 ESM bundle，bundle 顶部 `import { BrowserWindow } from "electron"` 在 `worker_threads` 内不会被 Electron 的模块加载器接管，触发 `SyntaxError: The requested module 'electron' does not provide an export named 'BrowserWindow'`，导致 `memory:rebuild` 等请求直接失败。
+- 涉及文件：
+  - `src/main/memory/embedding-types.ts`：新增，集中导出 worker 双方共用的类型。
+  - `src/main/memory/embedding-worker.ts`：新增，承载 `encodeViaProvider`、`createEmbeddingRuntime`、`startMemoryWorker` 与 worker bootstrap，仅依赖 `node:worker_threads`、SQLite store、retrieval、`@xenova/transformers`，不再触碰 electron。
+  - `src/main/memory/embedding.ts`：精简为 `MemoryWorkerClient`，并通过相邻 entry chunk URL 启动 worker。
+  - `electron.vite.config.ts`：主进程 `rollupOptions.input` 增加 `embedding-worker`，`entryFileNames` 固定为 `[name].js`。
+- 结果：本地 / 远端嵌入模型在重建、检索、写入路径都能正常落到 worker；切换到 Ollama `bge-m3:latest` 后“重建所有向量”不再抛 BrowserWindow 错误。⚠️ 该改动涉及构建配置，需重新启动 `pnpm dev` 以让 electron-vite 应用新的多入口配置。
+
+## 设置更新动态导入警告处理
+
+时间：2026-04-25 21:10:11
+
+改了什么：
+- 将 `settings.ts` 中对 `network/proxy` 和 `logger` 的动态导入改为顶部静态导入。
+- 将异步 `.then/.catch` 改为同步 `try/catch`，保留网络配置变更时才重建 dispatcher 的逻辑。
+
+为什么改：
+- Vite 构建时提示同一模块同时被动态导入和静态导入，动态导入无法拆出独立 chunk。
+- 这两个模块已经在主进程其他入口静态加载，设置更新处继续使用静态导入更符合当前打包结构。
+
+涉及文件：
+- [src/main/settings.ts](/D:/a_github/first_pi_agent/src/main/settings.ts)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 构建时不再因为 `settings.ts` 的这两处动态导入触发该类 Vite 分包警告。
+- 本轮继续按 AGENTS.md 约束使用文件级诊断，未运行 build。
+
+## Memory worker 启动失败诊断与 better-sqlite3 ABI 重建
+
+时间：2026-04-25 21:25
+
+改了什么：
+- `embedding-worker.ts`：fatal 错误改为延迟 50ms 再 `process.exit(1)`，避免 `parentPort.postMessage` 在退出时被丢失。
+- `embedding.ts`：`MemoryWorkerClient` 识别 `id:"bootstrap"` 的失败消息并写入 `appLogger` 的 `memory.worker` 作用域。
+- 通过 `pnpm dlx @electron/rebuild -f -o better-sqlite3 -v 41.1.0` 为 Electron 41 重装 prebuilt 二进制。
+
+为什么改：
+- 升级 Electron 后 `better-sqlite3` 仍是为 Electron 38（NODE_MODULE_VERSION 137）编译，当前 ABI 145 加载失败，但 worker 直接 `process.exit(1)` 退出，主线程只能看到 `exited with code 1`，定位不到根因。
+
+涉及文件：
+- `src/main/memory/embedding-worker.ts`
+- `src/main/memory/embedding.ts`
+
+结果：
+- worker 启动失败现在会在 `app.log` 里打出 `Chela memory worker bootstrap failed` 含完整 stderr。
+- `better-sqlite3` 已重新安装为 Electron 41 兼容版本，等待重启 Chela 后回归验证。
+
+## P0 安全策略补强
+
+时间：2026-04-25 21:38:15
+
+改了什么：
+- `security.ts`：敏感读路径和写保护路径在匹配前统一解析 symlink，glob 匹配改为专用转换函数；组合 shell 命令逐段校验，含 CR/LF、`;`、`&`、pipe 且混入非白名单指令时直接拒绝。
+- `logger.ts`：导出日志消息和值脱敏函数，日志 `message` 字段也走字符串级脱敏，递归对象继续按敏感 key 和 inline key/token 模式打码。
+- `providers.ts` 及调用点：`resolveModelEntry` 返回 `getApiKey()`，运行时模型对象避免直接暴露可枚举 `apiKey` 字段。
+- `tests/security-regression.test.ts`：新增 symlink 写保护绕过、PowerShell CR/LF 多行注入、递归日志脱敏的回归用例。
+
+为什么改：
+- 外部审查口径里 `S1/S2/S3` 仍是最高风险项；现有实现已经覆盖了一部分路径，但 symlink 指向受保护目录、日志 message 字段和模型解析对象明文 key 仍有补强空间。
+
+涉及文件：
+- `src/main/security.ts`
+- `src/main/logger.ts`
+- `src/main/providers.ts`
+- `src/main/agent.ts`
+- `src/main/context/snapshot.ts`
+- `src/main/memory/service.ts`
+- `src/main/worker-service.ts`
+- `tests/security-regression.test.ts`
+- `docs/changes/2026-04-25/changes.md`
+
+结果：
+- 文件策略对 symlink 后的真实路径执行敏感读与写保护判断。
+- 组合 shell payload 无法借安全首段绕过白名单。
+- 主日志消息、嵌套对象和模型解析结果减少 API Key 明文暴露面。
+- 当前 Windows Node 24.13/24.14 在本机启动时触发 `ncrypto::CSPRNG(nullptr, 0)` 断言，回归测试文件已落地，待 Node 运行时恢复后执行 `pnpm exec tsx tests/security-regression.test.ts`。
+
+## 主线 P0/P1 稳定性补强
+
+时间：2026-04-25 21:49:49
+
+改了什么：
+- `adapter.ts`：终态事件 flush 状态从单布尔位改为按 `runId` 记录，保留“发送成功后才标记已 flush”的语义。
+- `session/write-lock.ts`：新增 session 写入临界区工具。
+- `session/transcript-writer.ts`：追加 transcript 前读取真实最后 seq，并在 session 写锁内完成 append、meta seq 和 index 更新。
+- `session/service.ts`：`updateSessionMeta` 进入同一 session 写锁，减少 meta 与 transcript 写入互相覆盖的窗口。
+- `chat/cancel.ts`：同一 `runId` 的取消请求做短期幂等，避免重复触发 `cancelAgent`。
+- `chat/cancel.ts`：取消幂等 Set 的 30 秒清理定时器在所有 return 分支前注册，避免命中 active run 时长期残留。
+- `window.ts`：继续保留生产环境 DevTools 关闭和快捷键拦截；renderer sandbox 因 preload bridge 兼容性进入后续专项。
+- `AssistantThreadPanel.tsx` / `thread.tsx`：composer draft 按 session 持久化，切换会话时恢复对应草稿，快速切换时定时保存绑定原 session。
+
+为什么改：
+- 主线 P0/P1 里仍有数据完整性、终态事件、取消幂等和窗口安全隔离缺口；这些项直接影响聊天消息持久化、连续 run 终态送达和长时稳定性。
+
+涉及文件：
+- `src/main/adapter.ts`
+- `src/main/chat/cancel.ts`
+- `src/main/session/write-lock.ts`
+- `src/main/session/transcript-writer.ts`
+- `src/main/session/service.ts`
+- `src/main/window.ts`
+- `src/renderer/src/components/AssistantThreadPanel.tsx`
+- `src/renderer/src/components/assistant-ui/thread.tsx`
+- `docs/changes/2026-04-25/changes.md`
+
+结果：
+- 连续 run 的终态事件按 run 维度去重。
+- transcript seq 以文件实际最后一行为准，降低 stale meta 导致的重复 seq 和覆盖风险。
+- 重复点击取消只触发一次取消动作。
+- 生产环境 DevTools 入口保持关闭，renderer sandbox 迁移单独验收。
+- 快速切换 session 时，未发送的输入草稿会留在原会话并在切回时恢复。
+
+## 建立 docs/todos 目录与待办索引
+
+时间：2026-04-25 21:50
+
+改了什么：
+- 新建 `docs/todos/` 目录用于沉淀「想做但没做」的事项。
+- 新增 `docs/todos/README.md` 作为索引：按来源（plan / spec / AGENTS 约束 / 讨论稿）聚合，不重复细节，只指向源文档。
+- 新增 `docs/todos/memory-system-signal-driven.md`：保存与用户讨论的「类人记忆 = 4 类信号通道 + 候选事件总线 + 可学习评分器」设计稿。
+
+为什么改：
+- 当前 plan / spec / AGENTS 约束分散在多处，单个 audit 文件 75 条问题，缺一个统一入口看「下一步该做啥」。
+- 类人记忆设计是讨论结论，不属于已有 plan/spec 的范围，需要单独留痕，避免后续遗忘。
+
+涉及文件：
+- `docs/todos/README.md`（新增）
+- `docs/todos/memory-system-signal-driven.md`（新增）
+
+结果：
+- 后续新增 todo 直接在 `docs/todos/` 下加文件并在 README 追加链接；完成项从源文档勾掉同时删 README 对应行。
+
+## 回滚 renderer sandbox 启动回归
+
+时间：2026-04-25 22:06
+
+改了什么：
+- `window.ts`：将主窗口 `webPreferences.sandbox` 恢复为 `false`，保留 `contextIsolation: true`、`nodeIntegration: false` 和生产环境 DevTools 限制。
+
+为什么改：
+- 启用 sandbox 后当前 preload bridge 没有成功暴露 `window.desktopApi`，renderer 启动页直接报 `桌面桥接没有注入成功，renderer 无法访问 Electron API`。
+- 当前优先恢复 Chela 主界面可用性；sandbox 迁移需要单独做 preload 兼容改造和启动回归。
+
+涉及文件：
+- `src/main/window.ts`
+- `docs/changes/2026-04-25/changes.md`
+
+结果：
+- renderer 会继续沿用现有 preload 注入路径。
+- `M9` 的 sandbox 加固进入后续专项，验收标准包含启动时 `window.desktopApi` 可用。
+
+## 修复左下角分支初始读取卡住
+
+时间：2026-04-25 22:18
+
+改了什么：
+- `src/renderer/src/App.tsx` 中 `bootApp` 在写入 `settings` 状态前，同步更新 `settingsRef.current`。
+- `switchWorkspacePath` 改为基于 `settingsRef.current` 先算出 `nextSettings`，并同步写入 state 与 ref，再继续执行 workspace 更新后的 Git 刷新。
+
+为什么改：
+- 左下角分支按钮依赖 `gitBranchSummary`；初始化和切换 workspace 时，Git 刷新回调会拿 `settingsRef.current.workspace` 做“结果是否过期”的保护判断。
+- 之前 `settings` state 已更新但 `settingsRef` 还慢一拍，导致首轮 `getSummary()` / `getSnapshot()` 返回后被误判为旧结果直接丢弃，于是分支一直显示“读取中”；直到用户打开 diff panel 触发下一轮刷新才恢复。
+
+涉及文件：
+- `src/renderer/src/App.tsx`
+- `docs/changes/2026-04-25/changes.md`
+
+结果：
+- 首次进入线程页时，左下角分支摘要可以在首轮 Git 刷新完成后正常落到 UI，不再依赖打开 diff panel 才更新。
+- workspace 切换时，Git 刷新链路使用的 ref 与 state 保持同步，减少误丢结果的窗口。
