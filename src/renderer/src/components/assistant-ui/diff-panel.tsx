@@ -957,6 +957,120 @@ export function DiffWorkbenchContent({
   const visibleCommitPlanSkillUsage =
     commitPlanSkillUsage ?? (isGeneratingPlan ? pendingCommitPlanSkillUsage : null);
 
+  const stageSelectionControl =
+    selectedDiffSource === "unstaged" || selectedDiffSource === "all" ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-7 px-2.5 text-[12px] rounded-[var(--radius-shell)] gap-1.5"
+            onClick={handleStageSelected}
+            disabled={selectedPaths.size === 0 || isStaging}
+          >
+            <PlusIcon className="w-3.5 h-3.5" />
+            暂存
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>暂存选中文件</TooltipContent>
+      </Tooltip>
+    ) : selectedDiffSource === "staged" ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-7 px-2.5 text-[12px] rounded-[var(--radius-shell)] gap-1.5"
+            onClick={handleUnstageSelected}
+            disabled={selectedPaths.size === 0 || isStaging}
+          >
+            <MinusIcon className="w-3.5 h-3.5" />
+            取消暂存
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>取消暂存选中文件</TooltipContent>
+      </Tooltip>
+    ) : null;
+
+  const commitPlanActionControls = (
+    <div className="flex items-center gap-1">
+      {commitPlanGroups.length > 1 ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={isCommittingAll ? "default" : "ghost"}
+              size="sm"
+              className={cn(
+                "h-7 rounded-[var(--radius-shell)] shrink-0 transition-all",
+                isCommittingAll ? "bg-foreground/90 text-background px-2.5" : "w-7 p-0 text-muted-foreground hover:text-foreground"
+              )}
+              onClick={handleCommitAllPlanGroups}
+              disabled={!canCommitAll}
+              aria-label="依次提交全部"
+            >
+              {isCommittingAll ? (
+                <>
+                  <RefreshCwIcon className="size-3.5 animate-spin mr-1.5" />
+                  <span className="text-[11px] font-medium leading-none">{commitAllProgress.current} / {commitAllProgress.total}</span>
+                </>
+              ) : (
+                <CheckCheckIcon className="size-3.5" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{commitAllTooltip}</TooltipContent>
+        </Tooltip>
+      ) : null}
+
+      {commitPlanGroups.length > 0 ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 rounded-[var(--radius-shell)] shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={handleClearPlan}
+              disabled={isPlanBusy}
+            >
+              <TrashIcon className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>清空计划</TooltipContent>
+        </Tooltip>
+      ) : null}
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={isGeneratingPlan || showSparklesHint ? "default" : "ghost"}
+            size="sm"
+            className={cn(
+              "h-7 rounded-[var(--radius-shell)] shrink-0 transition-all gap-1.5",
+              isGeneratingPlan || showSparklesHint ? "bg-foreground/90 text-background px-2.5" : "w-7 p-0 text-muted-foreground hover:text-foreground",
+            )}
+            onClick={handleGeneratePlan}
+            disabled={!canGeneratePlan}
+          >
+            {isGeneratingPlan ? (
+              <>
+                <SparklesIcon className="size-3.5 animate-pulse" />
+                <span className="text-[11px] font-medium leading-none">生成中…</span>
+              </>
+            ) : showSparklesHint ? (
+              <>
+                <SparklesIcon className="size-3.5" />
+                <span className="text-[11px] font-medium leading-none">重新生成</span>
+              </>
+            ) : (
+              <SparklesIcon className="size-3.5" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{generateTooltip}</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+
   function PanelHeader({ children }: { children: React.ReactNode }) {
     return (
       <div className="mb-1 flex items-start justify-between gap-2">
@@ -1188,39 +1302,7 @@ export function DiffWorkbenchContent({
                       </Tooltip>
                     </div>
 
-                    {selectedDiffSource === "unstaged" || selectedDiffSource === "all" ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="h-7 px-2.5 text-[12px] rounded-[var(--radius-shell)] gap-1.5"
-                            onClick={handleStageSelected}
-                            disabled={selectedPaths.size === 0 || isStaging}
-                          >
-                            <PlusIcon className="w-3.5 h-3.5" />
-                            暂存
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>暂存选中文件</TooltipContent>
-                      </Tooltip>
-                    ) : selectedDiffSource === "staged" ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="h-7 px-2.5 text-[12px] rounded-[var(--radius-shell)] gap-1.5"
-                            onClick={handleUnstageSelected}
-                            disabled={selectedPaths.size === 0 || isStaging}
-                          >
-                            <MinusIcon className="w-3.5 h-3.5" />
-                            取消暂存
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>取消暂存选中文件</TooltipContent>
-                      </Tooltip>
-                    ) : null}
+                    {commitPlanActionControls}
                   </div>
 
                   <div className="flex-1 overflow-y-auto min-h-0 pr-1">
@@ -1265,80 +1347,7 @@ export function DiffWorkbenchContent({
                       </div>
 
                       <div className="flex items-center gap-1">
-                        {commitPlanGroups.length > 1 ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant={isCommittingAll ? "default" : "ghost"}
-                                size="sm"
-                                className={cn(
-                                  "h-7 rounded-[var(--radius-shell)] shrink-0 transition-all",
-                                  isCommittingAll ? "bg-foreground/90 text-background px-2.5" : "w-7 p-0 text-muted-foreground hover:text-foreground"
-                                )}
-                                onClick={handleCommitAllPlanGroups}
-                                disabled={!canCommitAll}
-                                aria-label="依次提交全部"
-                              >
-                                {isCommittingAll ? (
-                                  <>
-                                    <RefreshCwIcon className="size-3.5 animate-spin mr-1.5" />
-                                    <span className="text-[11px] font-medium leading-none">{commitAllProgress.current} / {commitAllProgress.total}</span>
-                                  </>
-                                ) : (
-                                  <CheckCheckIcon className="size-3.5" />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{commitAllTooltip}</TooltipContent>
-                          </Tooltip>
-                        ) : null}
-
-                        {commitPlanGroups.length > 0 ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-7 rounded-[var(--radius-shell)] shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                onClick={handleClearPlan}
-                                disabled={isPlanBusy}
-                              >
-                                <TrashIcon className="size-3.5" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>清空计划</TooltipContent>
-                          </Tooltip>
-                        ) : null}
-
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant={isGeneratingPlan || showSparklesHint ? "default" : "ghost"}
-                              size="sm"
-                              className={cn(
-                                "h-7 rounded-[var(--radius-shell)] shrink-0 transition-all gap-1.5",
-                                isGeneratingPlan || showSparklesHint ? "bg-foreground/90 text-background px-2.5" : "w-7 p-0 text-muted-foreground hover:text-foreground",
-                              )}
-                              onClick={handleGeneratePlan}
-                              disabled={!canGeneratePlan}
-                            >
-                              {isGeneratingPlan ? (
-                                <>
-                                  <SparklesIcon className="size-3.5 animate-pulse" />
-                                  <span className="text-[11px] font-medium leading-none">生成中…</span>
-                                </>
-                              ) : showSparklesHint ? (
-                                <>
-                                  <SparklesIcon className="size-3.5" />
-                                  <span className="text-[11px] font-medium leading-none">重新生成</span>
-                                </>
-                              ) : (
-                                <SparklesIcon className="size-3.5" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>{generateTooltip}</TooltipContent>
-                        </Tooltip>
+                        {stageSelectionControl}
                       </div>
                     </div>
 

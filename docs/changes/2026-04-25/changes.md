@@ -100,3 +100,47 @@
 结果：
 - 每条带 `runChangeSummary` 的 assistant 消息会显示可折叠的文件改动摘要。
 - 文件级 TypeScript 诊断通过；本轮按 AGENTS.md 约束保持轻量验证，未运行 build。
+
+## 工作区边栏提交计划前置
+
+时间：2026-04-25 14:09:50
+
+改了什么：
+- 将右侧工作区边栏左栏里的提交计划面板前置到文件树上方。
+- 文件树、全选、视图切换和暂存入口继续保留在提交计划下方。
+- 调整提交计划高度拖拽方向，当前置面板向下拖动时会增加高度。
+
+为什么改：
+- 用户明确表示顶部 `暂存` 操作使用频率低，希望把底部提交计划动作提到更容易点的位置。
+- 提交计划的生成、清空、批量提交属于当前工作流主操作，应该比文件树底部更早被看到。
+
+涉及文件：
+- [src/renderer/src/components/assistant-ui/diff-panel.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/assistant-ui/diff-panel.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 打开工作区边栏后，提交计划区会显示在左侧文件树上方。
+- 本轮为布局微调，按 AGENTS.md 约束做轻量自检，未运行 build。
+
+## 工作区边栏按钮组位置修正
+
+时间：2026-04-25 14:13:12
+
+改了什么：
+- 还原工作区边栏左侧的文件树和提交计划面板顺序。
+- 将提交计划动作按钮组抽成局部控件，并放到文件树顶部右侧原 `暂存` 位置。
+- 将 `暂存 / 取消暂存` 入口下放到提交计划标题右侧。
+- 恢复底部提交计划面板的高度拖拽方向。
+
+为什么改：
+- 用户要调整的是顶部 `暂存` 和底部提交计划动作按钮组的位置关系。
+- 生成提交计划按钮是高频动作，放在文件勾选区域右上角更贴近当前操作。
+
+涉及文件：
+- [src/renderer/src/components/assistant-ui/diff-panel.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/assistant-ui/diff-panel.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 文件树仍在上方，提交计划仍在下方。
+- 文件树顶部右侧显示生成计划、清空计划和依次提交按钮组。
+- 提交计划标题右侧显示 `暂存 / 取消暂存`。
