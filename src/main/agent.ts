@@ -186,7 +186,7 @@ export async function initAgent(
       tools,
       messages: normalizedMessages,
     },
-    getApiKey: () => resolved.apiKey,
+    getApiKey: () => resolved.getApiKey(),
     transformContext: createTransformContext(
       sessionId,
       resolved.model.contextWindow ?? null,

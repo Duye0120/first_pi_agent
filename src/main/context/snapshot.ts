@@ -650,7 +650,7 @@ async function buildSnapshotDraftWithModel(input: {
         ],
       },
       {
-        apiKey: resolved.apiKey,
+        apiKey: resolved.getApiKey(),
         maxTokens: 900,
       },
     );

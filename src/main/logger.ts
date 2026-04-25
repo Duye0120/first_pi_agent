@@ -178,6 +178,10 @@ function sanitizeStringForLog(value: string): string {
   return next.length <= 500 ? next : next.slice(0, 500) + "…";
 }
 
+export function sanitizeLogMessage(value: string): string {
+  return sanitizeStringForLog(value);
+}
+
 function sanitizeForLog(value: unknown, depth = 0): unknown {
   if (depth > 4) {
     return "[truncated]";
@@ -224,6 +228,10 @@ function sanitizeForLog(value: unknown, depth = 0): unknown {
   return next;
 }
 
+export function sanitizeLogValue(value: unknown): unknown {
+  return sanitizeForLog(value);
+}
+
 function serializeError(error: unknown): SerializedError {
   if (error instanceof Error) {
     const serialized: SerializedError = {
@@ -257,7 +265,7 @@ function writeLog(level: AppLogLevel, input: AppLogInput): void {
     timestamp: new Date().toISOString(),
     level,
     scope: input.scope,
-    message: input.message,
+    message: sanitizeLogMessage(input.message),
     pid: process.pid,
     data: input.data === undefined ? undefined : sanitizeForLog(input.data),
     error: input.error === undefined ? undefined : serializeError(input.error),
