@@ -131,3 +131,174 @@
 - 文件树顶部右侧显示图标版 `暂存 / 取消暂存`、生成计划、清空计划和提交按钮组。
 - 单个提交计划时，顶部提交按钮可以直接提交当前计划。
 - 提交计划底部标签优先单行展示，空间不足时自动换行。
+
+## 聊天工具调用分组样式
+
+时间：2026-04-25 15:38:25
+
+改了什么：
+- 将 assistant 消息里连续的工具调用步骤合并成 `command_group` 展示项。
+- 工具调用分组首行显示 `Ran N commands` 或运行中的 `Running N commands`。
+- 分组支持点击展开和收起，展开后逐行显示 `已运行 / 运行中 / 失败 / 已停止` 与对应命令摘要。
+- 命令摘要会把 `shell_exec`、`grep_search`、`glob_search`、`file_read`、`file_write`、`file_edit` 等工具转成更接近命令行的文本。
+- 保留原始 step 数据，只在 renderer 组装 assistant-ui parts 时合并展示。
+
+为什么改：
+- 原先每个工具调用单独占一行，聊天区域会出现大量“思考 / 读取文件 / grep search”的列表。
+- Codex 风格的命令分组更适合聊天流阅读，同时保留展开查看执行细节的能力。
+
+涉及文件：
+- [src/renderer/src/components/AssistantThreadPanel.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/AssistantThreadPanel.tsx)
+- [src/renderer/src/components/ui/tool-fallback.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/ui/tool-fallback.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 聊天里的连续工具调用会显示为可折叠命令列表。
+- 文件级 TypeScript 诊断通过；本轮按 AGENTS.md 约束保持轻量验证，未运行 build。
+
+## 聊天思考折叠行样式
+
+时间：2026-04-25 15:43:29
+
+改了什么：
+- 将聊天里的 `Reasoning` 思考块改成轻量折叠行。
+- 首行展示 `思考`、`进行中 / 已完成` 状态和箭头。
+- 运行中状态保留 spinner，完成状态使用中性图标底色。
+- 展开内容改为弱背景文本块，限制最大高度并支持内部滚动。
+
+为什么改：
+- 用户希望思考区域和 `Ran N commands` 工具分组保持相近的信息密度与折叠交互。
+- 思考内容默认收起能减少聊天流里的纵向占用，点击后仍可查看完整内容。
+
+涉及文件：
+- [src/renderer/src/components/assistant-ui/reasoning.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/assistant-ui/reasoning.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 聊天里的思考部分会显示为可展开的紧凑行。
+- 文件级 TypeScript 诊断通过；本轮按 AGENTS.md 约束保持轻量验证，未运行 build。
+
+## 聊天思考 think 标识
+
+时间：2026-04-25 15:46:49
+
+改了什么：
+- 将聊天思考折叠行左侧的 lucide 图标替换为 `think` 文本胶囊。
+- 移除 `BrainCircuitIcon` 和 `LoaderCircleIcon` 引用。
+- 保留 `进行中 / 已完成` 状态文本和展开箭头。
+
+为什么改：
+- 用户希望思考行减少图标感，用更直接的 `think` 文本标识表达这一段内容。
+
+涉及文件：
+- [src/renderer/src/components/assistant-ui/reasoning.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/assistant-ui/reasoning.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 思考行左侧显示 `think`，整体仍保持可展开折叠交互。
+- 文件级 TypeScript 诊断通过；本轮按 AGENTS.md 约束保持轻量验证，未运行 build。
+
+## 聊天命令分组展开详情框
+
+时间：2026-04-25 16:23:19
+
+改了什么：
+- 调整 `Ran N commands` 展开态的详情区域样式。
+- 展开后命令列表包裹在弱背景详情框中，增加轻量 ring 和内部留白。
+- 每条命令保持 `已运行 / 运行中 / 失败 / 已停止` 与命令摘要两列展示。
+
+为什么改：
+- 用户希望命令分组和 Codex 一样，点击展开后能更清楚地查看详情。
+
+涉及文件：
+- [src/renderer/src/components/ui/tool-fallback.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/ui/tool-fallback.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- `Ran N commands` 点击展开后会显示更明确的命令详情框。
+- 文件级 TypeScript 诊断通过；本轮按 AGENTS.md 约束保持轻量验证，未运行 build。
+
+## 聊天命令分组展开入口修正
+
+时间：2026-04-25 16:35:16
+
+改了什么：
+- 将 `Ran N commands` 的折叠触发行放进命令详情框顶部。
+- 详情框顶部始终显示标题和箭头，点击这一行即可展开或收起命令列表。
+- 命令明细继续保留在同一个详情框内部。
+
+为什么改：
+- 用户反馈展开态只看到命令明细，缺少可点击标题和箭头提示。
+- 把触发入口固定在详情框顶部后，收起和展开状态都有明确操作位置。
+
+涉及文件：
+- [src/renderer/src/components/ui/tool-fallback.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/ui/tool-fallback.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- `Ran N commands` 标题和箭头会始终显示在命令详情框顶部。
+- 文件级 TypeScript 诊断通过；本轮按 AGENTS.md 约束保持轻量验证，未运行 build。
+
+## 聊天单条命令详情展开
+
+时间：2026-04-25 16:44:42
+
+改了什么：
+- 为 `Ran N commands` 展开后的每条命令增加独立折叠交互。
+- 命令行有详情时右侧显示箭头，点击后展开 Shell 或工具输出块。
+- `AssistantThreadPanel` 在构建 `command_group` 时同步传入每条命令的详情标题、输出内容和错误内容。
+- Shell 命令详情优先展示 `$ command`、stdout 和 stderr；其他工具展示工具返回文本。
+
+为什么改：
+- 用户希望命令列表中的单条 `已运行 command` 也能像 Codex 一样继续展开查看详情。
+
+涉及文件：
+- [src/renderer/src/components/AssistantThreadPanel.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/AssistantThreadPanel.tsx)
+- [src/renderer/src/components/ui/tool-fallback.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/ui/tool-fallback.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 命令分组支持两层展开：先展开命令列表，再展开单条命令详情。
+- 文件级 TypeScript 诊断通过；本轮按 AGENTS.md 约束保持轻量验证，未运行 build。
+
+## 聊天命令详情 Codex 样式对齐
+
+时间：2026-04-25 16:57:53
+
+改了什么：
+- 将 `Ran N commands` 外层恢复为轻量文本触发行。
+- 命令列表行恢复为轻量文本行，单条命令展开后才显示灰色详情块。
+- Shell 命令展开时，命令行摘要显示为 `命令`，具体命令和输出放入下方详情块。
+- 单条命令详情块移除额外描边，使用弱背景、圆角、内部滚动和右下角状态。
+
+为什么改：
+- 用户指定以 Codex 参考图为准：分组和命令行保持轻，详情内容用灰色块承载。
+
+涉及文件：
+- [src/renderer/src/components/ui/tool-fallback.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/ui/tool-fallback.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 命令分组外观更接近参考图，命令详情只在单条命令展开后显示。
+- 文件级 TypeScript 诊断通过；本轮按 AGENTS.md 约束保持轻量验证，未运行 build。
+
+## 聊天命令详情状态细节对齐
+
+时间：2026-04-25 17:00:29
+
+改了什么：
+- 将单条命令详情块底部状态改成图标加文字的紧凑展示，例如 `成功` 前显示 check 图标。
+- 运行中、失败、已停止状态分别复用对应图标和颜色。
+- 将命令详情块背景改为更接近参考图的弱灰底，保留轻量圆角和内部滚动。
+
+为什么改：
+- 用户指定最新 Codex 参考图作为目标样式，详情块右下角状态需要和图中 `✓ 成功` 的表达一致。
+- 命令组外层和命令行保持轻量，灰色块只承载展开后的具体命令输出。
+
+涉及文件：
+- [src/renderer/src/components/ui/tool-fallback.tsx](/D:/a_github/first_pi_agent/src/renderer/src/components/ui/tool-fallback.tsx)
+- [docs/changes/2026-04-25/changes.md](/D:/a_github/first_pi_agent/docs/changes/2026-04-25/changes.md)
+
+结果：
+- 单条命令展开后，详情块的状态反馈更贴近参考图。
+- 本轮继续按 AGENTS.md 约束使用文件级诊断，未运行 build。
