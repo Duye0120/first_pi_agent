@@ -121,6 +121,7 @@ const desktopApi: DesktopApi = {
     saveSource: (draft) => ipcRenderer.invoke(IPC_CHANNELS.providersSaveSource, draft),
     deleteSource: (sourceId) => ipcRenderer.invoke(IPC_CHANNELS.providersDeleteSource, sourceId),
     testSource: (draft) => ipcRenderer.invoke(IPC_CHANNELS.providersTestSource, draft),
+    fetchModels: (draft) => ipcRenderer.invoke(IPC_CHANNELS.providersFetchModels, draft),
     getCredentials: (sourceId) => ipcRenderer.invoke(IPC_CHANNELS.providersGetCredentials, sourceId),
     setCredentials: (sourceId, apiKey) => ipcRenderer.invoke(IPC_CHANNELS.providersSetCredentials, sourceId, apiKey),
   },

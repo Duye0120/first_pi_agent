@@ -68,6 +68,7 @@ export const IPC_CHANNELS = {
   providersSaveSource: "providers:save-source",
   providersDeleteSource: "providers:delete-source",
   providersTestSource: "providers:test-source",
+  providersFetchModels: "providers:fetch-models",
   providersGetCredentials: "providers:get-credentials",
   providersSetCredentials: "providers:set-credentials",
 
