@@ -1302,7 +1302,10 @@ export function DiffWorkbenchContent({
                       </Tooltip>
                     </div>
 
-                    {commitPlanActionControls}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {stageSelectionControl}
+                      {commitPlanActionControls}
+                    </div>
                   </div>
 
                   <div className="flex-1 overflow-y-auto min-h-0 pr-1">
@@ -1328,26 +1331,19 @@ export function DiffWorkbenchContent({
                   style={{ height: commitPanelHeight }}
                 >
                   <div className="flex min-h-0 flex-1 flex-col rounded-[calc(var(--radius-shell)+2px)] bg-[color:var(--color-control-panel-bg)] p-2.5 shadow-[var(--color-control-shadow)]">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <p className="shrink-0 text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">
                           提交计划
-                        </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          <Badge variant="secondary">已选 {selectedPaths.size}</Badge>
-                          <Badge variant="secondary">计划 {commitPlanGroups.length}</Badge>
-                        </div>
+                      </p>
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                        <Badge variant="secondary">已选 {selectedPaths.size}</Badge>
+                        <Badge variant="secondary">计划 {commitPlanGroups.length}</Badge>
                         {visibleCommitPlanSkillUsage ? (
                           <SkillUsageStrip
                             skillUsages={[visibleCommitPlanSkillUsage]}
                             leadLabel="由"
-                            className="mt-2"
                           />
                         ) : null}
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        {stageSelectionControl}
                       </div>
                     </div>
 
