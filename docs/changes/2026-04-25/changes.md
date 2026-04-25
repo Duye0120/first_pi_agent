@@ -750,3 +750,25 @@
 结果：
 - 文件区域保持单列。
 - 用户可以继续在横向对比和竖向对比之间切换。
+
+## 修正本仓库 Git 提交作者邮箱
+
+时间：2026-04-25 23:54
+
+改了什么：
+- 当前仓库 `.git/config` 的 `user.name` 从 `Chela Dev` 调整为全局 Git 用户名。
+- 当前仓库 `.git/config` 的 `user.email` 从 Chela 专用邮箱调整为全局 Git 邮箱。
+- 检查 Chela 提交链路，确认 `git:commit` 走本仓库 Git 配置，没有硬编码提交作者。
+
+为什么改：
+- GitHub contribution 统计要求提交作者邮箱关联到 GitHub 账号；近期 Chela 生成的提交使用了 Chela 专用邮箱，导致贡献图没有归属到当前 GitHub 用户。
+
+涉及文件：
+- `.git/config`
+- `src/main/git.ts`
+- `src/main/ipc/workbench.ts`
+- `docs/changes/2026-04-25/changes.md`
+
+结果：
+- 后续通过 Chela 在当前仓库创建的提交会使用本仓库 Git 作者配置。
+- 已经推送的旧提交仍使用旧邮箱，需在 GitHub 账号里添加并验证旧邮箱，或重写这些提交的作者后再推送。
