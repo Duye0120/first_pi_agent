@@ -19,7 +19,7 @@ type GenerateSessionTitleInput = {
   assistantText: string;
 };
 
-type WorkerModelRole = "utility" | "chat";
+type WorkerModelRole = "utility" | "chat" | "subagent";
 
 type TextGenerationResult = {
   text: string;
@@ -134,10 +134,18 @@ function resolveWorkerModel(role: WorkerModelRole) {
   const entryId =
     role === "utility"
       ? settings.modelRouting.utility.modelId
-      : settings.modelRouting.chat.modelId;
+      : role === "subagent"
+        ? settings.modelRouting.subagent.modelId
+        : settings.modelRouting.chat.modelId;
 
   if (!entryId) {
-    throw new Error(role === "utility" ? "当前未配置工具模型。" : "当前未配置聊天模型。");
+    throw new Error(
+      role === "utility"
+        ? "当前未配置工具模型。"
+        : role === "subagent"
+          ? "当前未配置 Sub-agent 模型。"
+          : "当前未配置聊天模型。",
+    );
   }
 
   return resolveModelEntry(entryId);
@@ -166,7 +174,7 @@ async function completeTextWithRole(
         systemPrompt: nextSystemPrompt,
         messages: [{ role: "user", content: nextUserPrompt, timestamp: Date.now() }],
       },
-      { apiKey: resolved.apiKey },
+      { apiKey: resolved.getApiKey() },
     );
 
     const text = extractText(response.content);
@@ -284,6 +292,30 @@ async function generateTextWithFallback(input: {
     const chatMessage = getErrorMessage(fallbackError, "聊天模型回退失败。");
     throw new Error(`${utilityMessage} 聊天模型回退也失败：${chatMessage}`);
   }
+}
+
+async function generateSessionTitleTextWithFallback(input: {
+  systemPrompt: string;
+  userPrompt: string;
+}): Promise<TextGenerationResult> {
+  const roles: WorkerModelRole[] = getSettings().modelRouting.subagent.modelId
+    ? ["subagent", "utility", "chat"]
+    : ["utility", "chat"];
+  const errors: string[] = [];
+
+  for (const [index, role] of roles.entries()) {
+    try {
+      return {
+        text: await completeTextWithRole(role, input.systemPrompt, input.userPrompt),
+        usedModelRole: role,
+        fallbackUsed: index > 0,
+      };
+    } catch (error) {
+      errors.push(getErrorMessage(error, `${role} 模型生成失败。`));
+    }
+  }
+
+  throw new Error(errors.join(" "));
 }
 
 function escapeRegExp(value: string): string {
@@ -1218,7 +1250,7 @@ export class WorkerService {
     input: GenerateSessionTitleInput,
   ): Promise<string | null> {
     const prompt = buildSessionTitlePrompt(input);
-    const result = await generateTextWithFallback(prompt);
+    const result = await generateSessionTitleTextWithFallback(prompt);
     const title = normalizeTitleLine(result.text);
     return title || null;
   }
