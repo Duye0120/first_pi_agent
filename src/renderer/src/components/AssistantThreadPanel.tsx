@@ -108,20 +108,6 @@ function getLatestThinkingStep(steps: AgentStep[]) {
   return [...steps].reverse().find((step) => step.kind === "thinking");
 }
 
-function safeArgsText(value: unknown) {
-  if (value === undefined) return "{}";
-
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function normalizeLineEndings(text: string) {
-  return text.replace(/\r\n|\n\r|\r/g, "\n");
-}
-
 function mergeRuntimeSkillUsages(
   current: RuntimeSkillUsage[],
   next: RuntimeSkillUsage[],
@@ -153,52 +139,6 @@ function buildPendingApprovalGroupsSignature(groups: PendingApprovalGroup[]) {
     .join("|");
 }
 
-function getToolResultText(result: unknown): string | null {
-  if (typeof result === "string") {
-    return normalizeLineEndings(result);
-  }
-
-  if (!result || typeof result !== "object") {
-    return null;
-  }
-
-  const candidate = result as {
-    content?: unknown;
-  };
-
-  if (!Array.isArray(candidate.content)) {
-    return null;
-  }
-
-  const textParts = candidate.content
-    .flatMap((part) => {
-      if (!part || typeof part !== "object") {
-        return [];
-      }
-
-      const contentPart = part as {
-        type?: unknown;
-        text?: unknown;
-      };
-
-      if (
-        contentPart.type === "text" &&
-        typeof contentPart.text === "string" &&
-        contentPart.text.trim()
-      ) {
-        return [normalizeLineEndings(contentPart.text)];
-      }
-
-      return [];
-    });
-
-  return textParts.length > 0 ? textParts.join("\n\n") : null;
-}
-
-function getToolResultDisplay(result: unknown): unknown {
-  return getToolResultText(result) ?? result;
-}
-
 function buildRuntimeMessageCustomMetadata(response: RuntimeResponse) {
   const custom: Record<string, unknown> = {};
 
@@ -223,6 +163,16 @@ type ActivityThreadAssistantMessagePart = ThreadAssistantMessagePart & {
   endedAt?: number;
 };
 
+type CommandGroupEntry = {
+  id: string;
+  label: string;
+  status: AgentStep["status"];
+  toolName: string;
+  detailTitle?: string;
+  detailText?: string;
+  errorText?: string;
+};
+
 function toPartStatus(
   step: AgentStep,
 ): MessagePartStatus | ToolCallMessagePartStatus {
@@ -244,11 +194,230 @@ function toPartStatus(
   }
 }
 
+function quoteCommandValue(value: string) {
+  return value.includes(" ") ? JSON.stringify(value) : value;
+}
+
+function getStringArg(args: Record<string, unknown> | undefined, key: string) {
+  const value = args?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getNumberArg(args: Record<string, unknown> | undefined, key: string) {
+  const value = args?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizeCommandDetailText(text: string) {
+  return text.replace(/\r\n|\n\r|\r/g, "\n").trimEnd();
+}
+
+function stringifyCommandDetail(value: unknown): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    return normalizeCommandDetailText(value);
+  }
+
+  try {
+    return normalizeCommandDetailText(JSON.stringify(value, null, 2));
+  } catch {
+    return normalizeCommandDetailText(String(value));
+  }
+}
+
+function extractResultText(result: unknown): string | null {
+  if (typeof result === "string") {
+    return normalizeCommandDetailText(result);
+  }
+
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const content = (result as { content?: unknown }).content;
+  if (!Array.isArray(content)) {
+    return stringifyCommandDetail(result);
+  }
+
+  const textParts = content.flatMap((part) => {
+    if (!part || typeof part !== "object") {
+      return [];
+    }
+
+    const text = (part as { type?: unknown; text?: unknown }).text;
+    return typeof text === "string" && text.trim()
+      ? [normalizeCommandDetailText(text)]
+      : [];
+  });
+
+  return textParts.length > 0 ? textParts.join("\n\n") : null;
+}
+
+function extractResultDetails(result: unknown): Record<string, unknown> | null {
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const details = (result as { details?: unknown }).details;
+  return details && typeof details === "object"
+    ? (details as Record<string, unknown>)
+    : null;
+}
+
+function getCommandDetailTitle(toolName: string) {
+  if (toolName === "shell_exec") {
+    return "Shell";
+  }
+
+  if (toolName === "file_read") {
+    return "File read";
+  }
+
+  if (toolName === "file_write") {
+    return "File write";
+  }
+
+  if (toolName === "file_edit" || toolName === "edit_file") {
+    return "File edit";
+  }
+
+  return toolName.replace(/_/g, " ");
+}
+
+function getCommandDetailText(step: AgentStep, label: string) {
+  const toolName = step.toolName ?? "tool";
+  const result = step.toolError ?? step.toolResult ?? step.streamOutput;
+  const details = extractResultDetails(step.toolResult);
+
+  if (toolName === "shell_exec") {
+    const stdout = typeof details?.stdout === "string" ? details.stdout.trimEnd() : "";
+    const stderr = typeof details?.stderr === "string" ? details.stderr.trimEnd() : "";
+    const output = [stdout, stderr].filter(Boolean).join("\n");
+    return [`$ ${label}`, output].filter(Boolean).join("\n");
+  }
+
+  const resultText = extractResultText(result);
+  return resultText?.trim() ? resultText : null;
+}
+
+function formatToolCommand(step: AgentStep) {
+  const args = step.toolArgs ?? {};
+  const toolName = step.toolName ?? "tool";
+
+  if (toolName === "shell_exec") {
+    return getStringArg(args, "command") ?? "shell_exec";
+  }
+
+  if (toolName === "grep_search") {
+    const pattern = getStringArg(args, "pattern") ?? "";
+    const path = getStringArg(args, "path") ?? ".";
+    const filePattern = getStringArg(args, "filePattern");
+    const maxResults = getNumberArg(args, "maxResults");
+    return [
+      "rg -n",
+      pattern ? quoteCommandValue(pattern) : null,
+      filePattern ? `-g ${quoteCommandValue(filePattern)}` : null,
+      path,
+      maxResults !== null ? `--max-count ${maxResults}` : null,
+    ].filter(Boolean).join(" ");
+  }
+
+  if (toolName === "glob_search") {
+    const pattern = getStringArg(args, "pattern") ?? "*";
+    const path = getStringArg(args, "path") ?? ".";
+    return `rg --files ${path} -g ${quoteCommandValue(pattern)}`;
+  }
+
+  if (toolName === "file_read") {
+    return `read ${getStringArg(args, "path") ?? "file"}`;
+  }
+
+  if (toolName === "file_write") {
+    return `write ${getStringArg(args, "path") ?? "file"}`;
+  }
+
+  if (toolName === "file_edit" || toolName === "edit_file") {
+    return `edit ${getStringArg(args, "path") ?? "file"}`;
+  }
+
+  if (toolName === "web_fetch") {
+    return `fetch ${getStringArg(args, "url") ?? "url"}`;
+  }
+
+  if (toolName === "web_search") {
+    return `search ${getStringArg(args, "query") ?? "web"}`;
+  }
+
+  return toolName.replace(/_/g, " ");
+}
+
+function buildCommandGroupPart(
+  group: AgentStep[],
+): ActivityThreadAssistantMessagePart | null {
+  if (group.length === 0) {
+    return null;
+  }
+
+  const first = group[0];
+  const last = group[group.length - 1];
+  const runningStep = group.find((step) => step.status === "executing");
+  const errorStep = group.find((step) => step.status === "error");
+  const cancelledStep = group.find((step) => step.status === "cancelled");
+  const statusStep = runningStep ?? errorStep ?? cancelledStep ?? last;
+  const commands: CommandGroupEntry[] = group.map((step) => ({
+    id: step.id,
+    label: formatToolCommand(step),
+    status: step.status,
+    toolName: step.toolName ?? "tool",
+  })).map((command, index) => ({
+    ...command,
+    detailTitle: getCommandDetailTitle(command.toolName),
+    detailText: getCommandDetailText(group[index], command.label) ?? undefined,
+    errorText: stringifyCommandDetail(group[index].toolError) ?? undefined,
+  }));
+
+  return {
+    type: "tool-call",
+    toolCallId: `command-group-${first.id}-${group.length}`,
+    toolName: "command_group",
+    args: {},
+    argsText: "{}",
+    result: {
+      content: [
+        {
+          type: "text",
+          text: `Ran ${group.length} ${group.length === 1 ? "command" : "commands"}`,
+        },
+      ],
+      details: {
+        commands,
+      },
+    },
+    isError: group.some((step) => step.status === "error"),
+    status: toPartStatus(statusStep),
+    startedAt: first.startedAt,
+    endedAt: runningStep ? undefined : last.endedAt,
+  };
+}
+
 function buildAssistantParts(steps: AgentStep[], finalText: string): ThreadAssistantMessagePart[] {
   const parts: ActivityThreadAssistantMessagePart[] = [];
+  let toolGroup: AgentStep[] = [];
+
+  const flushToolGroup = () => {
+    const groupPart = buildCommandGroupPart(toolGroup);
+    if (groupPart) {
+      parts.push(groupPart);
+    }
+    toolGroup = [];
+  };
 
   for (const step of steps) {
     if (step.kind === "thinking" && step.thinkingText) {
+      flushToolGroup();
       parts.push({
         type: "reasoning",
         text: step.thinkingText,
@@ -260,27 +429,10 @@ function buildAssistantParts(steps: AgentStep[], finalText: string): ThreadAssis
     }
 
     if (step.kind === "tool_call") {
-      const result =
-        step.status === "executing"
-          ? getToolResultDisplay(step.streamOutput)
-          : getToolResultDisplay(
-            step.toolError ?? step.toolResult ?? step.streamOutput,
-          );
-
-      parts.push({
-        type: "tool-call",
-        toolCallId: step.id,
-        toolName: step.toolName ?? "tool",
-        args: (step.toolArgs ?? {}) as any,
-        argsText: safeArgsText(step.toolArgs ?? {}),
-        result,
-        isError: step.status === "error",
-        status: toPartStatus(step),
-        startedAt: step.startedAt,
-        endedAt: step.endedAt,
-      });
+      toolGroup.push(step);
     }
   }
+  flushToolGroup();
 
   if (finalText) {
     parts.push({

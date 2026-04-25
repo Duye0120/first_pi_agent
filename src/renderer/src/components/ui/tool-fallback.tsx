@@ -24,6 +24,10 @@ const TOOL_NAME_LABELS: Record<string, string> = {
   shell_exec: "Shell 命令",
   file_read: "读取文件",
   file_write: "写入文件",
+  file_edit: "编辑文件",
+  edit_file: "编辑文件",
+  grep_search: "grep search",
+  glob_search: "glob search",
   mcp: "MCP 工具",
   command_history: "命令历史",
   web_fetch: "网页抓取",
@@ -354,6 +358,243 @@ function getToolDetails(result: unknown) {
     : null;
 }
 
+type CommandGroupItem = {
+  id: string;
+  label: string;
+  status: "executing" | "success" | "error" | "cancelled";
+  toolName: string;
+  detailTitle?: string;
+  detailText?: string;
+  errorText?: string;
+};
+
+function getCommandGroupItems(result: unknown): CommandGroupItem[] {
+  const details = getToolDetails(result);
+  const commands = Array.isArray(details?.commands) ? details.commands : [];
+
+  return commands.flatMap((entry, index) => {
+    if (!entry || typeof entry !== "object") {
+      return [];
+    }
+
+    const item = entry as Partial<CommandGroupItem>;
+    const label = typeof item.label === "string" && item.label.trim()
+      ? item.label.trim()
+      : null;
+
+    if (!label) {
+      return [];
+    }
+
+    const status =
+      item.status === "executing" ||
+      item.status === "success" ||
+      item.status === "error" ||
+      item.status === "cancelled"
+        ? item.status
+        : "success";
+
+    return [{
+      id: typeof item.id === "string" ? item.id : `command-${index}`,
+      label,
+      status,
+      toolName: typeof item.toolName === "string" ? item.toolName : "tool",
+      detailTitle: typeof item.detailTitle === "string" ? item.detailTitle : undefined,
+      detailText: typeof item.detailText === "string" ? item.detailText : undefined,
+      errorText: typeof item.errorText === "string" ? item.errorText : undefined,
+    }];
+  });
+}
+
+function getCommandStatusLabel(status: CommandGroupItem["status"]) {
+  switch (status) {
+    case "executing":
+      return "运行中";
+    case "error":
+      return "失败";
+    case "cancelled":
+      return "已停止";
+    default:
+      return "已运行";
+  }
+}
+
+function getCommandStatusClass(status: CommandGroupItem["status"]) {
+  switch (status) {
+    case "executing":
+      return "text-[color:var(--color-accent)]";
+    case "error":
+      return "text-rose-600 dark:text-rose-400";
+    case "cancelled":
+      return "text-[color:var(--chela-text-tertiary)]";
+    default:
+      return "text-[color:var(--chela-text-tertiary)]";
+  }
+}
+
+function getCommandDetailStatusMeta(status: CommandGroupItem["status"]) {
+  switch (status) {
+    case "executing":
+      return {
+        label: "运行中",
+        Icon: LoaderIcon,
+        className: "text-[color:var(--color-accent)]",
+        iconClassName: "animate-spin",
+      };
+    case "error":
+      return {
+        label: "失败",
+        Icon: XCircleIcon,
+        className: "text-rose-600 dark:text-rose-400",
+        iconClassName: "",
+      };
+    case "cancelled":
+      return {
+        label: "已停止",
+        Icon: XCircleIcon,
+        className: "text-[color:var(--chela-text-tertiary)]",
+        iconClassName: "",
+      };
+    default:
+      return {
+        label: "成功",
+        Icon: CheckIcon,
+        className: "text-[color:var(--chela-text-tertiary)]",
+        iconClassName: "",
+      };
+  }
+}
+
+function CommandGroupRow({ command }: { command: CommandGroupItem }) {
+  const [open, setOpen] = useState(false);
+  const detailText = command.errorText ?? command.detailText;
+  const canExpand = Boolean(detailText?.trim());
+  const title = command.detailTitle ?? command.toolName.replace(/_/g, " ");
+  const displayLabel =
+    open && command.toolName === "shell_exec" ? "命令" : command.label;
+  const detailStatusMeta = getCommandDetailStatusMeta(command.status);
+  const DetailStatusIcon = detailStatusMeta.Icon;
+
+  if (!canExpand) {
+    return (
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-3 py-1 text-[12px] leading-5">
+        <span
+          className={cn(
+            "shrink-0 font-medium",
+            getCommandStatusClass(command.status),
+          )}
+        >
+          {getCommandStatusLabel(command.status)}
+        </span>
+        <code className="min-w-0 truncate font-mono text-[12px] text-[color:var(--chela-text-tertiary)]">
+          {command.label}
+        </code>
+      </div>
+    );
+  }
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger
+        className="group/command-row inline-grid max-w-full grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-2.5 py-1 text-left text-[12px] leading-5 transition-colors hover:text-[color:var(--chela-text-primary)]"
+        aria-label={open ? "收起命令详情" : "展开命令详情"}
+      >
+        <span
+          className={cn(
+            "shrink-0 font-medium",
+            getCommandStatusClass(command.status),
+          )}
+        >
+          {getCommandStatusLabel(command.status)}
+        </span>
+        <code className="min-w-0 truncate font-mono text-[12px] text-[color:var(--chela-text-tertiary)]">
+          {displayLabel}
+        </code>
+        <ChevronDownIcon
+          className={cn(
+            "size-3.5 shrink-0 self-center text-[color:var(--chela-text-tertiary)] transition-transform duration-200",
+            open && "rotate-180",
+          )}
+        />
+      </CollapsibleTrigger>
+
+      <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+        <div className="mt-2 mb-2 rounded-[var(--radius-shell)] bg-black/[0.045] px-3 py-2.5 dark:bg-white/[0.06]">
+          <p className="mb-2 font-mono text-[12px] leading-5 text-[color:var(--chela-text-tertiary)]">
+            {title}
+          </p>
+          <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap font-mono text-[12px] leading-5 text-[color:var(--chela-text-primary)]">
+            {detailText}
+          </pre>
+          <div
+            className={cn(
+              "mt-2 flex justify-end gap-1.5 text-[11px] leading-5",
+              detailStatusMeta.className,
+            )}
+          >
+            <DetailStatusIcon
+              className={cn("mt-1 size-3 shrink-0", detailStatusMeta.iconClassName)}
+            />
+            <span>{detailStatusMeta.label}</span>
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function CommandGroupFallback({
+  result,
+  status,
+}: {
+  result?: unknown;
+  status?: ToolCallMessagePartStatus;
+}) {
+  const commands = getCommandGroupItems(result);
+  const [open, setOpen] = useState(
+    status?.type === "running" || status?.type === "incomplete",
+  );
+
+  if (commands.length === 0) {
+    return null;
+  }
+
+  const isRunning = status?.type === "running";
+  const commandLabel = commands.length === 1 ? "command" : "commands";
+  const summaryText = isRunning
+    ? `Running ${commands.length} ${commandLabel}`
+    : `Ran ${commands.length} ${commandLabel}`;
+
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="aui-command-group mb-3 w-full max-w-[760px]"
+    >
+      <CollapsibleTrigger
+        className="group/command-group inline-flex max-w-full items-center gap-2 py-1 text-left text-[13px] leading-6 text-[color:var(--chela-text-tertiary)] transition-colors hover:text-[color:var(--chela-text-primary)]"
+        aria-label={open ? "收起命令列表" : "展开命令列表"}
+      >
+        <span className="truncate font-medium">{summaryText}</span>
+        <ChevronDownIcon
+          className={cn(
+            "size-3.5 shrink-0 text-[color:var(--chela-text-tertiary)] transition-transform duration-200",
+            open && "rotate-180",
+          )}
+        />
+      </CollapsibleTrigger>
+
+      <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+        <div className="mt-1 flex flex-col gap-1">
+          {commands.map((command) => (
+            <CommandGroupRow key={command.id} command={command} />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 function ToolFallbackSummary({
   toolName,
   result,
@@ -486,6 +727,10 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
   result,
   status,
 }) => {
+  if (toolName === "command_group") {
+    return <CommandGroupFallback result={result} status={status} />;
+  }
+
   const isCancelled =
     status?.type === "incomplete" && status.reason === "cancelled";
 
