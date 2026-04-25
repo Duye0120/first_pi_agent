@@ -654,13 +654,13 @@ export function KeysSection({
   const currentEntry =
     currentWorkspace && editingEntryId
       ? (currentWorkspace.entries.find(
-          (entry) => entry.id === editingEntryId,
-        ) ?? null)
+        (entry) => entry.id === editingEntryId,
+      ) ?? null)
       : null;
   const entryDialogDirty =
     currentEntry && editingEntrySnapshot
       ? serializeEditableEntry(currentEntry) !==
-        serializeEditableEntry(editingEntrySnapshot)
+      serializeEditableEntry(editingEntrySnapshot)
       : false;
   const dirty = currentWorkspace
     ? serializeWorkspace(currentWorkspace) !== currentWorkspace.baseline
@@ -1007,11 +1007,10 @@ export function KeysSection({
                     setError(null);
                     setTestResult(null);
                   }}
-                  className={`w-full rounded-[var(--radius-shell)] px-3 py-2 text-left transition-colors ${
-                    isSelected
+                  className={`w-full rounded-[var(--radius-shell)] px-3 py-2 text-left transition-colors ${isSelected
                       ? "bg-[color:var(--color-control-selected-bg)] text-[color:var(--color-control-selected-text)] font-medium"
                       : "bg-transparent text-foreground hover:bg-[color:var(--color-control-bg-hover)]"
-                  }`}
+                    }`}
                 >
                   <div className="truncate text-[13px] font-semibold text-foreground">
                     {sourceName}
@@ -1023,11 +1022,10 @@ export function KeysSection({
                           ? "已配置/已连接"
                           : "未配置"
                       }
-                      className={`inline-block h-2 w-2 rounded-full ${
-                        workspace.sourceDraft.enabled
+                      className={`inline-block h-2 w-2 rounded-full ${workspace.sourceDraft.enabled
                           ? "bg-emerald-500"
                           : "bg-zinc-400"
-                      }`}
+                        }`}
                     />
                     <span>
                       {providerTypeLabel(workspace.sourceDraft.providerType)}
@@ -1369,11 +1367,10 @@ export function KeysSection({
                 <div className="px-5 py-2">
                   {fetchModelsResult ? (
                     <div
-                      className={`mb-2 rounded-[var(--radius-shell)] px-3 py-2 text-[12px] ${
-                        fetchModelsResult.kind === "success"
+                      className={`mb-2 rounded-[var(--radius-shell)] px-3 py-2 text-[12px] ${fetchModelsResult.kind === "success"
                           ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                           : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                      }`}
+                        }`}
                     >
                       {fetchModelsResult.kind === "success"
                         ? fetchModelsResult.appended > 0
@@ -1433,9 +1430,9 @@ export function KeysSection({
                                     ...workspace,
                                     deletedEntryIds: entry.persistedId
                                       ? [
-                                          ...workspace.deletedEntryIds,
-                                          entry.persistedId,
-                                        ]
+                                        ...workspace.deletedEntryIds,
+                                        entry.persistedId,
+                                      ]
                                       : workspace.deletedEntryIds,
                                     entries: workspace.entries.filter(
                                       (item) => item.id !== entry.id,
@@ -1568,11 +1565,10 @@ export function KeysSection({
                   type="button"
                   onClick={() => void handleSave()}
                   disabled={saving || !dirty}
-                  className={`h-9 rounded-[var(--radius-shell)] px-4 text-[12px] ${
-                    dirty && !saving
+                  className={`h-9 rounded-[var(--radius-shell)] px-4 text-[12px] ${dirty && !saving
                       ? "animate-pulse bg-[color:var(--color-accent)] text-white hover:bg-[color:var(--color-accent-hover)] shadow-sm"
                       : "bg-foreground text-background hover:bg-foreground/90"
-                  }`}
+                    }`}
                 >
                   {saving ? "保存中…" : "保存修改"}
                 </Button>
@@ -1645,9 +1641,9 @@ export function KeysSection({
                                 entries: workspace.entries.map((entry) =>
                                   entry.id === currentEntry.id
                                     ? applyDetectedMetadata(
-                                        entry,
-                                        event.target.value,
-                                      )
+                                      entry,
+                                      event.target.value,
+                                    )
                                     : entry,
                                 ),
                               }),
@@ -1683,15 +1679,15 @@ export function KeysSection({
                                     entries: workspace.entries.map((entry) =>
                                       entry.id === currentEntry.id
                                         ? {
-                                            ...entry,
-                                            capabilities: {
-                                              ...entry.capabilities,
-                                              [key]: toCapabilityOverrideValue(
-                                                entry.detectedCapabilities[key],
-                                                checked === true,
-                                              ),
-                                            },
-                                          }
+                                          ...entry,
+                                          capabilities: {
+                                            ...entry.capabilities,
+                                            [key]: toCapabilityOverrideValue(
+                                              entry.detectedCapabilities[key],
+                                              checked === true,
+                                            ),
+                                          },
+                                        }
                                         : entry,
                                     ),
                                   }),
@@ -1730,14 +1726,14 @@ export function KeysSection({
                                   entries: workspace.entries.map((entry) =>
                                     entry.id === currentEntry.id
                                       ? {
-                                          ...entry,
-                                          limits: {
-                                            ...entry.limits,
-                                            contextWindow: parseOptionalNumber(
-                                              event.target.value,
-                                            ),
-                                          },
-                                        }
+                                        ...entry,
+                                        limits: {
+                                          ...entry.limits,
+                                          contextWindow: parseOptionalNumber(
+                                            event.target.value,
+                                          ),
+                                        },
+                                      }
                                       : entry,
                                   ),
                                 }),
@@ -1776,15 +1772,15 @@ export function KeysSection({
                                   entries: workspace.entries.map((entry) =>
                                     entry.id === currentEntry.id
                                       ? {
-                                          ...entry,
-                                          limits: {
-                                            ...entry.limits,
-                                            maxOutputTokens:
-                                              parseOptionalNumber(
-                                                event.target.value,
-                                              ),
-                                          },
-                                        }
+                                        ...entry,
+                                        limits: {
+                                          ...entry.limits,
+                                          maxOutputTokens:
+                                            parseOptionalNumber(
+                                              event.target.value,
+                                            ),
+                                        },
+                                      }
                                       : entry,
                                   ),
                                 }),
@@ -1813,9 +1809,9 @@ export function KeysSection({
                             entries: workspace.entries.map((entry) =>
                               entry.id === currentEntry.id
                                 ? {
-                                    ...entry,
-                                    providerOptionsText: event.target.value,
-                                  }
+                                  ...entry,
+                                  providerOptionsText: event.target.value,
+                                }
                                 : entry,
                             ),
                           }),

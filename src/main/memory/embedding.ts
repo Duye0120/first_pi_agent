@@ -36,7 +36,7 @@ export class MemoryWorkerClient {
   private state: WorkerState = "idle";
   private readonly pending = new Map<string, PendingRequest<unknown>>();
 
-  constructor(private readonly initData: MemoryWorkerInitData) {}
+  constructor(private readonly initData: MemoryWorkerInitData) { }
 
   getState(): WorkerState {
     return this.state;

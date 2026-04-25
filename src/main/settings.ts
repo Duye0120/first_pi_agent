@@ -304,7 +304,7 @@ function normalizeMemorySettings(
         : DEFAULT_SETTINGS.memory.embeddingModelId,
     embeddingProviderId:
       typeof source?.embeddingProviderId === "string" &&
-      source.embeddingProviderId.trim()
+        source.embeddingProviderId.trim()
         ? source.embeddingProviderId.trim()
         : null,
   };

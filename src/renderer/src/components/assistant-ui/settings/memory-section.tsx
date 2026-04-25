@@ -448,7 +448,7 @@ export function MemorySection({
               />
             </div>
             {!isLocalEmbeddingModelId(settings.memory.embeddingModelId) &&
-            !settings.memory.embeddingProviderId ? (
+              !settings.memory.embeddingProviderId ? (
               <p className="text-[12px] text-amber-500">
                 未绑定 Provider，远端嵌入模型将无法调用，请重新选择。
               </p>
@@ -505,7 +505,7 @@ export function MemorySection({
                 如有需要，手动重新生成所有记忆的嵌入向量。
               </span>
             </div>
-            
+
             {error ? (
               <p className="text-[12px] leading-5 text-[color:var(--color-status-danger-fg,#c43d2f)]">
                 {error}

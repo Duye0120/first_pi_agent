@@ -84,30 +84,30 @@ export type ReadyMessage = {
 
 export type SuccessResponse =
   | {
-      id: string;
-      ok: true;
-      result: MemoryRecord;
-    }
+    id: string;
+    ok: true;
+    result: MemoryRecord;
+  }
   | {
-      id: string;
-      ok: true;
-      result: MemorySearchResult[];
-    }
+    id: string;
+    ok: true;
+    result: MemorySearchResult[];
+  }
   | {
-      id: string;
-      ok: true;
-      result: MemoryRecord[];
-    }
+    id: string;
+    ok: true;
+    result: MemoryRecord[];
+  }
   | {
-      id: string;
-      ok: true;
-      result: Omit<MemoryStats, "workerState">;
-    }
+    id: string;
+    ok: true;
+    result: Omit<MemoryStats, "workerState">;
+  }
   | {
-      id: string;
-      ok: true;
-      result: MemoryRebuildResult;
-    };
+    id: string;
+    ok: true;
+    result: MemoryRebuildResult;
+  };
 
 export type ErrorResponse = {
   id: string;
