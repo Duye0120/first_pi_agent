@@ -54,6 +54,7 @@ import {
   appendRunFinishedEvent as appendRunFinishedTranscriptEvent,
   appendUserMessageEvent as appendUserMessageTranscriptEvent,
 } from "./transcript-writer.js";
+import { withSessionWriteLock } from "./write-lock.js";
 import {
   indexSessionSearchDocument,
   removeSessionSearchDocument,
@@ -378,7 +379,7 @@ export function saveSessionProjection(session: ChatSession): void {
     return;
   }
 
-  meta.title = session.title;
+  // 标题由首条用户消息、自动标题生成和手动重命名链路管理。
   meta.updatedAt = session.updatedAt;
   meta.archived = session.archived;
   meta.groupId = session.groupId;
@@ -651,13 +652,15 @@ export function updateSessionMeta(
   updater: (meta: PersistedSessionMeta) => void,
 ): PersistedSessionMeta | null {
   ensureSessionStorageReady();
-  const meta = updateMeta(sessionId, updater);
-  if (meta) {
-    indexSessionSearchDocument(sessionId);
-  } else {
-    removeSessionSearchDocument(sessionId);
-  }
-  return meta;
+  return withSessionWriteLock(sessionId, () => {
+    const meta = updateMeta(sessionId, updater);
+    if (meta) {
+      indexSessionSearchDocument(sessionId);
+    } else {
+      removeSessionSearchDocument(sessionId);
+    }
+    return meta;
+  });
 }
 
 export function appendUserMessageEvent(

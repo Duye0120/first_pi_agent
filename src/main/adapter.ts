@@ -126,7 +126,7 @@ export class ElectronAdapter {
   private readonly scope: AgentEventScope;
   private readonly buffer: RunBuffer;
   private pendingTerminalEvent: AgentEvent | null = null;
-  private terminalEventFlushed = false;
+  private readonly flushedTerminalRunIds = new Set<string>();
 
   constructor(window: BrowserWindow, scope: AgentEventScope) {
     this.window = window;
@@ -509,7 +509,7 @@ export class ElectronAdapter {
       return;
     }
 
-    if (this.terminalEventFlushed) {
+    if (this.flushedTerminalRunIds.has(this.scope.runId)) {
       return;
     }
 
@@ -523,7 +523,7 @@ export class ElectronAdapter {
   }
 
   queueTerminalError(message: string): void {
-    if (this.terminalEventFlushed) {
+    if (this.flushedTerminalRunIds.has(this.scope.runId)) {
       return;
     }
 
@@ -547,7 +547,7 @@ export class ElectronAdapter {
   }
 
   flushTerminalEvent(fallback?: TerminalEventFallback): void {
-    if (this.terminalEventFlushed) {
+    if (this.flushedTerminalRunIds.has(this.scope.runId)) {
       return;
     }
 
@@ -561,7 +561,7 @@ export class ElectronAdapter {
 
     if (this.pendingTerminalEvent && this.send(this.pendingTerminalEvent)) {
       this.pendingTerminalEvent = null;
-      this.terminalEventFlushed = true;
+      this.flushedTerminalRunIds.add(this.scope.runId);
     }
   }
 

@@ -15,6 +15,7 @@ import {
 } from "./meta.js";
 import { getTranscriptPath } from "./paths.js";
 import { loadTranscript } from "./transcript.js";
+import { withSessionWriteLock } from "./write-lock.js";
 
 function deriveSessionTitle(text: string, attachments: SelectedFile[]) {
   const trimmed = text.trim();
@@ -36,20 +37,23 @@ export function appendTranscriptEvent(
     meta: PersistedSessionMeta,
   ) => SessionTranscriptEvent,
 ): SessionTranscriptEvent {
-  const meta = readMeta(sessionId);
-  if (!meta) {
-    throw new Error(`会话不存在：${sessionId}`);
-  }
+  return withSessionWriteLock(sessionId, () => {
+    const meta = readMeta(sessionId);
+    if (!meta) {
+      throw new Error(`会话不存在：${sessionId}`);
+    }
 
-  const nextSeq = meta.transcriptSeq + 1;
-  const event = buildEvent(nextSeq, meta);
+    const lastTranscriptSeq = loadTranscript(sessionId).at(-1)?.seq ?? 0;
+    const nextSeq = Math.max(meta.transcriptSeq, lastTranscriptSeq) + 1;
+    const event = buildEvent(nextSeq, meta);
 
-  appendLine(getTranscriptPath(sessionId), JSON.stringify(event));
-  meta.transcriptSeq = nextSeq;
-  meta.updatedAt = event.timestamp;
-  writeMeta(meta);
-  updateIndexWithMeta(meta);
-  return event;
+    appendLine(getTranscriptPath(sessionId), JSON.stringify(event));
+    meta.transcriptSeq = nextSeq;
+    meta.updatedAt = event.timestamp;
+    writeMeta(meta);
+    updateIndexWithMeta(meta);
+    return event;
+  });
 }
 
 export function appendUserMessageEvent(input: {
