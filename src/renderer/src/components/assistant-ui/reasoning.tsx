@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  BrainCircuitIcon,
-  ChevronDownIcon,
-  LoaderCircleIcon,
-} from "lucide-react";
+import { ChevronDownIcon } from "lucide-react";
 import { type FC, useState } from "react";
 import { useMessagePartReasoning } from "@assistant-ui/react";
 
@@ -22,44 +18,40 @@ export const AssistantUIReasoning: FC = () => {
   if (!reasoning.text?.trim()) return null;
 
   const isRunning = reasoning.status.type === "running";
-  const title = isRunning ? "思考中" : "思考";
+  const statusLabel = isRunning ? "进行中" : "已完成";
 
   return (
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="mb-2"
+      className="mb-3 w-full max-w-[760px]"
     >
       <CollapsibleTrigger
         className={cn(
-          "group/trigger flex w-auto items-center gap-2.5 py-1 px-1 text-left transition-all duration-200 select-none",
+          "group/trigger inline-flex max-w-full items-center gap-2.5 py-1 text-left transition-colors duration-200 select-none",
+          "text-[color:var(--chela-text-secondary)] hover:text-[color:var(--chela-text-primary)]",
         )}
+        aria-label={open ? "收起思考内容" : "展开思考内容"}
       >
         <span
           className={cn(
-            "flex size-5 shrink-0 items-center justify-center rounded-full transition-colors",
+            "flex h-5 shrink-0 items-center justify-center rounded-full px-2 font-mono text-[10px] font-medium leading-none transition-colors",
             isRunning
-              ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
-              : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
+              ? "bg-[var(--color-accent-subtle)] text-[color:var(--color-accent)]"
+              : "bg-[color:var(--color-control-bg)] text-[color:var(--chela-text-tertiary)]"
           )}
         >
-          {isRunning ? (
-            <LoaderCircleIcon className="size-3 animate-spin" />
-          ) : (
-            <BrainCircuitIcon className="size-3" />
-          )}
+          think
         </span>
-        <span className="text-[13px] font-medium text-foreground/80 transition-colors group-hover/trigger:text-foreground">
-          {title}
+        <span className="text-[13px] font-medium text-[color:var(--chela-text-primary)] transition-colors">
+          思考
         </span>
-        {!isRunning ? (
-          <span className="text-[11px] font-medium text-muted-foreground/60 transition-colors">
-            已完成
-          </span>
-        ) : null}
+        <span className="text-[11px] font-medium text-[color:var(--chela-text-tertiary)] transition-colors">
+          {statusLabel}
+        </span>
         <ChevronDownIcon
           className={cn(
-            "size-3.5 shrink-0 text-muted-foreground/50 transition-transform duration-200",
+            "size-3.5 shrink-0 text-[color:var(--chela-text-tertiary)] transition-transform duration-200",
             "group-data-[state=closed]/trigger:-rotate-90",
             "group-data-[state=open]/trigger:rotate-0",
           )}
@@ -67,7 +59,7 @@ export const AssistantUIReasoning: FC = () => {
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
         <div className="pl-[1.625rem] pr-2 pb-2 pt-1">
-          <div className="border-l-2 border-slate-200/60 dark:border-slate-800/60 pl-4 py-0.5 text-[12px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+          <div className="max-h-[320px] overflow-y-auto rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-3 py-2 text-[12px] leading-6 whitespace-pre-wrap text-[color:var(--chela-text-secondary)]">
             {reasoning.text}
           </div>
         </div>
