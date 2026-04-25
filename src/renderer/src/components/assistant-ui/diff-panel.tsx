@@ -891,7 +891,7 @@ export function DiffWorkbenchContent({
   }, [commitPlanGroups, onRefresh, patchCommitPlanGroup]);
 
   const handleCommitAllPlanGroups = useCallback(async () => {
-    if (commitPlanGroups.length < 2) return;
+    if (commitPlanGroups.length === 0) return;
 
     const groupIds = commitPlanGroups.map((group) => group.id);
     setCommitPlanError(null);
@@ -936,7 +936,7 @@ export function DiffWorkbenchContent({
   const isPlanBusy = isGeneratingPlan || hasBusyPlanGroup || isCommittingAll;
   const canGeneratePlan = selectedFiles.length > 0 && !isPlanBusy;
   const canCommitAll =
-    commitPlanGroups.length > 1 &&
+    commitPlanGroups.length > 0 &&
     commitPlanGroups.every(
       (group) => group.title.trim().length > 0 && group.filePaths.length > 0,
     ) &&
@@ -948,7 +948,9 @@ export function DiffWorkbenchContent({
       : `按已勾选 ${selectedFiles.length} 个文件生成`;
   const commitAllTooltip = isCommittingAll
     ? `依次提交全部（${commitAllProgress.current}/${commitAllProgress.total}）`
-    : "依次提交全部";
+    : commitPlanGroups.length === 1
+      ? "提交当前计划"
+      : "依次提交全部";
   const showSparklesHint = selectedPathsChanged && commitPlanGroups.length > 0;
   const pendingCommitPlanSkillUsage = getRuntimeSkillUsage(
     "commit",
@@ -963,13 +965,13 @@ export function DiffWorkbenchContent({
         <TooltipTrigger asChild>
           <Button
             variant="secondary"
-            size="sm"
-            className="h-7 px-2.5 text-[12px] rounded-[var(--radius-shell)] gap-1.5"
+            size="icon"
+            className="size-7 rounded-[var(--radius-shell)]"
             onClick={handleStageSelected}
             disabled={selectedPaths.size === 0 || isStaging}
+            aria-label="暂存选中文件"
           >
             <PlusIcon className="w-3.5 h-3.5" />
-            暂存
           </Button>
         </TooltipTrigger>
         <TooltipContent>暂存选中文件</TooltipContent>
@@ -979,13 +981,13 @@ export function DiffWorkbenchContent({
         <TooltipTrigger asChild>
           <Button
             variant="secondary"
-            size="sm"
-            className="h-7 px-2.5 text-[12px] rounded-[var(--radius-shell)] gap-1.5"
+            size="icon"
+            className="size-7 rounded-[var(--radius-shell)]"
             onClick={handleUnstageSelected}
             disabled={selectedPaths.size === 0 || isStaging}
+            aria-label="取消暂存选中文件"
           >
             <MinusIcon className="w-3.5 h-3.5" />
-            取消暂存
           </Button>
         </TooltipTrigger>
         <TooltipContent>取消暂存选中文件</TooltipContent>
@@ -994,7 +996,7 @@ export function DiffWorkbenchContent({
 
   const commitPlanActionControls = (
     <div className="flex items-center gap-1">
-      {commitPlanGroups.length > 1 ? (
+      {commitPlanGroups.length > 0 ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -1006,7 +1008,7 @@ export function DiffWorkbenchContent({
               )}
               onClick={handleCommitAllPlanGroups}
               disabled={!canCommitAll}
-              aria-label="依次提交全部"
+              aria-label={commitPlanGroups.length === 1 ? "提交当前计划" : "依次提交全部"}
             >
               {isCommittingAll ? (
                 <>
