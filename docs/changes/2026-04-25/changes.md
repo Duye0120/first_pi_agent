@@ -610,6 +610,86 @@
 - 用户可见的 compact 操作统一显示为“压缩”。
 - compact 后的结果展示会显示“已压缩 / 最近压缩”。
 
+## 聊天处理过程聚合展示
+
+时间：2026-04-25 22:58
+
+改了什么：
+- `AssistantThreadPanel.tsx`：把同一条 assistant 回复里的 thinking 和连续 command group 聚合成一个 `process_group` 展示项。
+- `tool-fallback.tsx`：新增 `process_group` 渲染，折叠态显示“已处理 · 耗时 · N 个命令”，点击后展开 think 内容和命令明细。
+
+为什么改：
+- 用户反馈历史回复顶部堆叠多个 `think` / `Ran N commands` 行，视觉上割裂；期望和最新回复一样用一个处理摘要收起，点击后再看过程。
+
+涉及文件：
+- `src/renderer/src/components/AssistantThreadPanel.tsx`
+- `src/renderer/src/components/ui/tool-fallback.tsx`
+- `docs/changes/2026-04-25/changes.md`
+
+结果：
+- assistant 正文前只显示一条处理摘要。
+- 展开摘要后仍能查看每段 think 和每组命令输出详情。
+
+## 聊天处理过程三层展开修正
+
+时间：2026-04-25 23:04
+
+改了什么：
+- `tool-fallback.tsx`：`process_group` 顶层展开后先显示二层过程列表，保留 `think 已完成` 和 `Ran N commands` 行。
+- `tool-fallback.tsx`：每个二层条目再单独展开，`think` 展开显示思考文本，`Ran N commands` 展开显示命令列表和命令详情。
+
+为什么改：
+- 用户确认目标是三层结构：顶层“已处理 · 耗时 · N 个命令”，二层过程列表，三层具体内容。
+
+涉及文件：
+- `src/renderer/src/components/ui/tool-fallback.tsx`
+- `docs/changes/2026-04-25/changes.md`
+
+结果：
+- 默认只露出一条处理摘要。
+- 点击摘要后看到原来的 `think / Ran N commands` 列表。
+- 再点击列表项才展开具体思考或命令内容。
+
+## Diff 面板窄宽单列模式
+
+时间：2026-04-25 23:22
+
+改了什么：
+- `diff-panel.tsx`：右侧 diff 面板宽度低于 `900px` 时自动切到单列模式。
+- `diff-panel.tsx`：单列模式下每个文件独占整行 diff 卡片，文件头直接提供勾选入口，diff 内容强制使用垂直布局。
+- `diff-panel.tsx`：单列模式下提交计划移动到 diff 列底部，保留生成计划、暂存和提交能力。
+
+为什么改：
+- 用户反馈当前窄宽下“文件树 + diff 预览”双列结构会把 diff 内容挤到看不清；参考图里的单列 diff 卡片结构在宽度不足时更清晰。
+
+涉及文件：
+- `src/renderer/src/components/assistant-ui/diff-panel.tsx`
+- `docs/changes/2026-04-25/changes.md`
+
+结果：
+- 宽面板继续使用文件树 + 预览双列。
+- 窄面板自动改成单列 diff 列表，优先保证代码差异可读。
+
+## Diff 单列默认收起与计划置顶
+
+时间：2026-04-25 23:27
+
+改了什么：
+- `diff-panel.tsx`：单列 diff 文件卡片默认全部收起。
+- `diff-panel.tsx`：提交计划生成后移动到单列 diff 列表上方；未生成计划时继续保留底部提示。
+
+为什么改：
+- 用户希望单列 diff 默认先看文件概览，按需展开具体文件。
+- 生成后的提交计划需要优先可见，避免用户还要滚到列表底部阅读。
+
+涉及文件：
+- `src/renderer/src/components/assistant-ui/diff-panel.tsx`
+- `docs/changes/2026-04-25/changes.md`
+
+结果：
+- 单列模式进入时先显示收起的文件列表。
+- 计划生成后会出现在文件列表上方，更方便连续阅读和编辑。
+
 ## 修复左下角分支初始读取卡住
 
 时间：2026-04-25 22:18
@@ -629,3 +709,24 @@
 结果：
 - 首次进入线程页时，左下角分支摘要可以在首轮 Git 刷新完成后正常落到 UI，不再依赖打开 diff panel 才更新。
 - workspace 切换时，Git 刷新链路使用的 ref 与 state 保持同步，减少误丢结果的窗口。
+
+## Diff 面板单列与提交计划分区
+
+时间：2026-04-25 23:34
+
+改了什么：
+- `diff-panel.tsx`：移除文件树 + diff 预览双列结构，统一改成单列文件 diff 卡片列表。
+- `diff-panel.tsx`：提交计划存在或正在生成时，面板内容改为上方提交计划、下方文件列表的 5:5 分区，并让两个区域各自滚动。
+- `diff-panel.tsx`：未生成提交计划时隐藏计划占位，只展示文件列表；提交计划里的文件跳转改为展开并定位到对应文件卡片。
+
+为什么改：
+- 用户反馈双列结构在右侧面板宽度不足时可读性差，提交计划生成后需要固定在更容易阅读的位置。
+
+涉及文件：
+- `src/renderer/src/components/assistant-ui/diff-panel.tsx`
+- `docs/changes/2026-04-25/changes.md`
+
+结果：
+- diff 面板始终保持单列文件阅读体验。
+- 有提交计划时计划区和文件区上下均分并独立滚动。
+- 无提交计划时面板只保留文件列表和顶部操作入口。
