@@ -1102,10 +1102,12 @@ export function DiffWorkbenchContent({
       <div className="mt-2">
         {commitPlanGroups.length === 0 ? (
           isGeneratingPlan ? (
-            <div className="flex min-h-[140px] flex-col items-center justify-center rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)]/50 px-4 py-6 text-center shadow-inner">
-              <SparklesIcon className="mb-3 size-6 shrink-0 animate-pulse text-muted-foreground" />
-              <p className="text-[12px] font-medium text-foreground">AI 正在阅读和分析代码变动</p>
-              <p className="mt-1 text-balance text-[11px] text-muted-foreground">分析完成后会自动生成提交计划。</p>
+            <div className="flex min-h-[300px] items-center justify-center px-3 py-6">
+              <div className="flex w-full max-w-[360px] flex-col items-center justify-center rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)]/50 px-4 py-8 text-center shadow-inner">
+                <SparklesIcon className="mb-3 size-6 shrink-0 animate-pulse text-muted-foreground" />
+                <p className="text-[12px] font-medium text-foreground">AI 正在阅读和分析代码变动</p>
+                <p className="mt-1 text-balance text-[11px] text-muted-foreground">分析完成后会自动生成提交计划。</p>
+              </div>
             </div>
           ) : (
             <div className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-3 py-2.5 text-[12px] leading-5 text-muted-foreground shadow-[var(--color-control-shadow)]">
