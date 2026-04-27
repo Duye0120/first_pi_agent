@@ -63,6 +63,8 @@ export const IPC_CHANNELS = {
   memoryList: "memory:list",
   memoryGetStats: "memory:get-stats",
   memoryRebuild: "memory:rebuild",
+  memoryDelete: "memory:delete",
+  memoryFeedback: "memory:feedback",
   skillsListInstalled: "skills:list-installed",
   skillsSearchCatalog: "skills:search-catalog",
   skillsInstall: "skills:install",

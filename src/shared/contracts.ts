@@ -1070,6 +1070,8 @@ export type DesktopApi = {
     list: (input?: MemoryListInput) => Promise<MemoryRecord[]>;
     getStats: () => Promise<MemoryStats>;
     rebuild: () => Promise<MemoryRebuildResult>;
+    delete: (memoryId: number) => Promise<boolean>;
+    feedback: (memoryId: number, delta: number) => Promise<boolean>;
   };
   skills: {
     listInstalled: () => Promise<InstalledSkillDetail[]>;

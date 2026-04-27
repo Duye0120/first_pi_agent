@@ -88,6 +88,14 @@ class ChelaMemoryService {
       provider: resolveProviderInfo(),
     });
   }
+
+  async delete(memoryId: number): Promise<boolean> {
+    return this.workerClient.delete(memoryId);
+  }
+
+  async feedback(memoryId: number, delta: number): Promise<boolean> {
+    return this.workerClient.feedback(memoryId, delta);
+  }
 }
 
 const chelaMemoryService = new ChelaMemoryService();

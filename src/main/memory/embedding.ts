@@ -99,6 +99,22 @@ export class MemoryWorkerClient {
     });
   }
 
+  async delete(memoryId: number): Promise<boolean> {
+    return this.call<boolean>({
+      id: randomUUID(),
+      type: "delete",
+      payload: { memoryId },
+    });
+  }
+
+  async feedback(memoryId: number, delta: number): Promise<boolean> {
+    return this.call<boolean>({
+      id: randomUUID(),
+      type: "feedback",
+      payload: { memoryId, delta },
+    });
+  }
+
   private async ensureWorker(): Promise<Worker> {
     if (this.worker && this.readyPromise) {
       await this.readyPromise;

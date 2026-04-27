@@ -123,6 +123,18 @@ function runStoreRegression(): void {
       assert.equal(byConfidence[0].id, first.id);
       assert.equal(byConfidence[0].matchCount, 1);
       assert.equal(byConfidence[0].feedbackScore, 2);
+
+      assert.equal(store.adjustFeedback(first.id, -3), true);
+      const afterDownvote = store.listMemories({ sort: "feedback_score_desc", limit: 2 });
+      assert.equal(afterDownvote.find((item) => item.id === first.id)?.feedbackScore, -1);
+
+      assert.equal(store.deleteMemory(first.id), true);
+      assert.equal(store.deleteMemory(first.id), false);
+      assert.equal(store.getStats().totalMemories, 1);
+      assert.deepEqual(
+        store.listAllCandidates().map((item) => item.id),
+        [second.id],
+      );
     } finally {
       store.close();
     }

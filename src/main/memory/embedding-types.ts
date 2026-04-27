@@ -71,12 +71,31 @@ export type RebuildRequest = {
   };
 };
 
+export type DeleteRequest = {
+  id: string;
+  type: "delete";
+  payload: {
+    memoryId: number;
+  };
+};
+
+export type FeedbackRequest = {
+  id: string;
+  type: "feedback";
+  payload: {
+    memoryId: number;
+    delta: number;
+  };
+};
+
 export type MemoryWorkerRequest =
   | AddRequest
   | SearchRequest
   | StatsRequest
   | ListRequest
-  | RebuildRequest;
+  | RebuildRequest
+  | DeleteRequest
+  | FeedbackRequest;
 
 export type ReadyMessage = {
   type: "ready";
@@ -107,6 +126,11 @@ export type SuccessResponse =
     id: string;
     ok: true;
     result: MemoryRebuildResult;
+  }
+  | {
+    id: string;
+    ok: true;
+    result: boolean;
   };
 
 export type ErrorResponse = {

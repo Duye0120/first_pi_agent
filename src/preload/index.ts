@@ -164,6 +164,9 @@ const desktopApi: DesktopApi = {
     list: (input) => invokeIpc(IPC_CHANNELS.memoryList, input),
     getStats: () => invokeIpc(IPC_CHANNELS.memoryGetStats),
     rebuild: () => invokeIpc(IPC_CHANNELS.memoryRebuild),
+    delete: (memoryId) => invokeIpc(IPC_CHANNELS.memoryDelete, memoryId),
+    feedback: (memoryId, delta) =>
+      invokeIpc(IPC_CHANNELS.memoryFeedback, memoryId, delta),
   },
   skills: {
     listInstalled: () => invokeIpc(IPC_CHANNELS.skillsListInstalled),

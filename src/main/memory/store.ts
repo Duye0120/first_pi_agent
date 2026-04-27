@@ -301,6 +301,20 @@ export class MemoryStore {
     return result.changes > 0;
   }
 
+  deleteMemory(memoryId: number): boolean {
+    if (!Number.isInteger(memoryId) || memoryId <= 0) {
+      return false;
+    }
+
+    const result = this.db
+      .prepare(`
+        DELETE FROM memories
+        WHERE id = ?
+      `)
+      .run(memoryId);
+    return result.changes > 0;
+  }
+
   rebuildEmbeddings(
     updates: StoredMemoryEmbeddingUpdate[],
     modelId: string,

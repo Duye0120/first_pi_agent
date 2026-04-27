@@ -336,6 +336,25 @@ async function startMemoryWorker(data: MemoryWorkerInitData): Promise<void> {
           },
         };
       }
+
+      case "delete": {
+        return {
+          id: request.id,
+          ok: true,
+          result: store.deleteMemory(request.payload.memoryId),
+        };
+      }
+
+      case "feedback": {
+        return {
+          id: request.id,
+          ok: true,
+          result: store.adjustFeedback(
+            request.payload.memoryId,
+            request.payload.delta,
+          ),
+        };
+      }
     }
   };
 
