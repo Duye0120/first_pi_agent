@@ -90,13 +90,16 @@ function ModelSelectorRoot({
 
 export type ModelSelectorTriggerProps = ComponentPropsWithoutRef<
   typeof SelectTrigger
->;
+> & {
+  placeholder?: string;
+};
 
 function ModelSelectorTrigger({
   className,
   variant,
   size,
   children,
+  placeholder: _placeholder,
   ...props
 }: ModelSelectorTriggerProps) {
   return (

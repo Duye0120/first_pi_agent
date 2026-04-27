@@ -461,7 +461,7 @@ function getProcessGroupEntries(result: unknown): ProcessGroupEntry[] {
   const details = getToolDetails(result);
   const entries = Array.isArray(details?.entries) ? details.entries : [];
 
-  return entries.flatMap((entry, entryIndex) => {
+  return entries.flatMap((entry, entryIndex): ProcessGroupEntry[] => {
     if (!entry || typeof entry !== "object") {
       return [];
     }

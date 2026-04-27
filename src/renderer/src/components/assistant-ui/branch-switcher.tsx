@@ -3,6 +3,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
 } from "react";
@@ -31,35 +32,12 @@ type BranchSwitcherProps = {
 };
 
 const BRANCH_CACHE_TTL_MS = 5 * 60_000;
-let cachedBranches: GitBranchEntry[] | null = null;
-let cachedBranchesAt = 0;
-let branchLoadPromise: Promise<GitBranchEntry[]> | null = null;
 
-function hasFreshBranchCache(): boolean {
-  return !!cachedBranches && Date.now() - cachedBranchesAt < BRANCH_CACHE_TTL_MS;
-}
-
-function syncBranchCache(branches: GitBranchEntry[]): GitBranchEntry[] {
-  cachedBranches = sortBranches(branches);
-  cachedBranchesAt = Date.now();
-  return cachedBranches;
-}
-
-function readBranchCache(currentBranchName: string | null | undefined): GitBranchEntry[] | null {
-  if (!cachedBranches) {
-    return null;
-  }
-
-  return currentBranchName
-    ? markCurrentBranch(cachedBranches, currentBranchName)
-    : cachedBranches;
-}
-
-function invalidateBranchCache(): void {
-  cachedBranches = null;
-  cachedBranchesAt = 0;
-  branchLoadPromise = null;
-}
+type BranchCache = {
+  branches: GitBranchEntry[] | null;
+  cachedAt: number;
+  loadPromise: Promise<GitBranchEntry[]> | null;
+};
 
 function formatBranchLabel(branchSummary: GitBranchSummary | null) {
   if (!branchSummary) {
@@ -122,6 +100,11 @@ export function BranchSwitcher({
   const [submitting, setSubmitting] = useState(false);
   const [hasLoadedBranches, setHasLoadedBranches] = useState(false);
   const deferredQuery = useDeferredValue(query);
+  const branchCacheRef = useRef<BranchCache>({
+    branches: null,
+    cachedAt: 0,
+    loadPromise: null,
+  });
 
   const branchLabel = formatBranchLabel(branchSummary);
   const isGitRepo = !!branchSummary?.branchName;
@@ -131,12 +114,16 @@ export function BranchSwitcher({
       return;
     }
 
-    const cached = hasFreshBranchCache()
-      ? readBranchCache(branchSummary?.branchName)
-      : null;
+    const cache = branchCacheRef.current;
+    const isCacheFresh =
+      !!cache.branches &&
+      Date.now() - cache.cachedAt < BRANCH_CACHE_TTL_MS;
 
-    if (cached) {
-      setBranches(cached);
+    if (isCacheFresh && cache.branches) {
+      const currentBranches = branchSummary?.branchName
+        ? markCurrentBranch(cache.branches, branchSummary.branchName)
+        : cache.branches;
+      setBranches(currentBranches);
       setHasLoadedBranches(true);
       return;
     }
@@ -145,19 +132,28 @@ export function BranchSwitcher({
     setError(null);
 
     try {
-      if (!branchLoadPromise) {
-        branchLoadPromise = window.desktopApi.git
+      if (!cache.loadPromise) {
+        cache.loadPromise = window.desktopApi.git
           .listBranches()
-          .then((nextBranches) => syncBranchCache(nextBranches))
+          .then((nextBranches) => {
+            const sorted = sortBranches(nextBranches);
+            cache.branches = sorted;
+            cache.cachedAt = Date.now();
+            return sorted;
+          })
           .finally(() => {
-            branchLoadPromise = null;
+            cache.loadPromise = null;
           });
       }
 
-      const nextBranches = await branchLoadPromise;
-      setBranches(
-        readBranchCache(branchSummary?.branchName) ?? nextBranches,
-      );
+      const nextBranches = await cache.loadPromise;
+      const currentBranches = branchSummary?.branchName
+        ? markCurrentBranch(
+            cache.branches ?? nextBranches,
+            branchSummary.branchName,
+          )
+        : (cache.branches ?? nextBranches);
+      setBranches(currentBranches);
       setHasLoadedBranches(true);
     } catch (nextError) {
       setError(getErrorMessage(nextError));
@@ -179,7 +175,9 @@ export function BranchSwitcher({
       return;
     }
 
-    invalidateBranchCache();
+    branchCacheRef.current.branches = null;
+    branchCacheRef.current.cachedAt = 0;
+    branchCacheRef.current.loadPromise = null;
     setBranches([]);
     setHasLoadedBranches(false);
   }, [isGitRepo]);
@@ -189,7 +187,9 @@ export function BranchSwitcher({
       return;
     }
 
-    syncBranchCache(branches);
+    const sorted = sortBranches(branches);
+    branchCacheRef.current.branches = sorted;
+    branchCacheRef.current.cachedAt = Date.now();
   }, [branches, hasLoadedBranches]);
 
   useEffect(() => {

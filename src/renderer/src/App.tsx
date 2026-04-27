@@ -211,7 +211,7 @@ function applyCustomThemeVariables(
 
   Object.entries(nextTheme).forEach(([rawKey, value]) => {
     const key = rawKey.startsWith("--") ? rawKey : `--${rawKey}`;
-    root.style.setProperty(key, value);
+    root.style.setProperty(key, value ?? null);
     appliedKeys.push(key);
   });
 
@@ -2117,7 +2117,6 @@ export default function App() {
                             isLoading={gitOverviewLoading}
                             onRefresh={handleRefreshGitOverview}
                             className="h-full"
-                            panelWidth={resolvedRightPanelWidth}
                           />
                         </div>
 
