@@ -1078,11 +1078,11 @@ const ComposerAction: FC<
             onValueChange={onModelChange}
           >
             <ModelSelector.Trigger
-              variant="outline"
+              variant="ghost"
               size="sm"
               title={currentModel?.name ?? "选择模型"}
               aria-label={currentModel?.name ? `当前模型：${currentModel.name}` : "选择模型"}
-              className="h-8 rounded-[var(--radius-shell)] px-2 text-[12px]"
+              className="h-8 rounded-[var(--radius-shell)] bg-transparent px-2 text-[12px] text-[color:var(--color-text-secondary)] shadow-none ring-0 hover:bg-[color:var(--color-control-bg-hover)] hover:text-foreground hover:ring-0"
             >
               <BotIcon className="size-4 shrink-0" />
             </ModelSelector.Trigger>
@@ -1101,11 +1101,11 @@ const ComposerAction: FC<
               }
             >
               <SelectTrigger
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 title={thinkingTitle}
                 aria-label={`当前思考强度：${thinkingTitle}`}
-                className="h-8 rounded-[var(--radius-shell)] px-2 text-[12px]"
+                className="h-8 rounded-[var(--radius-shell)] bg-transparent px-2 text-[12px] text-[color:var(--color-text-secondary)] shadow-none ring-0 hover:bg-[color:var(--color-control-bg-hover)] hover:text-foreground hover:ring-0"
               >
                 <BrainCircuitIcon className="size-4 shrink-0" />
               </SelectTrigger>
@@ -1128,7 +1128,7 @@ const ComposerAction: FC<
             <div
               title={thinkingTitle}
               aria-label={thinkingTitle}
-              className="flex h-8 items-center justify-center rounded-[var(--radius-shell)] px-2 text-[color:var(--color-text-secondary)]"
+              className="flex h-8 items-center justify-center rounded-[var(--radius-shell)] bg-transparent px-2 text-[color:var(--color-text-secondary)]"
             >
               <BrainCircuitIcon className="size-4 shrink-0 opacity-55" />
             </div>
@@ -1295,7 +1295,7 @@ const ComposerStatusBar: FC<{
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
-                  className="shrink-0 cursor-help rounded-full bg-shell-panel px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-text-secondary)] [font-variant-numeric:tabular-nums] dark:bg-white/8"
+                  className="shrink-0 cursor-help px-1 text-[11px] font-medium text-[color:var(--color-text-secondary)] [font-variant-numeric:tabular-nums] hover:text-foreground"
                 >
                   in {formatStatusTokenCount(contextSummary.latestInputTokens)} · out{" "}
                   {formatStatusTokenCount(contextSummary.latestOutputTokens)}
@@ -1311,7 +1311,7 @@ const ComposerStatusBar: FC<{
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
-                  className="hidden shrink-0 cursor-help rounded-full bg-shell-panel px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-text-secondary)] [font-variant-numeric:tabular-nums] dark:bg-white/8 md:inline-flex"
+                  className="hidden shrink-0 cursor-help border-l border-[color:var(--color-control-border)]/60 pl-2 pr-1 text-[11px] font-medium text-[color:var(--color-text-secondary)] [font-variant-numeric:tabular-nums] hover:text-foreground md:inline-flex"
                 >
                   total {formatStatusTokenCount(totalUsageTokens)}
                 </span>

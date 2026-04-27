@@ -334,13 +334,13 @@ export function BranchSwitcher({
               : `当前分支 ${branchLabel}`
           }
           className={cn(
-            "h-8 min-w-0 max-w-[260px] rounded-[var(--radius-shell)] bg-[color:var(--color-shell-panel)]/92 px-3 text-[12px] font-medium text-foreground shadow-[var(--shadow-inset-soft)] ring-1 ring-[color:var(--color-control-border)]/70 hover:bg-[color:var(--color-shell-panel-elevated)]",
-            "disabled:bg-[color:var(--color-shell-panel)]/84 disabled:text-[color:var(--color-text-secondary)] disabled:opacity-100",
+            "h-8 min-w-0 max-w-[260px] rounded-[var(--radius-shell)] bg-transparent px-2 text-[12px] font-medium text-[color:var(--color-text-secondary)] shadow-none ring-0 hover:bg-[color:var(--color-control-bg-hover)] hover:text-foreground",
+            "disabled:bg-transparent disabled:text-[color:var(--color-text-secondary)] disabled:opacity-70",
           )}
         >
-          <GitBranchIcon className="size-3.5 shrink-0 text-[color:var(--color-text-secondary)]" />
+          <GitBranchIcon className="size-3.5 shrink-0" />
           <span className="truncate">{branchLabel}</span>
-          <ChevronDownIcon className="size-3.5 shrink-0 text-[color:var(--color-text-secondary)]" />
+          <ChevronDownIcon className="size-3.5 shrink-0" />
         </Button>
       </PopoverTrigger>
 
