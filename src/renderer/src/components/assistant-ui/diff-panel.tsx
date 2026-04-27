@@ -466,15 +466,9 @@ function CommitPlanCard({
       className={cn(
         "rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3.5 py-3 shadow-[var(--color-control-shadow)] transition-all relative overflow-hidden",
         isCommitted && "bg-emerald-50/60 dark:bg-emerald-950/20",
-        isBusy && "opacity-95 pointer-events-none ring-2 ring-[color:var(--color-control-focus-ring)] ring-offset-1 border-transparent",
+        isBusy && "opacity-95 pointer-events-none",
       )}
     >
-      {isBusy ? (
-        <div className="absolute top-0 left-0 w-full h-[3px] bg-muted/10 overflow-hidden z-20">
-          <div className="h-full w-full bg-[color:var(--color-control-focus-ring)] animate-pulse opacity-80" />
-        </div>
-      ) : null}
-
       <div className="flex items-center justify-between gap-3 relative z-10">
         <div className="flex min-w-0 items-center gap-2">
           <span className="inline-flex h-6 items-center rounded-full bg-[color:var(--color-control-panel-bg)] px-2.5 text-[11px] font-medium text-[color:var(--color-text-secondary)] shadow-[var(--color-control-shadow)]">
@@ -1103,7 +1097,7 @@ export function DiffWorkbenchContent({
         {commitPlanGroups.length === 0 ? (
           isGeneratingPlan ? (
             <div className="flex min-h-[300px] items-center justify-center px-3 py-6">
-              <div className="flex w-full max-w-[360px] flex-col items-center justify-center rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)]/50 px-4 py-8 text-center shadow-inner">
+              <div className="flex w-full max-w-[360px] flex-col items-center justify-center px-4 py-8 text-center">
                 <SparklesIcon className="mb-3 size-6 shrink-0 animate-pulse text-muted-foreground" />
                 <p className="text-[12px] font-medium text-foreground">AI 正在阅读和分析代码变动</p>
                 <p className="mt-1 text-balance text-[11px] text-muted-foreground">分析完成后会自动生成提交计划。</p>
