@@ -537,3 +537,62 @@
 
 结果：
 - 提交计划卡片顶部线条更干净，生成中空态保留居中但视觉更轻。
+
+## Composer 底部控件轻量化
+
+时间：2026-04-27 17:12:41
+
+改了什么：
+- 将 Composer 附件、模型选择、思考强度控件从盒状按钮改为透明底的轻量图标控件。
+- 将底部 Git 分支切换器改为透明底文字控件，仅保留 hover 反馈。
+
+为什么改：
+- 底部工具区需要对齐 Codex 的轻量控件风格，减少按钮盒子感和边框噪声。
+
+涉及文件：
+- `src/renderer/src/components/assistant-ui/attachment.tsx`
+- `src/renderer/src/components/assistant-ui/thread.tsx`
+- `src/renderer/src/components/assistant-ui/branch-switcher.tsx`
+- `docs/changes/2026-04-27/changes.md`
+
+结果：
+- 输入区底部工具控件和分支切换器视觉更轻，主发送按钮保持突出。
+
+## Composer 控件圆角统一
+
+时间：2026-04-27 17:14:07
+
+改了什么：
+- 将 Composer 底部附件、模型选择、思考强度、分支切换控件从 `rounded-full` 调整为统一的 `rounded-[var(--radius-shell)]`。
+- 在 `AGENTS.md` 增加 UI 圆角长期约束，轻量按钮、下拉触发器、分支切换器默认沿用项目圆角 token。
+
+为什么改：
+- 项目 UI 控件需要保持统一圆角语言，底部工具控件和分支切换器应与现有按钮体系一致。
+
+涉及文件：
+- `src/renderer/src/components/assistant-ui/attachment.tsx`
+- `src/renderer/src/components/assistant-ui/thread.tsx`
+- `src/renderer/src/components/assistant-ui/branch-switcher.tsx`
+- `AGENTS.md`
+- `docs/changes/2026-04-27/changes.md`
+
+结果：
+- Composer 底部轻量控件保留透明底风格，同时恢复项目统一圆角。
+
+## Composer token 统计轻量化
+
+时间：2026-04-27 17:17:15
+
+改了什么：
+- 将 Composer 底栏的 `in / out` 与 `total` token 统计从胶囊底色改为 inline 弱文本。
+- 保留 hover tooltip 详情，并给 `total` 增加轻分隔线。
+
+为什么改：
+- token 统计属于底栏辅助信息，使用胶囊底色会和轻量工具区、context 圆环的层级不一致。
+
+涉及文件：
+- `src/renderer/src/components/assistant-ui/thread.tsx`
+- `docs/changes/2026-04-27/changes.md`
+
+结果：
+- Composer 底栏 token 统计更贴合整体轻量状态栏风格。
