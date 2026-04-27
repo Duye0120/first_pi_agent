@@ -11,7 +11,8 @@
       "Bash(npx --yes pnpm check)",
       "Bash(npx --yes pnpm install)",
       "Bash(npx --yes pnpm install @xterm/xterm @xterm/addon-fit @xterm/addon-web-links)",
-      "Bash(npx --yes pnpm install node-pty)"
+      "Bash(npx --yes pnpm install node-pty)",
+      "Bash(npx tsc *)"
     ]
   }
 }
