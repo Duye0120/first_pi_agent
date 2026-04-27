@@ -6,6 +6,11 @@ import {
   getProviderErrorLabel,
 } from "../src/shared/provider-errors.ts";
 import { fetchProviderModelIds } from "../src/main/provider-model-fetch.ts";
+import {
+  isProviderChatSmokeCliEntry,
+  runProviderChatSmoke,
+  readProviderChatSmokeEnv,
+} from "../src/main/provider-chat-smoke.ts";
 import type { ProviderSource } from "../src/shared/contracts.ts";
 
 const openAiCompatibleSource: ProviderSource = {
@@ -92,6 +97,74 @@ assert.equal(getProviderErrorLabel("empty_models"), "模型为空");
     /aborted/,
   );
   assert.equal(aborted, true);
+}
+
+{
+  const requestBodies: unknown[] = [];
+  const result = await runProviderChatSmoke({
+    baseUrl: "https://dashscope.example.test/compatible-mode/v1",
+    apiKey: "sk-test",
+    model: "qwen-plus",
+    prompt: "ping",
+    fetchImpl: async (url, init) => {
+      assert.equal(url, "https://dashscope.example.test/compatible-mode/v1/chat/completions");
+      assert.equal((init?.headers as Record<string, string>).Authorization, "Bearer sk-test");
+      requestBodies.push(JSON.parse(String(init?.body)));
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "pong" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        }),
+        { status: 200 },
+      );
+    },
+  });
+  assert.deepEqual(requestBodies, [
+    {
+      model: "qwen-plus",
+      messages: [{ role: "user", content: "ping" }],
+      temperature: 0,
+      max_tokens: 16,
+    },
+  ]);
+  assert.deepEqual(result, {
+    success: true,
+    skipped: false,
+    model: "qwen-plus",
+    content: "pong",
+    usage: { prompt_tokens: 1, completion_tokens: 1 },
+  });
+}
+
+{
+  const skipped = await runProviderChatSmoke({
+    baseUrl: "",
+    apiKey: "",
+    model: "",
+    fetchImpl: async () => {
+      throw new Error("fetch should not be called");
+    },
+  });
+  assert.equal(skipped.success, false);
+  assert.equal(skipped.skipped, true);
+}
+
+{
+  const env = readProviderChatSmokeEnv({
+    CHELA_SMOKE_BASE_URL: "https://api.example.test/v1",
+    CHELA_SMOKE_API_KEY: "token",
+    CHELA_SMOKE_MODEL: "demo-model",
+  });
+  assert.equal(env.baseUrl, "https://api.example.test/v1");
+  assert.equal(env.apiKey, "token");
+  assert.equal(env.model, "demo-model");
+  assert.equal(
+    isProviderChatSmokeCliEntry(
+      "file:///D:/a_github/first_pi_agent/src/main/provider-chat-smoke.ts",
+      "D:\\a_github\\first_pi_agent\\src\\main\\provider-chat-smoke.ts",
+    ),
+    true,
+  );
 }
 
 console.log("provider regression tests passed");
