@@ -1,5 +1,5 @@
 import { Agent } from "@mariozechner/pi-agent-core";
-import type { AgentEvent as CoreAgentEvent } from "@mariozechner/pi-agent-core";
+import type { AgentEvent as CoreAgentEvent, AgentTool } from "@mariozechner/pi-agent-core";
 import type { ElectronAdapter } from "./adapter.js";
 import { PRIMARY_AGENT_OWNER } from "./agent-owners.js";
 import {
@@ -18,6 +18,7 @@ import {
   normalizePersistedSessionMessages,
 } from "./chat-message-adapter.js";
 import type { ChatMessage, SelectedFile } from "../shared/contracts.js";
+import type { McpServerStatus } from "../shared/contracts.js";
 import type { ResolvedRuntimeModel } from "./model-resolution.js";
 
 export interface AgentHandle {
@@ -86,6 +87,75 @@ function subscribeToAgent(
   });
 }
 
+function registerParallelExecutors(tools: AgentTool<any, any>[]): void {
+  for (const tool of tools) {
+    if (SIDE_EFFECT_FREE_TOOLS.has(tool.name)) {
+      parallelManager.registerExecutor(tool.name, (toolCallId, args, signal) =>
+        tool.execute(toolCallId, args, signal, () => {}),
+      );
+    }
+  }
+}
+
+async function buildHarnessedTools(
+  input: {
+    workspacePath: string;
+    sessionId: string;
+    mcpManager: McpConnectionManager;
+    adapter: ElectronAdapter;
+    getHandle: () => AgentHandle | null;
+  },
+) {
+  const rawTools = await buildToolPool({
+    workspacePath: input.workspacePath,
+    sessionId: input.sessionId,
+    mcpManager: input.mcpManager,
+  });
+
+  registerParallelExecutors(rawTools);
+
+  return wrapToolsWithHarness(rawTools, {
+    workspacePath: input.workspacePath,
+    runtime: harnessRuntime,
+    getAdapter: () => input.getHandle()?.adapter ?? input.adapter,
+    getRunScope: () => {
+      const activeRunId = input.getHandle()?.activeRunId;
+      return activeRunId
+        ? {
+            sessionId: input.sessionId,
+            runId: activeRunId,
+          }
+        : null;
+    },
+  });
+}
+
+async function reconnectMcpServers(
+  mcpManager: McpConnectionManager,
+  workspacePath: string,
+  serverName?: string,
+): Promise<void> {
+  const mcpConfig = loadMcpConfig(workspacePath);
+  const servers = getActiveServers(mcpConfig);
+  const filteredServers = serverName
+    ? servers.filter(([name]) => name === serverName)
+    : servers;
+
+  if (!serverName) {
+    await mcpManager.disconnectAll();
+  } else {
+    await mcpManager.disconnectServer(serverName);
+  }
+
+  for (const [name, cfg] of filteredServers) {
+    try {
+      await mcpManager.connectServer(name, cfg);
+    } catch {
+      /* skip failing servers */
+    }
+  }
+}
+
 /**
  * Create and initialize an Agent instance for a session.
  */
@@ -129,34 +199,12 @@ export async function initAgent(
     /* MCP init failure is non-fatal */
   }
 
-  const rawTools = await buildToolPool({
+  const tools = await buildHarnessedTools({
     workspacePath: adapter.workspacePath,
     sessionId,
     mcpManager,
-  });
-
-  // 注册只读工具的执行器供并行预执行使用
-  for (const tool of rawTools) {
-    if (SIDE_EFFECT_FREE_TOOLS.has(tool.name)) {
-      parallelManager.registerExecutor(tool.name, (toolCallId, args, signal) =>
-        tool.execute(toolCallId, args, signal, () => {}),
-      );
-    }
-  }
-
-  const tools = wrapToolsWithHarness(rawTools, {
-    workspacePath: adapter.workspacePath,
-    runtime: harnessRuntime,
-    getAdapter: () => handleRef.current?.adapter ?? adapter,
-    getRunScope: () => {
-      const activeRunId = handleRef.current?.activeRunId;
-      return activeRunId
-        ? {
-            sessionId,
-            runId: activeRunId,
-          }
-        : null;
-    },
+    adapter,
+    getHandle: () => handleRef.current,
   });
 
   const promptRuntime = {
@@ -306,6 +354,87 @@ export function getHandle(
   ownerId = PRIMARY_AGENT_OWNER,
 ): AgentHandle | null {
   return handlesByOwner.get(getHandleOwnerKey(sessionId, ownerId)) ?? null;
+}
+
+export function listMcpServerStatuses(): McpServerStatus[] {
+  const handles = [...handlesByOwner.values()];
+  const settings = getSettings();
+  const config = loadMcpConfig(settings.workspace);
+
+  if (handles.length === 0) {
+    return new McpConnectionManager().getStatuses(config);
+  }
+
+  const byName = new Map<string, McpServerStatus>();
+  for (const handle of handles) {
+    for (const status of handle.mcpManager.getStatuses(config)) {
+      const existing = byName.get(status.name);
+      if (!existing || (status.connected && !existing.connected)) {
+        byName.set(status.name, status);
+      }
+    }
+  }
+
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function refreshHandleTools(handle: AgentHandle): Promise<void> {
+  const handleRef = { current: handle };
+  const tools = await buildHarnessedTools({
+    workspacePath: handle.workspacePath,
+    sessionId: handle.sessionId,
+    mcpManager: handle.mcpManager,
+    adapter: handle.adapter,
+    getHandle: () => handleRef.current,
+  });
+  handle.agent.setTools(tools);
+  handle.agent.setSystemPrompt(
+    await buildSystemPrompt({
+      workspacePath: handle.workspacePath,
+      sessionId: handle.sessionId,
+      latestUserText: null,
+      toolNames: tools.map((tool) => tool.name),
+      thinkingLevel: handle.thinkingLevel,
+      promptRuntime: handle.promptRuntime,
+    }),
+  );
+}
+
+export async function reloadMcpConfigForActiveHandles(): Promise<McpServerStatus[]> {
+  const handles = [...handlesByOwner.values()];
+  await Promise.allSettled(
+    handles.map(async (handle) => {
+      await reconnectMcpServers(handle.mcpManager, handle.workspacePath);
+      await refreshHandleTools(handle);
+    }),
+  );
+  return listMcpServerStatuses();
+}
+
+export async function restartMcpServerForActiveHandles(
+  serverName: string,
+): Promise<McpServerStatus[]> {
+  const handles = [...handlesByOwner.values()];
+  await Promise.allSettled(
+    handles.map(async (handle) => {
+      await reconnectMcpServers(handle.mcpManager, handle.workspacePath, serverName);
+      await refreshHandleTools(handle);
+    }),
+  );
+  return listMcpServerStatuses();
+}
+
+export async function disconnectMcpServerForActiveHandles(
+  serverName: string,
+): Promise<McpServerStatus[]> {
+  const handles = [...handlesByOwner.values()];
+  await Promise.allSettled(
+    handles.map(async (handle) => {
+      await handle.mcpManager.disconnectServer(serverName);
+      await refreshHandleTools(handle);
+    }),
+  );
+  return listMcpServerStatuses();
 }
 
 async function buildSystemPrompt(input: {

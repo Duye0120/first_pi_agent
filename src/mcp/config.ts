@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { appLogger } from "../main/logger.js";
 
 export type McpServerConfig = {
   command: string;
@@ -21,13 +20,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function warnMcpConfig(configPath: string, message: string, data?: unknown): void {
-  appLogger.warn({
-    scope: "mcp.config",
-    message,
-    data: {
-      configPath,
-      ...(data && typeof data === "object" ? (data as Record<string, unknown>) : {}),
-    },
+  console.warn("[mcp.config]", message, {
+    configPath,
+    ...(data && typeof data === "object" ? (data as Record<string, unknown>) : {}),
   });
 }
 
@@ -133,7 +128,11 @@ export function loadMcpConfig(workspacePath: string): McpConfig {
       return { mcpServers: {} };
     }
 
-    const rawServers = parsed.mcpServers;
+    const rawServers = isPlainObject(parsed.mcpServers)
+      ? parsed.mcpServers
+      : isPlainObject((parsed as { servers?: unknown }).servers)
+        ? (parsed as { servers: Record<string, unknown> }).servers
+        : parsed.mcpServers;
     if (!isPlainObject(rawServers)) {
       if (rawServers != null) {
         warnMcpConfig(configPath, "mcpServers 字段无效，已回退为空配置。");
@@ -173,11 +172,9 @@ export function loadMcpConfig(workspacePath: string): McpConfig {
       mcpServers: normalizedServers,
     };
   } catch (err) {
-    appLogger.warn({
-      scope: "mcp.config",
-      message: "解析 MCP 配置失败，已回退为空配置。",
-      data: { configPath },
-      error: err,
+    console.warn("[mcp.config] 解析 MCP 配置失败，已回退为空配置。", {
+      configPath,
+      error: err instanceof Error ? err.message : String(err),
     });
     return { mcpServers: {} };
   }

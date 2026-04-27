@@ -14,6 +14,8 @@ export async function mcpToolsFromConnection(
 
   try {
     const result = await conn.client.listTools();
+    conn.toolCount = result.tools.length;
+    conn.updatedAt = Date.now();
     return result.tools.map((tool) => mcpToolToAgentTool(conn, tool));
   } catch {
     return [];
@@ -159,6 +161,8 @@ export function getMcpResourceTools(
       for (const connection of connections) {
         try {
           const result = await connection.client.listResources();
+          connection.resourceCount = result.resources.length;
+          connection.updatedAt = Date.now();
           resources.push(
             ...result.resources.map((resource) => ({
               server: connection.name,
@@ -252,6 +256,7 @@ export function getMcpResourceTools(
       for (const connection of connections) {
         try {
           const result = await connection.client.listResourceTemplates();
+          connection.updatedAt = Date.now();
           templates.push(
             ...result.resourceTemplates.map((template) => ({
               server: connection.name,
@@ -425,6 +430,8 @@ async function listMcpTools(
   for (const connection of connections) {
     try {
       const result = await connection.client.listTools();
+      connection.toolCount = result.tools.length;
+      connection.updatedAt = Date.now();
       tools.push(
         ...result.tools.map((tool) => ({
           server: connection.name,

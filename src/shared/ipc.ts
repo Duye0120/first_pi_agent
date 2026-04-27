@@ -1,3 +1,10 @@
+export type IpcErrorPayload = {
+  code: string;
+  message: string;
+};
+
+export const IPC_ERROR_MESSAGE_PREFIX = "__CHELA_IPC_ERROR__:";
+
 export const IPC_CHANNELS = {
   // Files
   filesPick: "files:pick",
@@ -61,6 +68,12 @@ export const IPC_CHANNELS = {
   skillsInstall: "skills:install",
   skillsOpenDirectory: "skills:open-directory",
   skillsOpenSkillFile: "skills:open-skill-file",
+
+  // MCP
+  mcpListStatus: "mcp:list-status",
+  mcpReloadConfig: "mcp:reload-config",
+  mcpRestartServer: "mcp:restart-server",
+  mcpDisconnectServer: "mcp:disconnect-server",
 
   // Providers
   providersListSources: "providers:list-sources",
