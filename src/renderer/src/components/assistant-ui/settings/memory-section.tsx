@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ThumbsDownIcon,
+  ThumbsUpIcon,
+  Trash2Icon,
+} from "lucide-react";
 import type {
   MemoryListSort,
   MemoryRecord,
+  MemoryRebuildResult,
   MemoryStats,
   ModelEntry,
   ProviderSource,
@@ -26,6 +32,14 @@ import {
   FieldInput,
   FieldSelect,
 } from "./shared";
+import {
+  deleteMemoryAndRefresh,
+  feedbackMemoryAndRefresh,
+} from "./memory-actions";
+import {
+  formatMemoryErrorMessage,
+  getRebuildStatusText,
+} from "./memory-status";
 
 function formatTimestamp(value: string | null, timeZone: string): string {
   if (!value) {
@@ -55,14 +69,23 @@ function getWorkerLabel(state: MemoryStats["workerState"]): string {
 function MetaItem({
   label,
   value,
+  breakAll = false,
 }: {
   label: string;
   value: string;
+  breakAll?: boolean;
 }) {
   return (
     <div className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-4 py-3">
       <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className="mt-1 text-[13px] leading-5 text-foreground">{value}</p>
+      <p
+        className={[
+          "mt-1 text-[13px] leading-5 text-foreground",
+          breakAll ? "break-all" : "",
+        ].join(" ")}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -104,7 +127,13 @@ export function MemorySection({
   const [loading, setLoading] = useState(false);
   const [memoriesLoading, setMemoriesLoading] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
+  const [lastRebuildResult, setLastRebuildResult] =
+    useState<MemoryRebuildResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [memoryAction, setMemoryAction] = useState<{
+    id: number;
+    kind: "delete" | "feedback";
+  } | null>(null);
   const [providerSources, setProviderSources] = useState<ProviderSource[]>([]);
   const [providerEntries, setProviderEntries] = useState<ModelEntry[]>([]);
 
@@ -142,7 +171,7 @@ export function MemorySection({
       const nextStats = await desktopApi.memory.getStats();
       setStats(nextStats);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "读取 Memory 状态失败");
+      setError(formatMemoryErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -167,7 +196,7 @@ export function MemorySection({
       });
       setMemories(nextMemories);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "读取 Memory 列表失败");
+      setError(formatMemoryErrorMessage(err));
     } finally {
       setMemoriesLoading(false);
     }
@@ -180,6 +209,14 @@ export function MemorySection({
   const modelNeedsRebuild =
     !!stats?.indexedModelId &&
     stats.indexedModelId !== settings.memory.embeddingModelId;
+  const selectedEmbeddingProvider = settings.memory.embeddingProviderId
+    ? providerSources.find(
+      (item) => item.id === settings.memory.embeddingProviderId,
+    )
+    : null;
+  const embeddingProviderUnavailable =
+    !!settings.memory.embeddingProviderId &&
+    (!selectedEmbeddingProvider || !selectedEmbeddingProvider.enabled);
 
   const LOCAL_GROUP_LABEL = "本地嵌入模型";
 
@@ -270,6 +307,7 @@ export function MemorySection({
     settings.memory.embeddingModelId,
     settings.memory.embeddingProviderId,
   ]);
+  const rebuildStatusText = getRebuildStatusText(lastRebuildResult);
 
   const handleEmbeddingValueChange = useCallback(
     (value: string) => {
@@ -293,14 +331,74 @@ export function MemorySection({
     setRebuilding(true);
     setError(null);
     try {
-      await desktopApi.memory.rebuild();
+      const result = await desktopApi.memory.rebuild();
+      setLastRebuildResult(result);
       await Promise.all([loadStats(), loadMemories()]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "重建 Memory 失败");
+      setError(formatMemoryErrorMessage(err));
     } finally {
       setRebuilding(false);
     }
   }, [desktopApi, loadMemories, loadStats]);
+
+  const handleMemoryDelete = useCallback(
+    async (memoryId: number) => {
+      if (!desktopApi) {
+        return;
+      }
+      const confirmed = window.confirm("确定删除这条记忆吗？");
+      if (!confirmed) {
+        return;
+      }
+
+      setMemoryAction({ id: memoryId, kind: "delete" });
+      setError(null);
+      try {
+        const deleted = await deleteMemoryAndRefresh(desktopApi, memoryId, {
+          loadStats,
+          loadMemories,
+        });
+        if (!deleted) {
+          setError("删除失败：这条记忆可能已经不存在。");
+        }
+      } catch (err) {
+        setError(formatMemoryErrorMessage(err));
+      } finally {
+        setMemoryAction(null);
+      }
+    },
+    [desktopApi, loadMemories, loadStats],
+  );
+
+  const handleMemoryFeedback = useCallback(
+    async (memoryId: number, delta: number) => {
+      if (!desktopApi) {
+        return;
+      }
+
+      setMemoryAction({ id: memoryId, kind: "feedback" });
+      setError(null);
+      try {
+        const updated = await feedbackMemoryAndRefresh(
+          desktopApi,
+          memoryId,
+          delta,
+          {
+            loadStats,
+            loadMemories,
+          },
+        );
+        if (!updated) {
+          setError("反馈失败：这条记忆可能已经不存在。");
+        }
+      } catch (err) {
+        setError(formatMemoryErrorMessage(err));
+      } finally {
+        setMemoryAction(null);
+      }
+    },
+    [desktopApi, loadMemories, loadStats],
+  );
 
   const handleMemorySettingChange = useCallback(
     (key: keyof Settings["memory"], value: any) => {
@@ -453,6 +551,11 @@ export function MemorySection({
                 未绑定 Provider，远端嵌入模型将无法调用，请重新选择。
               </p>
             ) : null}
+            {embeddingProviderUnavailable ? (
+              <p className="text-[12px] text-amber-500">
+                当前嵌入 Provider 未启用或已删除，请重新选择可用的嵌入模型。
+              </p>
+            ) : null}
           </div>
         </SettingsBlock>
       </SettingsCard>
@@ -460,7 +563,7 @@ export function MemorySection({
       <SettingsCard>
         <SettingsBlock label="操作与统计">
           <div className="space-y-4">
-            <div className="grid gap-2 sm:grid-cols-5">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
               <MetaItem
                 label="记忆总数"
                 value={loading && !stats ? "加载中…" : String(stats?.totalMemories ?? 0)}
@@ -474,12 +577,35 @@ export function MemorySection({
                 value={stats ? getWorkerLabel(stats.workerState) : "—"}
               />
               <MetaItem
+                label="模型状态"
+                value={stats ? (stats.modelLoaded ? "已加载" : "未加载") : "—"}
+              />
+              <MetaItem
+                label="候选上限"
+                value={stats ? String(stats.candidateLimit) : "—"}
+              />
+              <MetaItem
+                label="当前模型"
+                value={stats?.selectedModelId ?? settings.memory.embeddingModelId}
+                breakAll
+              />
+              <MetaItem
+                label="索引模型"
+                value={stats?.indexedModelId ?? "—"}
+                breakAll
+              />
+              <MetaItem
                 label="最近写入"
                 value={formatTimestamp(stats?.lastIndexedAt ?? null, timeZone)}
               />
               <MetaItem
                 label="最近重建"
                 value={formatTimestamp(stats?.lastRebuiltAt ?? null, timeZone)}
+              />
+              <MetaItem
+                label="数据库"
+                value={stats?.dbPath ?? "—"}
+                breakAll
               />
             </div>
 
@@ -505,6 +631,16 @@ export function MemorySection({
                 如有需要，手动重新生成所有记忆的嵌入向量。
               </span>
             </div>
+
+            {rebuilding ? (
+              <p className="text-[12px] leading-5 text-muted-foreground">
+                正在重建 Memory 向量，完成后会刷新统计和列表。
+              </p>
+            ) : rebuildStatusText ? (
+              <p className="text-[12px] leading-5 text-muted-foreground">
+                {rebuildStatusText}
+              </p>
+            ) : null}
 
             {error ? (
               <p className="text-[12px] leading-5 text-[color:var(--color-status-danger-fg,#c43d2f)]">
@@ -553,6 +689,12 @@ export function MemorySection({
                 memories.map((memory) => {
                   const tags = getMemoryTags(memory);
                   const confidenceScore = memory.matchCount + memory.feedbackScore;
+                  const actionBusy = memoryAction !== null;
+                  const rowBusy = memoryAction?.id === memory.id;
+                  const deleting =
+                    rowBusy && memoryAction?.kind === "delete";
+                  const feedbacking =
+                    rowBusy && memoryAction?.kind === "feedback";
 
                   return (
                     <div
@@ -563,10 +705,51 @@ export function MemorySection({
                         <p className="text-[13px] leading-5 text-foreground">
                           {memory.content}
                         </p>
-                        <div className="shrink-0 text-[12px] text-muted-foreground">
-                          综合 {confidenceScore}
+                        <div className="flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground">
+                          <span className="px-1">综合 {confidenceScore}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground"
+                            onClick={() => void handleMemoryFeedback(memory.id, 1)}
+                            disabled={actionBusy}
+                            aria-label="提升这条记忆"
+                            title="提升这条记忆"
+                          >
+                            <ThumbsUpIcon className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground"
+                            onClick={() => void handleMemoryFeedback(memory.id, -1)}
+                            disabled={actionBusy}
+                            aria-label="降低这条记忆权重"
+                            title="降低这条记忆权重"
+                          >
+                            <ThumbsDownIcon className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-[color:var(--color-status-danger-fg,#c43d2f)] hover:bg-[color:var(--color-control-bg-hover)]"
+                            onClick={() => void handleMemoryDelete(memory.id)}
+                            disabled={actionBusy}
+                            aria-label="删除这条记忆"
+                            title="删除这条记忆"
+                          >
+                            <Trash2Icon className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
+                      {deleting || feedbacking ? (
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          {deleting ? "正在删除…" : "正在更新反馈…"}
+                        </p>
+                      ) : null}
                       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                         <span>命中 {memory.matchCount}</span>
                         <span>反馈 {memory.feedbackScore}</span>
