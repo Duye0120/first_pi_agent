@@ -343,3 +343,178 @@
 结果：
 - `pnpm exec electron-vite build` 通过。
 - `pnpm run test:regression` 通过。
+
+## Phase 2 memory IPC 契约校验
+
+时间：2026-04-27 16:33:30
+
+改了什么：
+- 扩展 `src/main/ipc/schema.ts`，新增 `memory:add`、`memory:search`、`memory:list` 输入校验。
+- `src/main/ipc/memory.ts` 在调用 memory service 前校验 add input、search query / limit、list sort / limit。
+- 扩展 `tests/ipc-contract-regression.test.ts`，覆盖 memory 非法 payload、空 content、非法 metadata key、空 query、非法 limit、非法 sort，以及合法 add/list 输入。
+- 更新底层基建路线图，将 `memory:*` IPC 输入校验标为完成。
+
+为什么改：
+- Memory 写入、搜索和列表查询都直接进入主进程记忆链路，需要先保证 IPC 层输入稳定，避免脏 metadata、空 query 或非法排序参数进入 store / worker。
+
+涉及文件：
+- `src/main/ipc/schema.ts`
+- `src/main/ipc/memory.ts`
+- `tests/ipc-contract-regression.test.ts`
+- `docs/todos/foundation-hardening-roadmap.md`
+- `docs/changes/2026-04-27/changes.md`
+
+结果：
+- `memory:*` 关键 IPC 已有结构化输入校验，错误统一使用 `INVALID_IPC_PAYLOAD`。
+
+## Phase 2 git IPC 契约校验
+
+时间：2026-04-27 16:37:25
+
+改了什么：
+- 扩展 `src/main/ipc/schema.ts`，新增 git branchName、paths、commit input 校验。
+- `src/main/ipc/workbench.ts` 在调用 git 操作前校验 `git:switch-branch`、`git:create-branch`、`git:stage-files`、`git:unstage-files`、`git:commit` 入参。
+- 扩展 `tests/ipc-contract-regression.test.ts`，覆盖空分支名、含换行分支名、非法 paths item、空 path、空 commit message、非法 commit paths 和合法输入。
+- 更新底层基建路线图，将 `git:*` IPC 输入校验标为完成。
+
+为什么改：
+- git 分支、路径和提交信息都进入本地命令执行链路；IPC 层先保证基础形状和单行安全字符串，可以让后续 git 层错误更聚焦在仓库状态和 git 自身规则。
+
+涉及文件：
+- `src/main/ipc/schema.ts`
+- `src/main/ipc/workbench.ts`
+- `tests/ipc-contract-regression.test.ts`
+- `docs/todos/foundation-hardening-roadmap.md`
+- `docs/changes/2026-04-27/changes.md`
+
+结果：
+- `git:*` branch / paths / commit input 已有结构化输入校验，错误统一使用 `INVALID_IPC_PAYLOAD`。
+
+## Phase 2 workspace / MCP IPC 契约校验
+
+时间：2026-04-27 16:41:16
+
+改了什么：
+- 扩展 `src/main/ipc/schema.ts`，新增 workspace path 和 MCP serverName 校验。
+- `src/main/ipc/workspace.ts` 在 `workspace:change` 写入设置前校验绝对路径。
+- `src/main/ipc/mcp.ts` 在 restart / disconnect 前校验 serverName。
+- 扩展 `tests/ipc-contract-regression.test.ts`，覆盖相对 workspace 路径、含换行 workspace 路径、空 serverName、含换行 serverName 和合法输入。
+- 更新底层基建路线图，将 Phase 2 剩余任务和完成标准标为完成。
+
+为什么改：
+- workspace 路径和 MCP serverName 都是主进程资源选择输入，IPC 层先拒绝无效形状，后续业务层可以专注处理路径存在性、server 状态和实际操作失败。
+
+涉及文件：
+- `src/main/ipc/schema.ts`
+- `src/main/ipc/workspace.ts`
+- `src/main/ipc/mcp.ts`
+- `tests/ipc-contract-regression.test.ts`
+- `docs/todos/foundation-hardening-roadmap.md`
+- `docs/changes/2026-04-27/changes.md`
+
+结果：
+- Phase 2 IPC 契约校验任务已完成。
+
+## Phase 3 memory 删除与反馈闭环
+
+时间：2026-04-27 16:52:13
+
+改了什么：
+- 新增 memory delete / feedback 的 store、worker、service、IPC、preload、DesktopApi 契约链路。
+- Settings Memory 列表每条记忆增加提升、降权和删除动作，动作完成后刷新 stats 和列表。
+- 新增 `memory-actions.ts`，把 renderer 侧动作刷新流程抽成可测试 helper。
+- 新增 `tests/memory-ui-regression.test.ts` 并纳入 `test:regression`。
+- 更新底层基建路线图，将 Phase 3 的删除、反馈、列表排序、SQLite store 回归测试和“用户能查看、删除、降权记忆”标为完成。
+
+为什么改：
+- Phase 3 要把长期记忆补成可管理闭环，用户需要在 UI 中直接处理错误记忆、降低低价值记忆权重，并让反馈进入 `feedback_score`。
+
+涉及文件：
+- `src/main/memory/store.ts`
+- `src/main/memory/embedding-types.ts`
+- `src/main/memory/embedding.ts`
+- `src/main/memory/embedding-worker.ts`
+- `src/main/memory/rag-service.ts`
+- `src/main/ipc/memory.ts`
+- `src/main/ipc/schema.ts`
+- `src/preload/index.ts`
+- `src/shared/contracts.ts`
+- `src/shared/ipc.ts`
+- `src/renderer/src/components/assistant-ui/settings/memory-actions.ts`
+- `src/renderer/src/components/assistant-ui/settings/memory-section.tsx`
+- `tests/memory-regression.test.ts`
+- `tests/memory-ui-regression.test.ts`
+- `tests/ipc-contract-regression.test.ts`
+- `package.json`
+- `docs/todos/foundation-hardening-roadmap.md`
+- `docs/changes/2026-04-27/changes.md`
+
+结果：
+- `pnpm exec tsx tests/memory-regression.test.ts` 通过。
+- `pnpm exec tsx tests/memory-ui-regression.test.ts` 通过。
+- `pnpm exec tsx tests/ipc-contract-regression.test.ts` 通过。
+
+## Phase 3 memory 诊断状态展示
+
+时间：2026-04-27 16:58:54
+
+改了什么：
+- Settings Memory 区补齐当前模型、索引模型、候选上限、模型加载状态、数据库路径。
+- rebuild 动作记录最近一次结果，并在 UI 中展示进行中状态、重建数量、模型和完成时间。
+- 新增 `memory-status.ts`，将 native ABI、远端嵌入请求等错误转成用户可读提示。
+- 嵌入 Provider 未绑定、未启用或已删除时，在嵌入模型设置区直接提示用户重新选择。
+- 扩展 `tests/memory-ui-regression.test.ts`，覆盖 native 错误提示和 rebuild 结果文案。
+- 更新底层基建路线图，将 Phase 3 剩余任务和完成标准标为完成。
+
+为什么改：
+- Phase 3 的剩余缺口集中在可观察性和失败提示；用户需要看到 Memory 当前使用的模型、索引状态、数据库位置，并在 native 依赖或 embedding provider 出问题时得到明确处理路径。
+
+涉及文件：
+- `src/renderer/src/components/assistant-ui/settings/memory-status.ts`
+- `src/renderer/src/components/assistant-ui/settings/memory-section.tsx`
+- `tests/memory-ui-regression.test.ts`
+- `docs/todos/foundation-hardening-roadmap.md`
+- `docs/changes/2026-04-27/changes.md`
+
+结果：
+- `pnpm exec tsx tests/memory-ui-regression.test.ts` 通过。
+- `pnpm exec tsx tests/memory-regression.test.ts` 通过。
+
+## 修复多行 commit message IPC 校验
+
+时间：2026-04-27 17:04:55
+
+改了什么：
+- 调整 `git:commit` 的 `message` 校验，允许提交标题加正文的多行 commit message。
+- 保留 NUL 字符拦截，分支名、路径、MCP server name 等资源选择输入继续使用单行安全字符串校验。
+- 扩展 IPC 契约回归测试，覆盖多行 commit message 可通过、含 NUL message 会拒绝。
+
+为什么改：
+- 提交计划 UI 会把 commit title、description 和 plan note 组合成多行 message；上一轮 IPC 加固把 `git:commit.message` 错误限制为单行，导致用户无法提交。
+
+涉及文件：
+- `src/main/ipc/schema.ts`
+- `tests/ipc-contract-regression.test.ts`
+- `docs/changes/2026-04-27/changes.md`
+
+结果：
+- `pnpm exec tsx tests/ipc-contract-regression.test.ts` 通过。
+- `pnpm exec tsx tests/memory-ui-regression.test.ts` 通过。
+
+## 提交计划生成空态居中
+
+时间：2026-04-27 17:04:18
+
+改了什么：
+- 调整右侧 diff panel 提交计划生成中的空态布局，把提示块放入更高的居中容器。
+- 将提示内容限制为稳定宽度，避免宽屏右侧栏里视觉重心偏移。
+
+为什么改：
+- 生成计划时的提示块在上半区视觉偏上，需要和可用空白区域保持居中。
+
+涉及文件：
+- `src/renderer/src/components/assistant-ui/diff-panel.tsx`
+- `docs/changes/2026-04-27/changes.md`
+
+结果：
+- 提交计划生成中的提示块在右侧上半区水平、垂直居中更稳定。

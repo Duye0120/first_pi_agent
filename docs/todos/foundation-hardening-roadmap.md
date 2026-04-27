@@ -1,6 +1,6 @@
 # Chela 底层基建完善路线图
 
-更新时间：2026-04-27 16:14:01
+更新时间：2026-04-27 16:58:54
 
 目标：把 Chela 从“执行主干已具备”推进到“适合长期持续加功能”的底层状态。路线按 6 个阶段推进，预计 12-18 轮有效改动。优先做前 3 阶段：环境 Doctor、IPC 契约校验、Memory 管理闭环。
 
@@ -60,20 +60,26 @@
 - [x] 建立 IPC schema 校验工具，统一返回 `{ code, message }`。
 - [x] 优先覆盖 `settings:update`。
 - [x] 覆盖 `providers:*`，特别是保存 provider、测试 provider、拉取模型、凭据写入。
-- [ ] 覆盖 `memory:*`，特别是 `memory:add`、`memory:list`、`memory:search`。
-- [ ] 覆盖 `git:*` 的 branch / paths / commit input。
-- [ ] 覆盖 `workspace:*` 的路径输入。
-- [ ] 覆盖 `mcp:*` 的 server name 输入。
+- [x] 覆盖 `memory:*`，特别是 `memory:add`、`memory:list`、`memory:search`。
+- [x] 覆盖 `git:*` 的 branch / paths / commit input。
+- [x] 覆盖 `workspace:*` 的路径输入。
+- [x] 覆盖 `mcp:*` 的 server name 输入。
 - [x] 增加 IPC 契约回归测试。
 
 完成标准：
-- [ ] 关键 IPC 对错误输入有稳定错误码。
-- [ ] renderer 侧拿到的错误都带 `code` 和用户可读 `message`。
+- [x] 关键 IPC 对错误输入有稳定错误码。
+- [x] renderer 侧拿到的错误都带 `code` 和用户可读 `message`。
 - [x] 回归测试覆盖至少 5 类非法输入。
 
 结果记录：2026-04-27 16:00:27 完成 Phase 2 第一轮。新增 `src/main/ipc/schema.ts` 和 `tests/ipc-contract-regression.test.ts`，`settings:update` 已覆盖非法 payload、未知字段、空 workspace、嵌套类型错误、嵌套布尔字段错误，并纳入 `test:regression`。
 
 结果记录：2026-04-27 16:14:01 完成 Phase 2 provider 输入校验。`providers:save-source`、`providers:test-source`、`providers:fetch-models` 共享 provider draft schema；`providers:get-source`、`providers:delete-source`、`providers:get-credentials`、`providers:set-credentials` 校验 sourceId，凭据写入校验 apiKey 类型。
+
+结果记录：2026-04-27 16:33:30 完成 Phase 2 memory 输入校验。`memory:add` 校验 content 和 metadata，`memory:search` 校验 query / limit，`memory:list` 校验 sort / limit；相关非法输入和合法输入已进入 IPC 契约回归测试。
+
+结果记录：2026-04-27 16:37:25 完成 Phase 2 git 输入校验。`git:switch-branch`、`git:create-branch` 校验 branchName；`git:stage-files`、`git:unstage-files` 校验 paths；`git:commit` 校验 message 和 paths。
+
+结果记录：2026-04-27 16:41:16 完成 Phase 2 workspace / MCP 输入校验。`workspace:change` 校验绝对 workspace 路径；`mcp:restart-server`、`mcp:disconnect-server` 校验 serverName。至此 Phase 2 任务和完成标准已收口。
 
 ## Phase 3：Memory 管理闭环
 
@@ -82,19 +88,23 @@
 预计：3-4 轮有效改动。
 
 任务：
-- [ ] 新增 memory 删除能力。
-- [ ] 新增 memory 降权 / 反馈能力，对接 `feedback_score`。
-- [ ] 新增 memory rebuild 状态展示。
-- [ ] 增加 native 依赖不可用时的降级状态和 UI 提示。
-- [ ] 增加 embedding model/provider 缺失时的可读错误。
-- [ ] Settings Memory 区展示总数、indexed model、last indexed/rebuilt、worker state、db path。
-- [ ] Memory 列表支持排序：created、last matched、match count、feedback、confidence。
-- [ ] 补 SQLite store 真正运行的回归测试，前提是 doctor 确认 native ABI 可用。
+- [x] 新增 memory 删除能力。
+- [x] 新增 memory 降权 / 反馈能力，对接 `feedback_score`。
+- [x] 新增 memory rebuild 状态展示。
+- [x] 增加 native 依赖不可用时的降级状态和 UI 提示。
+- [x] 增加 embedding model/provider 缺失时的可读错误。
+- [x] Settings Memory 区展示总数、indexed model、last indexed/rebuilt、worker state、db path。
+- [x] Memory 列表支持排序：created、last matched、match count、feedback、confidence。
+- [x] 补 SQLite store 真正运行的回归测试，前提是 doctor 确认 native ABI 可用。
 
 完成标准：
-- [ ] 用户能查看、删除、降权记忆。
-- [ ] embedding / native 依赖失败时 UI 有明确提示。
-- [ ] rebuild 可触发、可观察、可失败恢复。
+- [x] 用户能查看、删除、降权记忆。
+- [x] embedding / native 依赖失败时 UI 有明确提示。
+- [x] rebuild 可触发、可观察、可失败恢复。
+
+结果记录：2026-04-27 16:52:13 完成 Phase 3 第一轮 memory 管理动作。Memory store、worker、IPC、preload、renderer 设置页已串通删除和反馈；设置页每条记忆支持提升、降权和删除，动作完成后刷新统计与列表；新增 memory UI 动作回归测试并纳入 `test:regression`。
+
+结果记录：2026-04-27 16:58:54 完成 Phase 3 第二轮 memory 诊断展示。Settings Memory 区补齐当前模型、索引模型、候选上限、模型加载状态、数据库路径；rebuild 显示进行中和上次结果；native ABI、远端嵌入请求、Provider 缺失会显示可读提示。Phase 3 任务和完成标准已收口。
 
 ## Phase 4：Provider / 模型目录稳定性
 
