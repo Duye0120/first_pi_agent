@@ -6,6 +6,11 @@ import type {
   SessionMemorySnapshot,
   SessionTranscriptEvent,
 } from "../../shared/contracts.js";
+import {
+  buildRunRecoveryPrompt,
+  classifyRunFailureReason,
+  type RunRecoveryTranscriptLine,
+} from "../../shared/run-recovery.js";
 import { executeBackgroundRun } from "../background-run.js";
 import { getGitDiffSnapshot } from "../git.js";
 import { harnessRuntime } from "../harness/singleton.js";
@@ -703,13 +708,45 @@ function getRecoverableRun(events: SessionTranscriptEvent[]) {
     return null;
   }
 
+  const latestToolFailure = getLatestToolFailure(events);
+  const todos = listSessionTodos(latestFinished.sessionId);
+  const recoveryRequested = [...events].reverse().find(
+    (
+      event,
+    ): event is Extract<SessionTranscriptEvent, { type: "run_recovery_requested" }> =>
+      event.type === "run_recovery_requested" && event.runId === latestFinished.runId,
+  );
+  const transcriptTail = getMessageEvents(events)
+    .slice(-4)
+    .map((event): RunRecoveryTranscriptLine => ({
+      role: event.message.role === "assistant" ? "assistant" : "user",
+      content: event.message.content,
+    }));
+  const reason =
+    latestFinished.reason ??
+    (latestFinished.finalState === "failed"
+      ? "上次运行失败，等待恢复。"
+      : "上次运行已取消，等待恢复。");
+  const failureKind = classifyRunFailureReason(reason);
+
   return {
     runId: latestFinished.runId,
-    reason:
-      latestFinished.reason ??
-      (latestFinished.finalState === "failed"
-        ? "上次运行失败，等待恢复。"
-        : "上次运行已取消，等待恢复。"),
+    reason,
+    failureKind,
+    recoveryStatus: recoveryRequested ? "recovered" : "recoverable",
+    recoveryPrompt: buildRunRecoveryPrompt({
+      runId: latestFinished.runId,
+      finalState: latestFinished.finalState,
+      reason,
+      latestToolFailure: latestToolFailure
+        ? {
+            toolName: latestToolFailure.toolName,
+            error: latestToolFailure.error,
+          }
+        : null,
+      todos,
+      transcriptTail,
+    }),
   };
 }
 
