@@ -1,5 +1,13 @@
-import type { ProviderSourceDraft, Settings } from "../../shared/contracts.js";
+import type {
+  GitCommitInput,
+  MemoryAddInput,
+  MemoryListInput,
+  MemoryListSort,
+  ProviderSourceDraft,
+  Settings,
+} from "../../shared/contracts.js";
 import { IPC_CHANNELS, type IpcErrorPayload } from "../../shared/ipc.js";
+import path from "node:path";
 
 type PlainRecord = Record<string, unknown>;
 
@@ -45,6 +53,16 @@ const PROVIDER_SOURCE_DRAFT_KEYS = new Set([
 ]);
 const PROVIDER_TYPES = ["anthropic", "openai", "google", "openai-compatible"] as const;
 const PROVIDER_MODES = ["native", "custom"] as const;
+const MEMORY_ADD_KEYS = new Set(["content", "metadata"]);
+const MEMORY_LIST_KEYS = new Set(["sort", "limit"]);
+const MEMORY_LIST_SORTS: readonly MemoryListSort[] = [
+  "created_desc",
+  "last_matched_desc",
+  "match_count_desc",
+  "feedback_score_desc",
+  "confidence_desc",
+];
+const GIT_COMMIT_KEYS = new Set(["message", "paths"]);
 
 export function invalidIpcPayload(channel: string, path: string, expected: string): IpcErrorPayload {
   return {
@@ -128,6 +146,94 @@ export function validateProviderApiKeyPayload(channel: string, value: unknown): 
   return value;
 }
 
+export function validateMemoryAddPayload(value: unknown): MemoryAddInput {
+  const input = expectPlainObject(value, IPC_CHANNELS.memoryAdd, "input");
+  assertKnownKeys(input, MEMORY_ADD_KEYS, IPC_CHANNELS.memoryAdd, "input");
+  expectNonEmptyString(input.content, IPC_CHANNELS.memoryAdd, "content");
+  if ("metadata" in input) {
+    validateMemoryMetadata(input.metadata, IPC_CHANNELS.memoryAdd, "metadata");
+  }
+  return input as unknown as MemoryAddInput;
+}
+
+export function validateMemorySearchQueryPayload(value: unknown): string {
+  expectNonEmptyString(value, IPC_CHANNELS.memorySearch, "query");
+  return value;
+}
+
+export function validateMemorySearchLimitPayload(value: unknown): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  expectPositiveInteger(value, IPC_CHANNELS.memorySearch, "limit");
+  return value;
+}
+
+export function validateMemoryListPayload(value: unknown): MemoryListInput | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const input = expectPlainObject(value, IPC_CHANNELS.memoryList, "input");
+  assertKnownKeys(input, MEMORY_LIST_KEYS, IPC_CHANNELS.memoryList, "input");
+  if ("sort" in input) {
+    expectEnum(input.sort, MEMORY_LIST_SORTS, IPC_CHANNELS.memoryList, "sort");
+  }
+  if ("limit" in input) {
+    expectPositiveInteger(input.limit, IPC_CHANNELS.memoryList, "limit");
+  }
+  return input as MemoryListInput;
+}
+
+export function validateMemoryIdPayload(channel: string, value: unknown): number {
+  expectPositiveInteger(value, channel, "memoryId");
+  return value;
+}
+
+export function validateMemoryFeedbackDeltaPayload(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
+    throw invalidIpcPayload(IPC_CHANNELS.memoryFeedback, "delta", "整数");
+  }
+  return value;
+}
+
+export function validateGitBranchNamePayload(channel: string, value: unknown): string {
+  expectNonEmptyString(value, channel, "branchName");
+  expectSafeSingleLineString(value, channel, "branchName");
+  return value;
+}
+
+export function validateGitPathsPayload(channel: string, value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw invalidIpcPayload(channel, "paths", "字符串数组");
+  }
+  value.forEach((item, index) => validateGitPath(item, channel, `paths.${index}`));
+  return value;
+}
+
+export function validateGitCommitPayload(value: unknown): GitCommitInput {
+  const input = expectPlainObject(value, IPC_CHANNELS.gitCommit, "input");
+  assertKnownKeys(input, GIT_COMMIT_KEYS, IPC_CHANNELS.gitCommit, "input");
+  expectNonEmptyString(input.message, IPC_CHANNELS.gitCommit, "message");
+  expectSafeText(input.message, IPC_CHANNELS.gitCommit, "message");
+  const paths = validateGitPathsPayload(IPC_CHANNELS.gitCommit, input.paths);
+  return { message: input.message, paths };
+}
+
+export function validateWorkspacePathPayload(value: unknown): string {
+  expectNonEmptyString(value, IPC_CHANNELS.workspaceChange, "workspacePath");
+  expectSafeSingleLineString(value, IPC_CHANNELS.workspaceChange, "workspacePath");
+  if (!path.isAbsolute(value)) {
+    throw invalidIpcPayload(IPC_CHANNELS.workspaceChange, "workspacePath", "绝对路径");
+  }
+  return value;
+}
+
+export function validateServerNamePayload(channel: string, value: unknown): string {
+  expectNonEmptyString(value, channel, "serverName");
+  expectSafeSingleLineString(value, channel, "serverName");
+  return value;
+}
+
 function validateModelRouting(value: unknown): void {
   const input = expectPlainObject(value, IPC_CHANNELS.settingsUpdate, "modelRouting");
   assertKnownKeys(input, MODEL_ROUTING_KEYS, IPC_CHANNELS.settingsUpdate, "modelRouting");
@@ -206,6 +312,34 @@ function validateCustomTheme(value: unknown): void {
   }
 }
 
+function validateMemoryMetadata(value: unknown, channel: string, path: string): void {
+  if (value === null) {
+    return;
+  }
+  const input = expectPlainObject(value, channel, path);
+  for (const [key, entry] of Object.entries(input)) {
+    if (!/^[A-Za-z0-9_-]{1,48}$/.test(key)) {
+      throw invalidIpcPayload(channel, `${path}.${key}`, "安全 metadata 键");
+    }
+    validateMemoryMetadataValue(entry, channel, `${path}.${key}`);
+  }
+}
+
+function validateMemoryMetadataValue(value: unknown, channel: string, path: string): void {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null
+  ) {
+    return;
+  }
+  if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
+    return;
+  }
+  throw invalidIpcPayload(channel, path, "字符串、数字、布尔值、null 或字符串数组");
+}
+
 function expectPlainObject(value: unknown, channel: string, path: string): PlainRecord {
   if (!isPlainObject(value)) {
     throw invalidIpcPayload(channel, path, "对象");
@@ -233,6 +367,23 @@ function expectNonEmptyString(value: unknown, channel: string, path: string): vo
   }
 }
 
+function expectSafeSingleLineString(value: string, channel: string, path: string): void {
+  if (/[\0\r\n]/.test(value)) {
+    throw invalidIpcPayload(channel, path, "单行安全字符串");
+  }
+}
+
+function expectSafeText(value: string, channel: string, path: string): void {
+  if (value.includes("\0")) {
+    throw invalidIpcPayload(channel, path, "安全文本");
+  }
+}
+
+function validateGitPath(value: unknown, channel: string, path: string): void {
+  expectNonEmptyString(value, channel, path);
+  expectSafeSingleLineString(value, channel, path);
+}
+
 function expectOptionalString(value: unknown, channel: string, path: string): void {
   if (value !== undefined && typeof value !== "string") {
     throw invalidIpcPayload(channel, path, "字符串");
@@ -248,6 +399,12 @@ function expectNullableString(value: unknown, channel: string, path: string): vo
 function expectNumber(value: unknown, channel: string, path: string): void {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw invalidIpcPayload(channel, path, "有限数字");
+  }
+}
+
+function expectPositiveInteger(value: unknown, channel: string, path: string): void {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw invalidIpcPayload(channel, path, "正整数");
   }
 }
 

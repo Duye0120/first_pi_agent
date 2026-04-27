@@ -21,6 +21,11 @@ import {
 } from "../terminal.js";
 import { getUiState, setDiffPanelOpen, setRightPanelState } from "../ui-state.js";
 import { handleIpc } from "./handle.js";
+import {
+  validateGitBranchNamePayload,
+  validateGitCommitPayload,
+  validateGitPathsPayload,
+} from "./schema.js";
 
 export function registerWorkbenchIpc(): void {
   handleIpc(
@@ -51,27 +56,41 @@ export function registerWorkbenchIpc(): void {
   handleIpc(
     IPC_CHANNELS.gitSwitchBranch,
     async (_event, branchName: string) =>
-      switchGitBranch(getSettings().workspace, branchName),
+      switchGitBranch(
+        getSettings().workspace,
+        validateGitBranchNamePayload(IPC_CHANNELS.gitSwitchBranch, branchName),
+      ),
   );
   handleIpc(
     IPC_CHANNELS.gitCreateBranch,
     async (_event, branchName: string) =>
-      createAndSwitchGitBranch(getSettings().workspace, branchName),
+      createAndSwitchGitBranch(
+        getSettings().workspace,
+        validateGitBranchNamePayload(IPC_CHANNELS.gitCreateBranch, branchName),
+      ),
   );
   handleIpc(
     IPC_CHANNELS.gitStageFiles,
     async (_event, paths: string[]) =>
-      stageGitFiles(getSettings().workspace, paths),
+      stageGitFiles(
+        getSettings().workspace,
+        validateGitPathsPayload(IPC_CHANNELS.gitStageFiles, paths),
+      ),
   );
   handleIpc(
     IPC_CHANNELS.gitUnstageFiles,
     async (_event, paths: string[]) =>
-      unstageGitFiles(getSettings().workspace, paths),
+      unstageGitFiles(
+        getSettings().workspace,
+        validateGitPathsPayload(IPC_CHANNELS.gitUnstageFiles, paths),
+      ),
   );
   handleIpc(
     IPC_CHANNELS.gitCommit,
-    async (_event, input: GitCommitInput) =>
-      commitGitChanges(getSettings().workspace, input.message, input.paths),
+    async (_event, input: GitCommitInput) => {
+      const payload = validateGitCommitPayload(input);
+      return commitGitChanges(getSettings().workspace, payload.message, payload.paths);
+    },
   );
   handleIpc(
     IPC_CHANNELS.gitPush,

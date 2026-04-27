@@ -11,10 +11,11 @@ import { getSoulFilesStatus } from "../soul.js";
 import { getSettings, updateSettings } from "../settings.js";
 import { getMainWindow } from "../window.js";
 import { handleIpc } from "./handle.js";
+import { validateWorkspacePathPayload } from "./schema.js";
 
 export function registerWorkspaceIpc(): void {
   handleIpc(IPC_CHANNELS.workspaceChange, async (_event, path: string) => {
-    updateSettings({ workspace: path });
+    updateSettings({ workspace: validateWorkspacePathPayload(path) });
   });
   handleIpc(IPC_CHANNELS.workspaceGetSoul, async () => {
     const settings = getSettings();
