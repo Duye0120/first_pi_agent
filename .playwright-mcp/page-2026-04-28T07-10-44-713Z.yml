@@ -1,0 +1,6 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - paragraph [ref=e5]: Renderer Error
+    - heading "界面初始化失败" [level=1] [ref=e6]
+    - paragraph [ref=e7]: 桌面桥接没有注入成功，renderer 无法访问 Electron API。现在不会再整窗黑掉，而是直接把问题暴露出来。
+    - paragraph [ref=e8]: 现在就算 preload 出问题，也不会再整窗发黑，而是直接显示诊断信息。
