@@ -202,10 +202,16 @@ export default function App() {
     undefined,
   );
   const lastExpandedSidebarSizeRef = useRef(sidebarSize);
+  const sidebarCollapsedRef = useRef(sidebarCollapsed);
+  const sidebarProgrammaticTargetRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     summariesRef.current = summaries;
   }, [summaries]);
+
+  useEffect(() => {
+    sidebarCollapsedRef.current = sidebarCollapsed;
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     archivedSummariesRef.current = archivedSummaries;
@@ -286,20 +292,25 @@ export default function App() {
     );
   }, [sidebarCollapsed]);
 
-  useEffect(() => {
+  const applySidebarPanelState = useCallback((collapsed: boolean) => {
     const panel = sidebarPanelRef.current;
     if (!panel) {
       return;
     }
 
-    if (sidebarCollapsed) {
+    if (collapsed) {
       panel.collapse();
+      panel.resize("0%");
       return;
     }
 
     panel.expand();
     panel.resize(toSidebarPercentageSize(lastExpandedSidebarSizeRef.current));
-  }, [sidebarCollapsed]);
+  }, []);
+
+  useEffect(() => {
+    applySidebarPanelState(sidebarCollapsed);
+  }, [applySidebarPanelState, sidebarCollapsed]);
 
   useEffect(() => {
     if (!settings) {
@@ -1141,6 +1152,19 @@ export default function App() {
     const isCollapsedByPanel =
       panelSize.inPixels <= 1 || panelSize.asPercentage <= 0.1;
 
+    if (sidebarProgrammaticTargetRef.current !== null) {
+      if (
+        sidebarProgrammaticTargetRef.current === false &&
+        panelSize.inPixels > MIN_SIDEBAR_WIDTH + 1
+      ) {
+        const resolvedSize = clampSidebarSize(panelSize.asPercentage);
+        lastExpandedSidebarSizeRef.current = resolvedSize;
+        setSidebarSize(resolvedSize);
+      }
+      return;
+    }
+
+    sidebarCollapsedRef.current = isCollapsedByPanel;
     setSidebarCollapsed((current) =>
       current === isCollapsedByPanel ? current : isCollapsedByPanel,
     );
@@ -1163,12 +1187,19 @@ export default function App() {
   const toggleSidebarCollapsed = useCallback(() => {
     setSidebarAnimating(true);
     clearTimeout(sidebarAnimatingTimerRef.current);
-    sidebarAnimatingTimerRef.current = setTimeout(() => setSidebarAnimating(false), 520);
-    if (!sidebarCollapsed) {
+    const nextCollapsed = !sidebarCollapsedRef.current;
+    sidebarProgrammaticTargetRef.current = nextCollapsed;
+    sidebarAnimatingTimerRef.current = setTimeout(() => {
+      sidebarProgrammaticTargetRef.current = null;
+      setSidebarAnimating(false);
+    }, 520);
+    if (nextCollapsed) {
       lastExpandedSidebarSizeRef.current = clampSidebarSize(sidebarSize);
     }
-    setSidebarCollapsed((current) => !current);
-  }, [sidebarCollapsed, sidebarSize]);
+    sidebarCollapsedRef.current = nextCollapsed;
+    applySidebarPanelState(nextCollapsed);
+    setSidebarCollapsed(nextCollapsed);
+  }, [applySidebarPanelState, sidebarSize]);
 
   const handleToggleMaximize = useCallback(() => {
     if (!desktopApi) {
@@ -1524,6 +1555,7 @@ export default function App() {
           <ResizablePanel
             id="shell-sidebar"
             panelRef={sidebarPanelRef}
+            className="min-w-0 overflow-hidden"
             collapsible
             collapsedSize="0%"
             defaultSize={toSidebarPercentageSize(sidebarSize)}
@@ -1531,7 +1563,7 @@ export default function App() {
             maxSize={`${MAX_SIDEBAR_SIZE}%`}
             onResize={handleSidebarResize}
           >
-            <aside className="chela-sidebar-content relative h-full min-h-0 min-w-[220px] overflow-hidden bg-transparent" data-collapsed={sidebarCollapsed ? "true" : undefined}>
+            <aside className="chela-sidebar-content relative h-full min-h-0 w-full min-w-0 overflow-hidden bg-transparent" data-collapsed={sidebarCollapsed ? "true" : undefined}>
               <Sidebar
                 groups={groups}
                 summaries={summaries}
@@ -1548,7 +1580,7 @@ export default function App() {
                 }}
                 onSelectSession={selectSession}
                 onNewSession={createNewSession}
-                onOpenSettings={() => openSettingsView("workspace")}
+                onOpenSettings={() => openSettingsView("general")}
                 onRenameSession={(sessionId) => {
                   void renameSession(sessionId);
                 }}

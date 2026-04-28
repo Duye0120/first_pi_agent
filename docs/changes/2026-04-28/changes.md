@@ -316,3 +316,35 @@
 - 选中文件后，提交区域显示手动提交表单。
 - title 为空或未选文件时提交按钮禁用。
 - 手动提交成功后清空表单、清空生成计划并刷新 diff 快照。
+
+## 侧栏折叠与设置默认入口修复
+
+时间：2026-04-28 16:55:28
+
+改了什么：
+- 将侧栏折叠/展开按钮改为在点击事件中同步更新 React 状态和 `react-resizable-panels` 的 panel imperative API。
+- 将侧边栏底部设置入口默认分区从 `workspace` 改为 `general`。
+
+为什么改：
+- 侧栏切换只更新状态再等待 effect 调 panel API，UI 交互链路容易出现状态与面板尺寸脱节。
+- 设置入口默认打开工作区分区，当前产品行为要求默认进入通用设置。
+
+涉及文件：
+- `src/renderer/src/App.tsx`
+- `docs/changes/2026-04-28/changes.md`
+
+结果：
+- 首页和设置页共用的标题栏侧栏按钮现在直接驱动同一个折叠/展开链路。
+- 从侧边栏进入设置时默认打开 `通用`。
+
+根因修复（2026-04-28 17:15:30）：
+- 给 `shell-sidebar` 的 `ResizablePanel` 增加 `min-w-0 overflow-hidden`，让 panel 收到 0 宽度时裁剪内部内容。
+- 将 sidebar 内容容器从 `min-w-[220px]` 改为 `w-full min-w-0`，侧栏最小宽度继续由 panel 的 `minSize` 约束负责。
+- 原因：panel 折叠状态已经触发，但内部 `aside` 的 220px 最小宽度持续向外溢出，视觉上表现为侧栏闪一下后仍然留在原处。
+- 涉及文件：`src/renderer/src/App.tsx`、`docs/changes/2026-04-28/changes.md`。
+
+回弹修复（2026-04-28 17:23:20）：
+- 增加 `sidebarProgrammaticTargetRef`，程序化折叠/展开期间屏蔽 `onResize` 对 `sidebarCollapsed` 的反写。
+- 折叠时在 `collapse()` 后补一次 `resize("0%")`，确保 panel 目标宽度明确为 0。
+- 原因：折叠动画中间帧的 `onResize` 会读到非 0 宽度，把 `sidebarCollapsed` 写回 `false`，导致侧栏来回弹并重新展开。
+- 涉及文件：`src/renderer/src/App.tsx`、`docs/changes/2026-04-28/changes.md`。
