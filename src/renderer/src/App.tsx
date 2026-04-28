@@ -19,6 +19,12 @@ import type {
   WindowFrameState,
 } from "@shared/contracts";
 import { AssistantThreadPanel } from "@renderer/components/assistant-ui/assistant-thread-panel";
+import {
+  AppBootErrorScreen,
+  AppBootingScreen,
+  ThreadEmptyState,
+  ThreadUnavailableState,
+} from "@renderer/components/assistant-ui/app-shell-states";
 import { Button } from "@renderer/components/assistant-ui/button";
 import {
   DiffWorkbenchContent,
@@ -26,7 +32,6 @@ import {
 import { TracePanel } from "@renderer/components/assistant-ui/trace-panel";
 import {
   SettingsView,
-  SETTINGS_SECTIONS,
   type SettingsSection,
 } from "@renderer/components/assistant-ui/settings-view";
 import { Sidebar } from "@renderer/components/assistant-ui/sidebar";
@@ -45,220 +50,38 @@ import {
 import {
   EMPTY_CONTEXT_USAGE_SUMMARY,
 } from "@renderer/lib/context-usage";
+import {
+  ACTIVE_SESSION_STORAGE_KEY,
+  DEFAULT_SIDEBAR_SIZE,
+  LEGACY_ACTIVE_SESSION_STORAGE_KEY,
+  LEGACY_SIDEBAR_WIDTH_STORAGE_KEY,
+  MAX_RIGHT_PANEL_WIDTH,
+  MAX_SIDEBAR_SIZE,
+  MIN_RIGHT_PANEL_WIDTH,
+  MIN_SIDEBAR_WIDTH,
+  RIGHT_PANEL_GAP_PX,
+  ROOT_UI_THEME_DATASET,
+  SETTINGS_ROUTE_PREFIX,
+  SIDEBAR_COLLAPSED_STORAGE_KEY,
+  SIDEBAR_WIDTH_STORAGE_KEY,
+  applyCustomThemeVariables,
+  clampRightPanelWidth,
+  clampSidebarSize,
+  clearStoredStrings,
+  getDefaultRightPanelWidth,
+  getProjectNameFromPath,
+  mergeSettingsState,
+  migrateLegacySidebarWidth,
+  readStoredNumber,
+  readStoredString,
+  resolveSettingsSectionFromPath,
+  toSidebarPercentageSize,
+  type DeepPartialSettings,
+} from "@renderer/lib/app-shell";
 import { loadProviderDirectory } from "@renderer/lib/provider-directory";
 import { mergeAttachments, upsertSummary } from "@renderer/lib/session";
 import type { PanelImperativeHandle, PanelSize } from "react-resizable-panels";
 import { useLocation, useNavigate } from "react-router-dom";
-
-const ACTIVE_SESSION_STORAGE_KEY = "chela.active-session-id";
-const LEGACY_ACTIVE_SESSION_STORAGE_KEY = "first-pi-agent.active-session-id";
-const SIDEBAR_WIDTH_STORAGE_KEY = "chela.sidebar-width";
-const LEGACY_SIDEBAR_WIDTH_STORAGE_KEY = "first-pi-agent.sidebar-width";
-const SIDEBAR_COLLAPSED_STORAGE_KEY = "chela.sidebar-collapsed";
-const DEFAULT_SIDEBAR_SIZE = 18;
-const MIN_SIDEBAR_SIZE = 4;
-const MAX_SIDEBAR_SIZE = 85;
-const MIN_SIDEBAR_WIDTH = 220;
-const MIN_RIGHT_PANEL_WIDTH = 480;
-const MAX_RIGHT_PANEL_WIDTH = 920;
-const MIN_THREAD_CONTENT_WIDTH = 320;
-const RIGHT_PANEL_GAP_PX = 8;
-const ROOT_UI_THEME_DATASET = "theme";
-const SETTINGS_ROUTE_PREFIX = "/settings";
-const SETTINGS_SECTION_IDS = SETTINGS_SECTIONS.map((section) => section.id);
-
-function resolveSettingsSectionFromPath(pathname: string): SettingsSection | null {
-  if (!pathname.startsWith(SETTINGS_ROUTE_PREFIX)) {
-    return null;
-  }
-
-  const section = pathname
-    .slice(SETTINGS_ROUTE_PREFIX.length)
-    .replace(/^\/+/, "");
-
-  if (!section) {
-    return "general";
-  }
-
-  return SETTINGS_SECTION_IDS.includes(section as SettingsSection)
-    ? (section as SettingsSection)
-    : "general";
-}
-
-function clampSidebarSize(size: number) {
-  return Math.min(MAX_SIDEBAR_SIZE, Math.max(MIN_SIDEBAR_SIZE, size));
-}
-
-function clampRightPanelWidth(size: number, containerWidth: number) {
-  if (!Number.isFinite(containerWidth) || containerWidth <= 0) {
-    return Math.min(MAX_RIGHT_PANEL_WIDTH, Math.max(MIN_RIGHT_PANEL_WIDTH, size));
-  }
-
-  const maxWidth = Math.max(
-    MIN_RIGHT_PANEL_WIDTH,
-    Math.min(MAX_RIGHT_PANEL_WIDTH, containerWidth - MIN_THREAD_CONTENT_WIDTH),
-  );
-
-  return Math.min(maxWidth, Math.max(MIN_RIGHT_PANEL_WIDTH, size));
-}
-
-function getDefaultRightPanelWidth(containerWidth: number) {
-  return clampRightPanelWidth(Math.round(containerWidth * 0.44), containerWidth);
-}
-
-function toSidebarPercentageSize(size: number) {
-  return `${clampSidebarSize(size)}%`;
-}
-
-function migrateLegacySidebarWidth(storedWidth: number) {
-  if (storedWidth <= 100) {
-    return clampSidebarSize(storedWidth);
-  }
-
-  if (typeof window === "undefined" || window.innerWidth <= 0) {
-    return DEFAULT_SIDEBAR_SIZE;
-  }
-
-  return clampSidebarSize((storedWidth / window.innerWidth) * 100);
-}
-
-function readStoredNumber(keys: string[]) {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  for (const key of keys) {
-    const value = Number(localStorage.getItem(key));
-    if (Number.isFinite(value)) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function readStoredString(keys: string[]) {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  for (const key of keys) {
-    const value = localStorage.getItem(key);
-    if (value) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function clearStoredStrings(keys: string[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  for (const key of keys) {
-    localStorage.removeItem(key);
-  }
-}
-
-function getProjectNameFromPath(projectPath: string) {
-  return projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? projectPath;
-}
-
-type DeepPartialSettings = {
-  modelRouting?: {
-    chat?: Partial<Settings["modelRouting"]["chat"]>;
-    utility?: Partial<Settings["modelRouting"]["utility"]>;
-    subagent?: Partial<Settings["modelRouting"]["subagent"]>;
-    compact?: Partial<Settings["modelRouting"]["compact"]>;
-  };
-  defaultModelId?: Settings["defaultModelId"];
-  workerModelId?: Settings["workerModelId"];
-  thinkingLevel?: Settings["thinkingLevel"];
-  timeZone?: Settings["timeZone"];
-  theme?: Settings["theme"];
-  customTheme?: Settings["customTheme"];
-  terminal?: Partial<Settings["terminal"]>;
-  ui?: Partial<Settings["ui"]>;
-  network?: {
-    proxy?: Partial<Settings["network"]["proxy"]>;
-    timeoutMs?: Settings["network"]["timeoutMs"];
-  };
-  memory?: Partial<Settings["memory"]>;
-  workspace?: Settings["workspace"];
-};
-
-function applyCustomThemeVariables(
-  root: HTMLElement,
-  previousKeys: string[],
-  nextTheme: Settings["customTheme"],
-) {
-  previousKeys.forEach((key) => root.style.removeProperty(key));
-
-  const appliedKeys: string[] = [];
-  if (!nextTheme) {
-    return appliedKeys;
-  }
-
-  Object.entries(nextTheme).forEach(([rawKey, value]) => {
-    const key = rawKey.startsWith("--") ? rawKey : `--${rawKey}`;
-    root.style.setProperty(key, value ?? null);
-    appliedKeys.push(key);
-  });
-
-  return appliedKeys;
-}
-
-function mergeSettingsState(
-  current: Settings,
-  partial: DeepPartialSettings,
-): Settings {
-  return {
-    ...current,
-    ...partial,
-    modelRouting: {
-      ...current.modelRouting,
-      ...partial.modelRouting,
-      chat: {
-        ...current.modelRouting.chat,
-        ...partial.modelRouting?.chat,
-      },
-      utility: {
-        ...current.modelRouting.utility,
-        ...partial.modelRouting?.utility,
-      },
-      subagent: {
-        ...current.modelRouting.subagent,
-        ...partial.modelRouting?.subagent,
-      },
-      compact: {
-        ...current.modelRouting.compact,
-        ...partial.modelRouting?.compact,
-      },
-    },
-    terminal: {
-      ...current.terminal,
-      ...partial.terminal,
-    },
-    ui: {
-      ...current.ui,
-      ...partial.ui,
-    },
-    network: {
-      ...current.network,
-      ...partial.network,
-      proxy: {
-        ...current.network.proxy,
-        ...partial.network?.proxy,
-      },
-    },
-    memory: {
-      ...current.memory,
-      ...partial.memory,
-    },
-  };
-}
 
 export default function App() {
   const desktopApi = window.desktopApi;
@@ -1745,11 +1568,7 @@ export default function App() {
 
   const threadRuntimeLayer = useMemo(() => {
     if (!desktopApi) {
-      return (
-        <div className="grid min-h-0 flex-1 place-items-center px-6 text-sm text-gray-400">
-          当前没有可用线程。
-        </div>
-      );
+      return <ThreadUnavailableState />;
     }
 
     if (mountedSessionIds.length === 0) {
@@ -1757,43 +1576,14 @@ export default function App() {
       const hasLiveSessions = summaries.length > 0;
 
       return (
-        <div className="grid min-h-0 flex-1 place-items-center px-6">
-          <div className="flex max-w-[440px] flex-col items-center gap-3 text-center">
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium text-[color:var(--chela-text-primary)]">
-                {hasLiveSessions ? "还没有选中的线程" : "当前没有活跃线程"}
-              </p>
-              <p className="text-[12px] leading-5 text-[color:var(--chela-text-secondary)]">
-                {hasArchivedSessions
-                  ? "可以新建一个线程继续，也可以去已归档里恢复之前的对话。"
-                  : "可以先新建一个线程，空线程列表现在也允许保留。"}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => {
-                  void createNewSession();
-                }}
-                className="rounded-[var(--radius-shell)]"
-              >
-                新建线程
-              </Button>
-              {hasArchivedSessions ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openSettingsView("archived")}
-                  className="rounded-[var(--radius-shell)]"
-                >
-                  查看已归档
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        <ThreadEmptyState
+          hasArchivedSessions={hasArchivedSessions}
+          hasLiveSessions={hasLiveSessions}
+          onCreateNewSession={() => {
+            void createNewSession();
+          }}
+          onOpenArchived={() => openSettingsView("archived")}
+        />
       );
     }
 
@@ -1934,42 +1724,11 @@ export default function App() {
   );
 
   if (booting) {
-    return (
-      <main className="grid h-screen place-items-center bg-[#f0f0f0] text-gray-400">
-        <div className="rounded-xl border border-black/6 bg-white/80 px-6 py-4 shadow-sm">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400">
-            Booting
-          </p>
-          <h1 className="mt-2 text-lg font-medium text-gray-800">
-            正在拉起桌面聊天壳…
-          </h1>
-          <p className="mt-1 text-xs text-gray-400">
-            会话状态、窗口状态和本地文件能力正在就位。
-          </p>
-        </div>
-      </main>
-    );
+    return <AppBootingScreen />;
   }
 
   if (bootError) {
-    return (
-      <main className="grid h-screen place-items-center bg-[#f0f0f0] px-6 text-gray-400">
-        <div className="max-w-lg rounded-xl border border-rose-400/20 bg-rose-50 px-6 py-4 shadow-sm">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-rose-300">
-            Renderer Error
-          </p>
-          <h1 className="mt-2 text-lg font-medium text-gray-800">
-            界面初始化失败
-          </h1>
-          <p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-gray-500">
-            {bootError}
-          </p>
-          <p className="mt-2 text-xs text-gray-400">
-            现在就算 preload 出问题，也不会再整窗发黑，而是直接显示诊断信息。
-          </p>
-        </div>
-      </main>
-    );
+    return <AppBootErrorScreen message={bootError} />;
   }
 
   return (
