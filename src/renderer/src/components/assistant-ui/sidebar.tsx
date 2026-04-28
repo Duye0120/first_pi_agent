@@ -6,10 +6,12 @@ import {
   BoltIcon,
   CircleStackIcon,
   Cog6ToothIcon,
+  CubeTransparentIcon,
   FolderIcon,
   FolderOpenIcon,
   MapPinIcon,
   PuzzlePieceIcon,
+  ServerStackIcon,
   SparklesIcon,
   SwatchIcon,
   TrashIcon,
@@ -76,10 +78,12 @@ const settingsItems: {
     { id: "ai_model", label: "模型", icon: SparklesIcon },
     { id: "workspace", label: "工作区", icon: FolderIcon },
     { id: "memory", label: "记忆", icon: CircleStackIcon },
+    { id: "mcp", label: "MCP", icon: ServerStackIcon },
+    { id: "plugins", label: "插件", icon: CubeTransparentIcon },
     { id: "skills", label: "Skills", icon: PuzzlePieceIcon },
     { id: "interface", label: "界面与终端", icon: SwatchIcon },
     { id: "archived", label: "已归档会话", icon: ArchiveBoxIcon },
-    { id: "system", label: "数据与系统", icon: Cog6ToothIcon },
+    { id: "system", label: "系统", icon: Cog6ToothIcon },
   ];
 
 function SidebarFooterAction({

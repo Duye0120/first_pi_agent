@@ -5,17 +5,9 @@ import type {
   SessionGroup,
   ThinkingLevel,
 } from "@shared/contracts";
+import type { SettingsSection } from "@shared/settings-sections";
 
-export type SettingsSection =
-  | "general"
-  | "network"
-  | "ai_model"
-  | "workspace"
-  | "memory"
-  | "skills"
-  | "interface"
-  | "archived"
-  | "system";
+export type { SettingsSection };
 
 export type SettingsViewProps = {
   activeSection: SettingsSection;

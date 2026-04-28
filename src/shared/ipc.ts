@@ -77,6 +77,10 @@ export const IPC_CHANNELS = {
   mcpRestartServer: "mcp:restart-server",
   mcpDisconnectServer: "mcp:disconnect-server",
 
+  // Plugins
+  pluginsListStatus: "plugins:list-status",
+  pluginsSetEnabled: "plugins:set-enabled",
+
   // Providers
   providersListSources: "providers:list-sources",
   providersGetSource: "providers:get-source",

@@ -1,5 +1,6 @@
 import type { AgentEvent, ConfirmationResponse } from "./agent-events.js";
 import type { MemoryEmbeddingModelId } from "./memory.js";
+import type { ChelaPluginManifest } from "./plugins.js";
 import type { ProviderErrorCode } from "./provider-errors.js";
 import type { RunFailureKind } from "./run-recovery.js";
 
@@ -473,6 +474,34 @@ export type McpServerStatus = {
   startedAt: number | null;
   updatedAt: number | null;
   lastError: string | null;
+};
+
+export type PluginStatus = {
+  id: string;
+  name: string;
+  version: string;
+  description: string | null;
+  directory: string;
+  manifestPath: string;
+  enabled: boolean;
+  toolCount: number;
+  mcpServerCount: number;
+  uiPanelCount: number;
+  workflowCount: number;
+  manifest: ChelaPluginManifest;
+};
+
+export type PluginStatusError = {
+  directory: string;
+  manifestPath: string;
+  message: string;
+};
+
+export type PluginStatusBundle = {
+  rootDir: string;
+  statePath: string;
+  plugins: PluginStatus[];
+  errors: PluginStatusError[];
 };
 
 export type InstalledSkillSource = "project" | "user";
@@ -1168,6 +1197,10 @@ export type DesktopApi = {
     reloadConfig: () => Promise<McpServerStatus[]>;
     restartServer: (serverName: string) => Promise<McpServerStatus[]>;
     disconnectServer: (serverName: string) => Promise<McpServerStatus[]>;
+  };
+  plugins: {
+    listStatus: () => Promise<PluginStatusBundle>;
+    setEnabled: (pluginId: string, enabled: boolean) => Promise<PluginStatusBundle>;
   };
   providers: {
     listSources: () => Promise<ProviderSource[]>;
