@@ -39,6 +39,7 @@ import {
   registerProcessLogging,
 } from "./logger.js";
 import { applyGlobalNetworkSettings } from "./network/proxy.js";
+import { initTraceService } from "./trace/service.js";
 
 configureAppIdentity();
 
@@ -83,6 +84,7 @@ app.whenReady()
 
     const recoveredRuns = harnessRuntime.hydrateFromDisk();
     recoverInterruptedRuns(recoveredRuns);
+    initTraceService();
     await startBackgroundServices();
     registerIpcHandlers();
     const window = createMainWindow();

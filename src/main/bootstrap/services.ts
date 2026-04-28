@@ -10,6 +10,7 @@ import {
 import { initReflectionService, stopReflectionService } from "../reflection/service.js";
 import { initPersonalityDrift } from "../reflection/personality-drift.js";
 import { startWebhookServer, stopWebhookServer } from "../webhook.js";
+import { initTraceService, stopTraceService } from "../trace/service.js";
 import { appLogger } from "../logger.js";
 
 type BackgroundServiceDefinition = {
@@ -36,6 +37,7 @@ const BACKGROUND_SERVICES: BackgroundServiceDefinition[] = [
   },
   { name: "scheduler", start: () => scheduler.start(), stop: () => scheduler.stop() },
   { name: "webhook", start: () => startWebhookServer(), stop: stopWebhookServer },
+  { name: "trace-service", start: initTraceService, stop: stopTraceService },
 ];
 
 const startedBackgroundServices = new Set<string>();
