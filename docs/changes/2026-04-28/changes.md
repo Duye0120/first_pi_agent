@@ -137,3 +137,129 @@
 - `pnpm run native:rebuild:electron` 通过，输出 `Building modules: better-sqlite3` 和 `Rebuild Complete`。
 - `pnpm run native:verify:electron` 通过，输出 `electron ABI 145 / electron 41.1.0 / node 24.14.0` 和 `electron native modules ok`。
 - `pnpm exec tsx tests/package-scripts-regression.test.ts` 通过。
+
+## 全项目代码质量与性能小步审查
+
+时间：2026-04-28 14:05:32
+
+改了什么：
+- 按 100 个检查点执行质量与性能审查，落地 15 组可验证的小步修订。
+- 将 context 快照、assistant step、Trace 面板中的最新项查找改为尾部扫描，减少复制数组再反转的分配。
+- 将 context、会话时间、diff 数量、snapshot 时间格式化器提升为模块级复用对象。
+- 优化 sidebar 项目会话分组、Trace 统计、diff tree 选中统计、workspace soul 计数等渲染计数路径。
+- diff tree 在构建阶段缓存排序后的子节点列表，渲染阶段直接复用。
+- 附件消息组装改为并行读取附件内容并保持原有顺序。
+- 记忆检索和会话搜索改为有界排名列表，规避全量排序后再截断；同时补齐 `limit` 归一化。
+- 记忆向量解析、provider 模型去重、启用 source 集合、技能用量提取、反思消息提取改为一次循环处理。
+- 安全策略预编译禁读 glob 正则，fetch 协议检查使用窄化函数。
+- 收紧并行工具、agent toolCall 解析、harness 审计、shell 异常、Tiptap markdown storage、memory 设置回调等类型边界。
+- 为记忆检索 top-k 行为和安全策略协议/禁读规则补充 regression 断言。
+
+为什么改：
+- 高频聊天、context、diff、trace、sidebar 和搜索路径存在可消除的中间数组、重复 formatter、全量排序和宽泛类型边界。
+- 本轮目标是低风险提升运行稳定性、渲染性能和维护质量，保持现有交互和业务行为。
+
+涉及文件：
+- `src/main/adapter.ts`
+- `src/main/agent.ts`
+- `src/main/chat-message-adapter.ts`
+- `src/main/context/snapshot.ts`
+- `src/main/harness/runtime.ts`
+- `src/main/memory/retrieval.ts`
+- `src/main/memory/service.ts`
+- `src/main/parallel-tools.ts`
+- `src/main/prompt-control-plane.ts`
+- `src/main/providers.ts`
+- `src/main/reflection/service.ts`
+- `src/main/security.ts`
+- `src/main/session/search.ts`
+- `src/main/shell.ts`
+- `src/main/tools/code-analysis.ts`
+- `src/mcp/adapter.ts`
+- `src/renderer/src/components/AssistantThreadPanel.tsx`
+- `src/renderer/src/components/assistant-ui/context-summary-trigger.tsx`
+- `src/renderer/src/components/assistant-ui/diff-panel.tsx`
+- `src/renderer/src/components/assistant-ui/diff-tree.tsx`
+- `src/renderer/src/components/assistant-ui/settings/memory-section.tsx`
+- `src/renderer/src/components/assistant-ui/settings/workspace-section.tsx`
+- `src/renderer/src/components/assistant-ui/sidebar.tsx`
+- `src/renderer/src/components/assistant-ui/trace-panel.tsx`
+- `src/renderer/src/components/ui/commit-description-editor.tsx`
+- `src/renderer/src/lib/context-usage.ts`
+- `src/renderer/src/lib/session.ts`
+- `src/shared/skill-usage.ts`
+- `tests/memory-regression.test.ts`
+- `tests/security-regression.test.ts`
+- `docs/changes/2026-04-28/changes.md`
+
+结果：
+- `pnpm exec tsx tests/memory-regression.test.ts` 通过；better-sqlite3 存储段按既有逻辑提示 native module 需要匹配当前 Node/Electron ABI 后跳过。
+- `pnpm exec tsx tests/security-regression.test.ts` 通过。
+- `pnpm exec tsx tests/provider-regression.test.ts` 通过。
+- `git diff --check` 通过，仅输出当前 Windows 换行提示。
+- 定点 TypeScript 诊断覆盖 `src/main/agent.ts`、`src/main/session/search.ts`、`src/renderer/src/components/assistant-ui/diff-tree.tsx`、`src/renderer/src/components/ui/commit-description-editor.tsx`，均为 0 error。
+- 任务开始前已有 `docs/doctor.md` 未提交改动，本轮审查未把它作为修订目标。
+
+## 大文件拆分与兼容优化
+
+时间：2026-04-28 15:06:14
+
+改了什么：
+- 按 100 轮小步兼容检查思路，继续拆分 `App.tsx`、`thread.tsx`、`keys-section.tsx`、`diff-panel.tsx` 的低耦合模块。
+- 将 App 壳层常量、路由解析、宽度计算、主题变量应用、设置合并逻辑移入 `app-shell.ts`。
+- 将 App 启动/错误/空线程状态 UI 移入 `app-shell-states.tsx`。
+- 将聊天区模型选项构建、剪贴板文件收集、状态 token 格式化、`/btw` 判定移入 `thread-helpers.tsx`。
+- 将 assistant run 变更摘要卡片移入 `thread-run-change-summary.tsx`。
+- 将 provider/model 数据整理、序列化、能力开关、workspace 创建逻辑移入 `keys-section-model.ts`。
+- 将模型高级项弹窗移入 `keys-section-entry-dialog.tsx`。
+- 将 diff 面板的来源选择、摘要卡、文件卡、空状态、计数与 DOM id helper 移入 `diff-panel-parts.tsx`。
+- 将提交计划卡片、提交消息生成、提交计划生成包装移入 `diff-panel-commit-plan.tsx`。
+
+为什么改：
+- 这些文件承担了状态编排、展示组件、数据模型 helper、格式化 helper 等多类职责，拆分后更便于继续做兼容审查和局部优化。
+- 拆分优先选择低耦合展示块和纯 helper，保持现有 UI 行为、调用入口和运行时数据结构稳定。
+
+涉及文件：
+- `src/renderer/src/App.tsx`
+- `src/renderer/src/lib/app-shell.ts`
+- `src/renderer/src/components/assistant-ui/app-shell-states.tsx`
+- `src/renderer/src/components/assistant-ui/thread.tsx`
+- `src/renderer/src/components/assistant-ui/thread-helpers.tsx`
+- `src/renderer/src/components/assistant-ui/thread-run-change-summary.tsx`
+- `src/renderer/src/components/assistant-ui/settings/keys-section.tsx`
+- `src/renderer/src/components/assistant-ui/settings/keys-section-model.ts`
+- `src/renderer/src/components/assistant-ui/settings/keys-section-entry-dialog.tsx`
+- `src/renderer/src/components/assistant-ui/diff-panel.tsx`
+- `src/renderer/src/components/assistant-ui/diff-panel-parts.tsx`
+- `src/renderer/src/components/assistant-ui/diff-panel-commit-plan.tsx`
+- `docs/changes/2026-04-28/changes.md`
+
+结果：
+- 当前行数：`diff-panel.tsx` 925 行、`keys-section.tsx` 1176 行、`thread.tsx` 1630 行、`App.tsx` 1958 行。
+- 定点 TypeScript 诊断覆盖本节所有新增/改动的 renderer 拆分文件，均为 0 error。
+- `pnpm exec tsx tests/settings-navigation-regression.test.ts` 通过。
+- `pnpm exec tsx tests/provider-regression.test.ts` 通过。
+- `git diff --check` 通过，仅输出当前 Windows 换行提示。
+- 按项目约束跳过全量 `pnpm build` 和全量 `pnpm check`。
+
+## App 拆分常量遗漏修复
+
+时间：2026-04-28 15:11:05
+
+改了什么：
+- 将 `MAX_SIDEBAR_SIZE` 从 `app-shell.ts` 显式导出。
+- 在 `App.tsx` 显式导入 `MAX_SIDEBAR_SIZE` 和 `MAX_RIGHT_PANEL_WIDTH`。
+
+为什么改：
+- 大文件拆分后，`App.tsx` 仍使用右侧面板默认宽度和侧栏最大百分比常量；遗漏导入会在 renderer 启动时触发 `ReferenceError: MAX_SIDEBAR_SIZE is not defined`。
+
+涉及文件：
+- `src/renderer/src/App.tsx`
+- `src/renderer/src/lib/app-shell.ts`
+- `docs/changes/2026-04-28/changes.md`
+
+结果：
+- `App.tsx` 与 `app-shell.ts` 定点 TypeScript 诊断均为 0 error。
+- `pnpm exec tsx tests/settings-navigation-regression.test.ts` 通过。
+- `git diff --check` 通过，仅输出当前 Windows 换行提示。
+- Playwright 打开 `http://127.0.0.1:5173/` 后未再出现 `ReferenceError` 渲染崩溃；普通浏览器环境显示预期的 Electron preload 注入诊断，控制台仅有 `favicon.ico` 404。

@@ -1,6 +1,6 @@
 # Chela Doctor
 
-更新时间：2026-04-27 16:00:27
+更新时间：2026-04-28 13:05:55
 
 `doctor` 用于诊断 Chela 本地开发环境，重点覆盖 Node 版本、命令行工具、搜索工具、原生模块 ABI 和 Electron 主进程关键依赖。
 
@@ -28,8 +28,14 @@ pnpm install
 
 ```bash
 set SystemRoot=C:\Windows
-pnpm rebuild better-sqlite3
-pnpm install
+pnpm run native:rebuild:electron
+pnpm run native:verify:electron
+```
+
+发布构建会自动执行 Electron native 重建和自检：
+
+```bash
+pnpm build
 ```
 
 `node-pty` ABI 或加载失败：
@@ -70,3 +76,7 @@ pnpm run test:doctor
 时间：2026-04-27 16:00:27
 
 补充 `better-sqlite3` rebuild 经验：pnpm 需要允许 `better-sqlite3` 执行 build 脚本；Windows shell 里 `SystemRoot` 缺失时，node-gyp 会在 Visual Studio 探测阶段失败。
+
+时间：2026-04-28 13:05:55
+
+将 `better-sqlite3` 修复路径改为 Electron 41.1.0 ABI 重建脚本，并记录 `pnpm build` 会自动执行 Electron native 重建和自检。
