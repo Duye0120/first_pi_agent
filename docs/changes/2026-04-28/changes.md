@@ -263,3 +263,32 @@
 - `pnpm exec tsx tests/settings-navigation-regression.test.ts` 通过。
 - `git diff --check` 通过，仅输出当前 Windows 换行提示。
 - Playwright 打开 `http://127.0.0.1:5173/` 后未再出现 `ReferenceError` 渲染崩溃；普通浏览器环境显示预期的 Electron preload 注入诊断，控制台仅有 `favicon.ico` 404。
+
+## App session/git/workspace 编排拆分
+
+时间：2026-04-28 15:22:39
+
+改了什么：
+- 将 App 的 Git 分支摘要、diff 快照、请求去重、diff 面板自动刷新逻辑拆到 `use-app-git-state.ts`。
+- 将会话 summary 归档/恢复迁移、session cache 删除、运行中会话 id 更新、session 到项目路径解析拆到 `app-session-state.ts`。
+- 将项目按路径/ID 查找、项目名称/路径解析 helper 收敛到 `app-session-state.ts`。
+- 将文件选择、剪贴板文件保存、文本附件预览补全、附件删除逻辑拆到 `use-session-attachments.ts`。
+- `App.tsx` 继续保留应用级事件顺序、路由、面板布局和渲染组合。
+
+为什么改：
+- `App.tsx` 的 session/git/workspace 状态编排继续增长，影响后续定位和兼容审查。
+- 本轮优先抽离无视觉变化的状态 hook 和纯 helper，保持现有行为和组件传参稳定。
+
+涉及文件：
+- `src/renderer/src/App.tsx`
+- `src/renderer/src/hooks/use-app-git-state.ts`
+- `src/renderer/src/hooks/use-session-attachments.ts`
+- `src/renderer/src/lib/app-session-state.ts`
+- `docs/changes/2026-04-28/changes.md`
+
+结果：
+- `App.tsx` 从 1960 行降到 1728 行。
+- `App.tsx`、`use-app-git-state.ts`、`use-session-attachments.ts`、`app-session-state.ts` 定点 TypeScript 诊断均为 0 error。
+- `pnpm exec tsx tests/settings-navigation-regression.test.ts` 通过。
+- `git diff --check` 通过，仅输出当前 Windows 换行提示。
+- Chrome DevTools 打开 `http://127.0.0.1:5173/` 未出现新的 `ReferenceError` 渲染崩溃；普通浏览器环境显示预期的 Electron preload 注入诊断，控制台仅有 `favicon.ico` 404。
