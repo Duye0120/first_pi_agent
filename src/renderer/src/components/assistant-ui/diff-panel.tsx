@@ -1,46 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  FileIcon,
-  ImageIcon,
   RefreshCwIcon,
   XIcon,
   ColumnsIcon,
   ListIcon,
   UploadIcon,
   DownloadIcon,
-  CheckIcon,
   PlusIcon,
   MinusIcon,
   SparklesIcon,
   TrashIcon,
   CheckCheckIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
 } from "lucide-react";
 import type {
-  CommitPlanGroup,
-  GitDiffFile,
   GitDiffOverview,
   GitDiffSource,
-  GitDiffSourceSnapshot,
   RuntimeSkillUsage,
 } from "@shared/contracts";
 import { getRuntimeSkillUsage } from "@shared/skill-usage";
 import { Badge } from "@renderer/components/assistant-ui/badge";
 import { Button } from "@renderer/components/assistant-ui/button";
-import { DiffView } from "@renderer/components/DiffView";
 import { SkillUsageStrip } from "@renderer/components/assistant-ui/skill-usage-strip";
-import {
-  SelectContent,
-  SelectItem,
-  SelectRoot,
-  SelectTrigger,
-} from "@renderer/components/assistant-ui/select";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@renderer/components/ui/collapsible";
 import {
   Tooltip,
   TooltipContent,
@@ -48,28 +28,26 @@ import {
 } from "@renderer/components/ui/tooltip";
 import { cn } from "@renderer/lib/utils";
 import { useResizable } from "@renderer/hooks/use-resizable";
-
-const DIFF_SOURCES: readonly GitDiffSource[] = ["unstaged", "staged", "all"];
-const EMPTY_SOURCE_SNAPSHOT: GitDiffSourceSnapshot = {
-  files: [],
-  totalFiles: 0,
-  totalAdditions: 0,
-  totalDeletions: 0,
-};
-const DIFF_SOURCE_META: Record<GitDiffSource, { label: string; description: string }> = {
-  unstaged: {
-    label: "未暂存",
-    description: "工作区相对 index 的改动。",
-  },
-  staged: {
-    label: "已暂存",
-    description: "index 相对 HEAD 的改动。",
-  },
-  all: {
-    label: "全部改动",
-    description: "工作区相对 HEAD 的完整预览。",
-  },
-};
+import {
+  CommitPlanCard,
+  buildCommitMessage,
+  generateCommitPlan,
+  type CommitPlanCardState,
+} from "@renderer/components/assistant-ui/diff-panel-commit-plan";
+import {
+  DIFF_SOURCES,
+  DIFF_SOURCE_META,
+  DiffFileCard,
+  DiffSourceSelect,
+  DiffSummaryCard,
+  EMPTY_SOURCE_SNAPSHOT,
+  EmptyPanelState,
+  SectionSurface,
+  formatBranchLabel,
+  formatSignedCount,
+  getDiffFileDomId,
+  getErrorMessage,
+} from "@renderer/components/assistant-ui/diff-panel-parts";
 
 type DiffWorkbenchContentProps = {
   onClose: () => void;
@@ -94,279 +72,6 @@ const DEFAULT_DIFF_WORKBENCH_DRAFT: DiffWorkbenchDraft = {
 };
 
 let diffWorkbenchDraft: DiffWorkbenchDraft = { ...DEFAULT_DIFF_WORKBENCH_DRAFT };
-const DEFAULT_VISIBLE_COMMIT_FILES = 4;
-
-type CommitPlanStatus =
-  | "idle"
-  | "staging"
-  | "staged"
-  | "committing"
-  | "committed"
-  | "error";
-
-type CommitPlanCardState = CommitPlanGroup & {
-  status: CommitPlanStatus;
-  error: string | null;
-};
-
-type CommitPlanGenerationResult = {
-  groups: CommitPlanCardState[];
-  skillUsage: RuntimeSkillUsage | null;
-};
-
-function EmptyPanelState({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="grid min-h-[220px] place-items-center rounded-[var(--radius-shell)] px-6 py-7 text-center">
-      <div className="max-w-[260px]">
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground opacity-80">{description}</p>
-      </div>
-    </div>
-  );
-}
-
-function SectionSurface({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section
-      className={cn(
-        "rounded-[var(--radius-shell)] border border-border bg-[color:var(--color-control-panel-bg)] p-3 shadow-sm",
-        className,
-      )}
-    >
-      {children}
-    </section>
-  );
-}
-
-function formatSignedCount(value: number, sign: "+" | "-") {
-  return `${sign}${new Intl.NumberFormat("zh-CN").format(value)}`;
-}
-
-function getDiffFileDomId(path: string) {
-  return `diff-file-${encodeURIComponent(path)}`;
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message.trim();
-  }
-
-  return fallback;
-}
-
-function formatBranchLabel(overview: GitDiffOverview) {
-  if (!overview.isGitRepo) {
-    return "非 Git 仓库";
-  }
-
-  if (overview.branch.isDetached) {
-    return `Detached · ${overview.branch.branchName ?? "HEAD"}`;
-  }
-
-  return overview.branch.branchName ?? "未识别分支";
-}
-
-function DiffStatusPill({ status }: { status: GitDiffFile["status"] }) {
-  const config = {
-    modified: "warning",
-    deleted: "destructive",
-    untracked: "success",
-  } satisfies Record<GitDiffFile["status"], "warning" | "destructive" | "success">;
-
-  const label = {
-    modified: "变更",
-    deleted: "删除",
-    untracked: "新增",
-  } satisfies Record<GitDiffFile["status"], string>;
-
-  return (
-    <Badge variant={config[status]} className="justify-center px-2.5">
-      {label[status]}
-    </Badge>
-  );
-}
-
-function DiffSourceSelect({
-  selectedSource,
-  overview,
-  onChange,
-}: {
-  selectedSource: GitDiffSource;
-  overview: GitDiffOverview | null;
-  onChange: (source: GitDiffSource) => void;
-}) {
-  const selectedMeta = DIFF_SOURCE_META[selectedSource];
-  const selectedSnapshot = overview?.sources[selectedSource] ?? EMPTY_SOURCE_SNAPSHOT;
-
-  return (
-    <SelectRoot value={selectedSource} onValueChange={(value) => onChange(value as GitDiffSource)}>
-      <SelectTrigger
-        variant="ghost"
-        className="h-7 w-full rounded-[var(--radius-shell)] px-2.5 text-[12px] border-0 bg-secondary/50 hover:bg-secondary/80 justify-between items-center"
-      >
-        <span className="truncate font-medium text-foreground">
-          {selectedMeta.label} <span className="text-muted-foreground font-normal ml-1">({selectedSnapshot.totalFiles})</span>
-        </span>
-      </SelectTrigger>
-
-      <SelectContent className="min-w-[240px] rounded-[var(--radius-shell)]">
-        {DIFF_SOURCES.map((source) => {
-          const meta = DIFF_SOURCE_META[source];
-          const snapshot = overview?.sources[source] ?? EMPTY_SOURCE_SNAPSHOT;
-
-          return (
-            <SelectItem key={source} value={source} textValue={meta.label}>
-              <div className="flex flex-col min-w-0 py-0.5 text-left">
-                <div className="flex items-center gap-2">
-                  <span className="text-[12px] font-medium leading-none">{meta.label}</span>
-                  <span className="text-[10px] text-muted-foreground font-mono leading-none">
-                    {formatSignedCount(snapshot.totalAdditions, "+")} · {formatSignedCount(snapshot.totalDeletions, "-")}
-                  </span>
-                </div>
-                <span className="text-[11px] text-muted-foreground mt-1.5 leading-none">
-                  {meta.description}
-                </span>
-              </div>
-            </SelectItem>
-          );
-        })}
-      </SelectContent>
-    </SelectRoot>
-  );
-}
-
-function DiffSummaryCard({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "positive" | "negative";
-}) {
-  return (
-    <div className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-3 py-2 shadow-none">
-      <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">{label}</p>
-      <p
-        className={cn(
-          "mt-2 text-base font-semibold",
-          tone === "positive"
-            ? "text-diff-add-text"
-            : tone === "negative"
-              ? "text-diff-del-text"
-              : "text-foreground",
-        )}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function DiffKindMeta({ kind }: { kind: GitDiffFile["kind"] }) {
-  const icon = kind === "image" ? <ImageIcon className="size-3.5" /> : <FileIcon className="size-3.5" />;
-  const label = kind === "image" ? "图片预览" : kind === "binary" ? "二进制" : "文本差异";
-
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-      {icon}
-      <span>{label}</span>
-    </span>
-  );
-}
-
-function DiffFileCard({
-  file,
-  expanded,
-  onExpandedChange,
-  layout,
-  className,
-  selected,
-  onSelectedChange,
-}: {
-  file: GitDiffFile;
-  expanded: boolean;
-  onExpandedChange: (open: boolean) => void;
-  layout?: "vertical" | "horizontal";
-  className?: string;
-  selected?: boolean;
-  onSelectedChange?: (selected: boolean) => void;
-}) {
-  return (
-    <Collapsible
-      open={expanded}
-      onOpenChange={onExpandedChange}
-      className={cn("flex flex-col min-h-0 overflow-hidden rounded-[var(--radius-shell)] border border-border bg-[color:var(--color-control-panel-bg)]", className)}
-    >
-      <div
-        className={cn(
-          "flex shrink-0 w-full items-start gap-3 px-3 py-2 text-left transition-colors",
-          expanded ? "bg-[color:var(--color-control-bg-hover)]" : "hover:bg-[color:var(--color-control-bg-hover)]/80",
-        )}
-      >
-        {onSelectedChange ? (
-          <input
-            type="checkbox"
-            checked={selected === true}
-            onChange={(event) => onSelectedChange(event.currentTarget.checked)}
-            className="mt-1 size-4 shrink-0 rounded border-border bg-background accent-foreground"
-            aria-label={`选择 ${file.path}`}
-          />
-        ) : null}
-
-        <CollapsibleTrigger className="flex min-w-0 flex-1 items-start gap-3 text-left">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-foreground">{file.path}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <DiffKindMeta kind={file.kind} />
-              <DiffStatusPill status={file.status} />
-            </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-3 pl-2">
-            <div className="text-right text-[11px] leading-5">
-              <p className="font-medium text-diff-add-text">{formatSignedCount(file.additions, "+")}</p>
-              <p className="font-medium text-diff-del-text">{formatSignedCount(file.deletions, "-")}</p>
-            </div>
-            <ChevronDownIcon
-              className={cn(
-                "mt-1 size-3.5 shrink-0 text-muted-foreground transition-transform",
-                expanded && "rotate-180",
-              )}
-            />
-          </div>
-        </CollapsibleTrigger>
-      </div>
-
-      <CollapsibleContent className="flex flex-col flex-1 min-h-0 overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-        <div className="flex flex-col flex-1 min-h-0">
-          <DiffView
-            patch={file.patch}
-            fileName={file.path}
-            kind={file.kind}
-            previewPath={file.previewPath}
-            status={file.status}
-            maxHunks={12}
-            maxLines={420}
-            layout={layout}
-          />
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
 
 function getFirstNonEmptySource(overview: GitDiffOverview | null) {
   if (!overview) {
@@ -374,233 +79,6 @@ function getFirstNonEmptySource(overview: GitDiffOverview | null) {
   }
 
   return DIFF_SOURCES.find((source) => overview.sources[source].totalFiles > 0) ?? null;
-}
-
-function createCommitPlanCardState(groups: CommitPlanGroup[]): CommitPlanCardState[] {
-  return groups.map((group) => ({
-    ...group,
-    status: "idle",
-    error: null,
-  }));
-}
-
-async function generateCommitPlan(
-  selectedFiles: GitDiffFile[],
-): Promise<CommitPlanGenerationResult> {
-  const result = await window.desktopApi.worker.generateCommitPlan({
-    selectedFiles,
-  });
-
-  return {
-    groups: createCommitPlanCardState(result.groups),
-    skillUsage: result.skillUsage ?? null,
-  };
-}
-
-function buildCommitMessage(group: Pick<CommitPlanGroup, "title" | "description">): string {
-  const title = group.title.trim();
-  const description = group.description.trim();
-
-  if (!description) {
-    return title;
-  }
-
-  return `${title}\n\n${description}`;
-}
-
-function getCommitPlanStatusMeta(status: CommitPlanStatus): {
-  label: string;
-  variant: "secondary" | "warning" | "success" | "destructive";
-} {
-  switch (status) {
-    case "staging":
-      return { label: "暂存中", variant: "warning" };
-    case "staged":
-      return { label: "已暂存", variant: "success" };
-    case "committing":
-      return { label: "提交中", variant: "warning" };
-    case "committed":
-      return { label: "已提交", variant: "success" };
-    case "error":
-      return { label: "失败", variant: "destructive" };
-    default:
-      return { label: "待处理", variant: "secondary" };
-  }
-}
-
-function CommitPlanCard({
-  group,
-  index,
-  disabled,
-  onJumpToFile,
-  onTitleChange,
-  onDescriptionChange,
-  onStage,
-  onCommit,
-}: {
-  group: CommitPlanCardState;
-  index: number;
-  disabled: boolean;
-  onJumpToFile: (path: string) => void;
-  onTitleChange: (value: string) => void;
-  onDescriptionChange: (value: string) => void;
-  onStage: () => void;
-  onCommit: () => void;
-}) {
-  const statusMeta = getCommitPlanStatusMeta(group.status);
-  const isBusy = group.status === "staging" || group.status === "committing";
-  const isCommitted = group.status === "committed";
-  const shouldCollapseFiles = group.filePaths.length > DEFAULT_VISIBLE_COMMIT_FILES;
-  const [filesExpanded, setFilesExpanded] = useState(false);
-  const visibleFilePaths =
-    shouldCollapseFiles && !filesExpanded
-      ? group.filePaths.slice(0, DEFAULT_VISIBLE_COMMIT_FILES)
-      : group.filePaths;
-  const hiddenFileCount = Math.max(
-    0,
-    group.filePaths.length - DEFAULT_VISIBLE_COMMIT_FILES,
-  );
-
-  return (
-    <div
-      className={cn(
-        "rounded-[var(--radius-shell)] border border-[color:var(--color-control-border)] bg-[color:var(--color-control-bg)] px-3.5 py-3 shadow-[var(--color-control-shadow)] transition-all relative overflow-hidden",
-        isCommitted && "bg-emerald-50/60 dark:bg-emerald-950/20",
-        isBusy && "opacity-95 pointer-events-none",
-      )}
-    >
-      <div className="flex items-center justify-between gap-3 relative z-10">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="inline-flex h-6 items-center rounded-full bg-[color:var(--color-control-panel-bg)] px-2.5 text-[11px] font-medium text-[color:var(--color-text-secondary)] shadow-[var(--color-control-shadow)]">
-            提交 {index + 1}
-          </span>
-          <span className="text-[11px] text-muted-foreground">
-            {group.filePaths.length} 个文件
-          </span>
-        </div>
-        <Badge variant={statusMeta.variant} className="shrink-0">
-          {statusMeta.label}
-        </Badge>
-      </div>
-
-      <textarea
-        rows={2}
-        value={group.title}
-        aria-label={`提交 ${index + 1} 标题`}
-        disabled={disabled || isBusy}
-        onChange={(event) => onTitleChange(event.target.value)}
-        onInput={(event) => {
-          const element = event.currentTarget;
-          element.style.height = "auto";
-          element.style.height = `${element.scrollHeight}px`;
-        }}
-        ref={(element) => {
-          if (!element) return;
-          element.style.height = "auto";
-          element.style.height = `${element.scrollHeight}px`;
-        }}
-        className="mt-2 min-h-[52px] w-full resize-none rounded-[var(--radius-shell)] bg-background/78 px-3 py-2 text-[13px] font-semibold leading-5 text-foreground outline-none ring-1 ring-[color:var(--color-control-border)] transition-[background-color,box-shadow] placeholder:text-muted-foreground focus-visible:bg-[color:var(--color-control-bg-active)] focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)] disabled:cursor-not-allowed"
-        placeholder="输入提交标题..."
-      />
-
-      <textarea
-        rows={3}
-        value={group.description}
-        aria-label={`提交 ${index + 1} 说明`}
-        disabled={disabled || isBusy}
-        onChange={(event) => onDescriptionChange(event.target.value)}
-        className="mt-2 min-h-[84px] w-full resize-y rounded-[var(--radius-shell)] bg-background/78 px-3 py-2.5 text-[12px] leading-6 text-foreground outline-none ring-1 ring-[color:var(--color-control-border)] transition-[background-color,box-shadow] placeholder:text-muted-foreground focus-visible:bg-[color:var(--color-control-bg-active)] focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)] disabled:cursor-not-allowed"
-        placeholder="输入提交说明（支持 Markdown）..."
-      />
-
-      {group.reason ? (
-        <div className="mt-2 rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)] px-3 py-2 text-[11px] leading-5 text-muted-foreground">
-          {group.reason}
-        </div>
-      ) : null}
-
-      <div className="mt-2 flex flex-wrap gap-2">
-        {visibleFilePaths.map((filePath) => (
-          <button
-            key={filePath}
-            type="button"
-            aria-label={`定位到 ${filePath}`}
-            onClick={() => onJumpToFile(filePath)}
-            className="max-w-full truncate rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)] px-2.5 py-1.5 text-left text-[11px] leading-5 text-muted-foreground shadow-[var(--color-control-shadow)] transition-colors hover:bg-[color:var(--color-selection-muted-bg)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)]"
-          >
-            {filePath}
-          </button>
-        ))}
-      </div>
-
-      {shouldCollapseFiles ? (
-        <button
-          type="button"
-          onClick={() => setFilesExpanded((current) => !current)}
-          className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium leading-5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-control-focus-ring)] rounded-[var(--radius-shell)]"
-        >
-          {filesExpanded ? (
-            <>
-              <ChevronUpIcon className="size-3.5" />
-              收起文件列表
-            </>
-          ) : (
-            <>
-              <ChevronDownIcon className="size-3.5" />
-              展开其余 {hiddenFileCount} 个文件
-            </>
-          )}
-        </button>
-      ) : null}
-
-      {group.error ? (
-        <div className="mt-2 rounded-[var(--radius-shell)] bg-rose-500/8 px-2.5 py-2 text-[12px] leading-5 text-rose-700">
-          {group.error}
-        </div>
-      ) : null}
-
-      <div className="mt-3 flex items-center justify-end gap-2 border-t border-[color:var(--color-control-border)]/70 pt-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onStage}
-          disabled={disabled || isBusy || isCommitted || group.filePaths.length === 0}
-          className={cn(
-            "h-8 px-3 text-[12px] transition-all",
-            group.status === "staging" && "opacity-80 disabled:opacity-80 text-foreground border-[color:var(--color-control-focus-ring)]"
-          )}
-        >
-          {group.status === "staging" ? (
-            <RefreshCwIcon className="size-3.5 animate-spin text-[color:var(--color-control-focus-ring)]" />
-          ) : (
-            <PlusIcon className="size-3.5" />
-          )}
-          {group.status === "staging" ? "暂存中…" : "暂存本组"}
-        </Button>
-
-        <Button
-          type="button"
-          size="sm"
-          onClick={onCommit}
-          disabled={disabled || isBusy || isCommitted || !group.title.trim() || group.filePaths.length === 0}
-          className={cn(
-            "h-8 px-3 text-[12px] transition-all",
-            group.status === "committing" && "opacity-100 disabled:opacity-100 bg-foreground/90"
-          )}
-        >
-          {group.status === "committing" ? (
-            <RefreshCwIcon className="size-3.5 animate-spin" />
-          ) : group.status === "committed" ? (
-            <CheckCheckIcon className="size-3.5" />
-          ) : (
-            <CheckIcon className="size-3.5" />
-          )}
-          {group.status === "committing" ? "提交中…" : group.status === "committed" ? "已提交" : "提交本组"}
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 export function DiffWorkbenchContent({
