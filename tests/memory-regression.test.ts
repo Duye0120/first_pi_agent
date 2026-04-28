@@ -77,6 +77,51 @@ function withTempDir(test: (dir: string) => void): void {
 }
 
 {
+  const ranked = rankMemories(
+    [1, 0],
+    [
+      {
+        id: 1,
+        content: "low similarity",
+        embedding: JSON.stringify([0.6, 0.4]),
+        metadata: null,
+        createdAt: "2026-04-27T00:00:00.000Z",
+        matchCount: 0,
+        feedbackScore: 0,
+        lastMatchedAt: null,
+      },
+      {
+        id: 2,
+        content: "best similarity",
+        embedding: JSON.stringify([1, 0]),
+        metadata: null,
+        createdAt: "2026-04-27T00:00:00.000Z",
+        matchCount: 0,
+        feedbackScore: 0,
+        lastMatchedAt: null,
+      },
+      {
+        id: 3,
+        content: "middle similarity",
+        embedding: JSON.stringify([0.8, 0.2]),
+        metadata: null,
+        createdAt: "2026-04-27T00:00:00.000Z",
+        matchCount: 0,
+        feedbackScore: 0,
+        lastMatchedAt: null,
+      },
+    ],
+    2,
+  );
+
+  assert.deepEqual(
+    ranked.map((item) => item.id),
+    [2, 3],
+  );
+  assert.deepEqual(rankMemories([1, 0], [], Number.NaN), []);
+}
+
+{
   const cache = new QueryVectorCache(2);
   cache.set(" Hello ", "model-a", [1]);
   assert.deepEqual(cache.get("hello", "model-a"), [1]);

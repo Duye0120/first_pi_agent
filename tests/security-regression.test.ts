@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { checkShellCommand } from "../src/main/security.ts";
+import { checkFetchUrl, checkShellCommand, isPathForbiddenRead } from "../src/main/security.ts";
 import { evaluateToolPolicy } from "../src/main/harness/policy.ts";
 import { sanitizeLogMessage, sanitizeLogValue } from "../src/main/log-sanitize.ts";
 
@@ -43,6 +43,12 @@ withTempWorkspace((workspacePath) => {
   const result = checkShellCommand("echo safe; Remove-Item -Recurse C:\\temp\\chela");
   assert.equal(result.allowed, false);
   assert.equal(result.needsConfirmation, false);
+}
+
+{
+  assert.equal(isPathForbiddenRead(path.join(os.tmpdir(), "project", ".env")), true);
+  assert.equal(checkFetchUrl("https://example.com").allowed, true);
+  assert.equal(checkFetchUrl("file:///tmp/secret").allowed, false);
 }
 
 {
