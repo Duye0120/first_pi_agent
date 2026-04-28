@@ -23,8 +23,10 @@ import { InterfaceSection } from "./settings/interface-section";
 import { SystemSection } from "./settings/system-section";
 import { GeneralSection } from "./settings/general-section";
 import { NetworkSection } from "./settings/network-section";
+import { McpSection } from "./settings/mcp-section";
 import type { SettingsViewProps } from "./settings/types";
 import { MemorySection } from "./settings/memory-section";
+import { PluginsSection } from "./settings/plugins-section";
 import { SkillsSection } from "./settings/skills-section";
 import { ArchivedSection } from "./settings/archived-section";
 import { WorkspaceSection } from "./settings/workspace-section";
@@ -242,6 +244,10 @@ function SettingsViewImpl({
                 onSettingsChange={onSettingsChange}
               />
             ) : null}
+
+            {activeSection === "mcp" ? <McpSection /> : null}
+
+            {activeSection === "plugins" ? <PluginsSection /> : null}
 
             {activeSection === "skills" ? <SkillsSection /> : null}
 

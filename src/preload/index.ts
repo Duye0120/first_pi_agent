@@ -185,6 +185,11 @@ const desktopApi: DesktopApi = {
     disconnectServer: (serverName: string) =>
       invokeIpc(IPC_CHANNELS.mcpDisconnectServer, serverName),
   },
+  plugins: {
+    listStatus: () => invokeIpc(IPC_CHANNELS.pluginsListStatus),
+    setEnabled: (pluginId: string, enabled: boolean) =>
+      invokeIpc(IPC_CHANNELS.pluginsSetEnabled, pluginId, enabled),
+  },
 
   // ── Providers / Models ─────────────────────────────────────
   providers: {

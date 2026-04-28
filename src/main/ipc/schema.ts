@@ -234,6 +234,18 @@ export function validateServerNamePayload(channel: string, value: unknown): stri
   return value;
 }
 
+export function validatePluginIdPayload(channel: string, value: unknown): string {
+  expectNonEmptyString(value, channel, "pluginId");
+  const pluginId = value as string;
+  expectSafeSingleLineString(pluginId, channel, "pluginId");
+  return pluginId;
+}
+
+export function validatePluginEnabledPayload(value: unknown): boolean {
+  expectBoolean(value, IPC_CHANNELS.pluginsSetEnabled, "enabled");
+  return value as boolean;
+}
+
 function validateModelRouting(value: unknown): void {
   const input = expectPlainObject(value, IPC_CHANNELS.settingsUpdate, "modelRouting");
   assertKnownKeys(input, MODEL_ROUTING_KEYS, IPC_CHANNELS.settingsUpdate, "modelRouting");
