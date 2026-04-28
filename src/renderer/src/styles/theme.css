@@ -101,11 +101,22 @@
   --chela-selection-text: #1a1a1a;
 
   /* === Component Tokens === */
-  --chela-message-user-bg: #e8e8e8;
+  --chela-message-user-bg: #ebebeb;
   --chela-message-user-text: #1a1a1a;
-  --chela-message-assistant-bg: #f5f5f5;
+  --chela-message-user-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --chela-message-assistant-bg: transparent;
   --chela-message-assistant-text: #1a1a1a;
   --chela-message-radius: 10px;
+
+  /* === Status Colors — bg/text pairs === */
+  --chela-status-success-bg: #e8f5e9;
+  --chela-status-success-text: #1b5e20;
+  --chela-status-warning-bg: #fff8e1;
+  --chela-status-warning-text: #795321;
+  --chela-status-error-bg: #ffebee;
+  --chela-status-error-text: #b71c1c;
+  --chela-status-info-bg: rgba(51, 51, 51, 0.06);
+  --chela-status-info-text: #333333;
 
   --chela-activity-bar-bg: #f5f5f5;
   --chela-activity-bar-border: #e0e0e0;
@@ -354,8 +365,19 @@
   /* === Message bubbles dark === */
   --chela-message-user-bg: #2a2a2a;
   --chela-message-user-text: #f0f0f0;
-  --chela-message-assistant-bg: #222222;
+  --chela-message-user-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --chela-message-assistant-bg: transparent;
   --chela-message-assistant-text: #f0f0f0;
+
+  /* === Status Colors — bg/text pairs (dark) === */
+  --chela-status-success-bg: rgba(76, 175, 80, 0.12);
+  --chela-status-success-text: #81c784;
+  --chela-status-warning-bg: rgba(255, 179, 0, 0.12);
+  --chela-status-warning-text: #ffcc02;
+  --chela-status-error-bg: rgba(239, 83, 80, 0.12);
+  --chela-status-error-text: #ef9a9a;
+  --chela-status-info-bg: rgba(224, 224, 224, 0.08);
+  --chela-status-info-text: #e0e0e0;
 
   /* Legacy mappings */
   --background: 0 0% 5%;
