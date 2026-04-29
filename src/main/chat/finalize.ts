@@ -15,8 +15,12 @@ import {
 import { indexSessionSearchDocument } from "../session/search.js";
 import { BUS_EVENTS, bus } from "../event-bus.js";
 import { WorkerService } from "../worker-service.js";
-import { buildRunChangeSummary } from "./run-change-summary.js";
+import {
+  buildRunChangeSummary,
+  collectRunTouchedPaths,
+} from "./run-change-summary.js";
 import type { ChatRunContext } from "./types.js";
+import type { ChatMessage, RunChangeSummary } from "../../shared/contracts.js";
 
 async function maybeAutoRenameSessionTitle(
   sessionId: string,
@@ -67,10 +71,19 @@ async function maybeAutoRenameSessionTitle(
   }
 }
 
-async function resolveRunChangeSummary(context: ChatRunContext) {
+async function resolveRunChangeSummary(
+  context: ChatRunContext,
+  assistantMessage: ChatMessage | null,
+) {
   try {
+    const touchedPaths = collectRunTouchedPaths(
+      assistantMessage?.steps,
+      context.settings.workspace,
+    );
     const afterDiffOverview = await getGitDiffSnapshot(context.settings.workspace);
-    return buildRunChangeSummary(context.beforeDiffOverview, afterDiffOverview);
+    return buildRunChangeSummary(context.beforeDiffOverview, afterDiffOverview, {
+      touchedPaths,
+    });
   } catch (error) {
     appLogger.warn({
       scope: "chat.send",
@@ -85,15 +98,29 @@ async function resolveRunChangeSummary(context: ChatRunContext) {
   }
 }
 
+function attachRunChangeSummary(
+  assistantMessage: ChatMessage | null,
+  runChangeSummary: RunChangeSummary | null,
+): void {
+  if (!assistantMessage || !runChangeSummary) {
+    return;
+  }
+
+  assistantMessage.meta = {
+    ...(assistantMessage.meta ?? {}),
+    runChangeSummary,
+  };
+}
+
 export async function finalizeCompletedChatRun(
   context: ChatRunContext,
 ): Promise<void> {
-  const runChangeSummary = await resolveRunChangeSummary(context);
   const assistantMessage = context.adapter.buildAssistantMessage(
     "completed",
     undefined,
-    runChangeSummary,
   );
+  const runChangeSummary = await resolveRunChangeSummary(context, assistantMessage);
+  attachRunChangeSummary(assistantMessage, runChangeSummary);
   if (assistantMessage) {
     appendAssistantMessageEvent({
       sessionId: context.input.sessionId,
@@ -112,12 +139,13 @@ export async function finalizeCompletedChatRun(
     finalState: "completed",
     metadata: {
       requestedModelEntryId: context.requestedModelEntryId,
-        resolvedModelEntryId: context.handle?.modelEntryId ?? context.resolvedModel.entry.id,
-        prepareFailedEntries: context.failover.prepare.failedEntries,
-        executeAttemptedEntryIds: context.failover.execute.attemptedEntryIds,
-        ...(runChangeSummary ? { runChangeSummary } : {}),
-      },
-    });
+      resolvedModelEntryId:
+        context.handle?.modelEntryId ?? context.resolvedModel.entry.id,
+      prepareFailedEntries: context.failover.prepare.failedEntries,
+      executeAttemptedEntryIds: context.failover.execute.attemptedEntryIds,
+      ...(runChangeSummary ? { runChangeSummary } : {}),
+    },
+  });
   harnessRuntime.finishRun(context.runScope, "completed");
   scheduleAutoMemorySummarize({
     sessionId: context.input.sessionId,
@@ -150,8 +178,6 @@ export async function finalizeFailedChatRun(
   context: ChatRunContext,
   err: unknown,
 ): Promise<void> {
-  const runChangeSummary = await resolveRunChangeSummary(context);
-
   if (
     err instanceof HarnessRunCancelledError ||
     harnessRuntime.isCancelRequested(context.runScope)
@@ -159,8 +185,9 @@ export async function finalizeFailedChatRun(
     const cancelledMessage = context.adapter.buildAssistantMessage(
       "cancelled",
       undefined,
-      runChangeSummary,
     );
+    const runChangeSummary = await resolveRunChangeSummary(context, cancelledMessage);
+    attachRunChangeSummary(cancelledMessage, runChangeSummary);
     if (cancelledMessage && context.transcriptStarted) {
       appendAssistantMessageEvent({
         sessionId: context.input.sessionId,
@@ -213,8 +240,9 @@ export async function finalizeFailedChatRun(
   const failedMessage = context.adapter.buildAssistantMessage(
     "error",
     errorMessage,
-    runChangeSummary,
   );
+  const runChangeSummary = await resolveRunChangeSummary(context, failedMessage);
+  attachRunChangeSummary(failedMessage, runChangeSummary);
   if (failedMessage && context.transcriptStarted) {
     appendAssistantMessageEvent({
       sessionId: context.input.sessionId,
