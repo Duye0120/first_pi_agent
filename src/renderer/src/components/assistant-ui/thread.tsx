@@ -878,7 +878,6 @@ const Composer: FC<ThreadResolvedProps> = ({
       <ComposerStatusBar
         branchSummary={branchSummary}
         contextSummary={contextSummary}
-        runStatusLabel={runStatusLabel}
         onCompactContext={onCompactContext}
         onRecoverContext={recoverContextTask}
         onBranchChanged={onBranchChanged}
@@ -1184,7 +1183,6 @@ const ComposerAction: FC<
 const ComposerStatusBar: FC<{
   branchSummary: GitBranchSummary | null;
   contextSummary: ContextUsageSummary;
-  runStatusLabel: string;
   onCompactContext: () => void | Promise<void>;
   onRecoverContext: () => void | Promise<void>;
   onBranchChanged: () => void | Promise<void>;
@@ -1192,7 +1190,6 @@ const ComposerStatusBar: FC<{
 }> = ({
   branchSummary,
   contextSummary,
-  runStatusLabel,
   onCompactContext,
   onRecoverContext,
   onBranchChanged,
@@ -1225,12 +1222,6 @@ const ComposerStatusBar: FC<{
           {showBtw ? (
             <span className="shrink-0 rounded-full bg-[var(--color-accent-subtle)] px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-accent)]">
               /btw 旁路补充
-            </span>
-          ) : null}
-
-          {runStage !== "idle" && runStatusLabel ? (
-            <span className="min-w-0 truncate rounded-full bg-shell-panel px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-text-secondary)] dark:bg-white/8">
-              {runStatusLabel}
             </span>
           ) : null}
 
