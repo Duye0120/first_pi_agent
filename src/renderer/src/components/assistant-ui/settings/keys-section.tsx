@@ -47,6 +47,7 @@ import {
   getDetectedMetadata,
   getEntryDisplayName,
   getEntryNameHint,
+  normalizeCapabilitiesOverride,
   parseProviderOptions,
   serializeEditableEntry,
   serializeWorkspace,
@@ -55,6 +56,10 @@ import {
   type SourceWorkspace,
 } from "./keys-section-model";
 import { ModelEntryDialog } from "./keys-section-entry-dialog";
+
+type MeasuredSourceTestResult = SourceTestResult & {
+  durationMs: number;
+};
 
 export function KeysSection({
   settings,
@@ -89,7 +94,7 @@ export function KeysSection({
     | null
   >(null);
   const [error, setError] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<SourceTestResult | null>(null);
+  const [testResult, setTestResult] = useState<MeasuredSourceTestResult | null>(null);
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingEntrySnapshot, setEditingEntrySnapshot] =
@@ -238,6 +243,26 @@ export function KeysSection({
     ? serializeWorkspace(currentWorkspace) !== currentWorkspace.baseline
     : false;
 
+  const createSourceDraftPayload = useCallback((workspace: SourceWorkspace) => {
+    const draft = {
+      name:
+        workspace.kind === "builtin"
+          ? workspace.sourceDraft.name
+          : workspace.sourceDraft.name.trim(),
+      providerType: workspace.sourceDraft.providerType,
+      mode: workspace.kind === "builtin" ? workspace.sourceDraft.mode : "custom",
+      enabled: workspace.sourceDraft.enabled,
+      baseUrl: workspace.sourceDraft.baseUrl,
+    };
+
+    return workspace.persistedSourceId
+      ? {
+        id: workspace.persistedSourceId,
+        ...draft,
+      }
+      : draft;
+  }, []);
+
   const updateWorkspace = useCallback(
     (
       sourceId: string,
@@ -351,20 +376,9 @@ export function KeysSection({
     setTestResult(null);
 
     try {
-      const savedSource = await desktopApi.providers.saveSource({
-        id: currentWorkspace.persistedSourceId,
-        name:
-          currentWorkspace.kind === "builtin"
-            ? currentWorkspace.sourceDraft.name
-            : currentWorkspace.sourceDraft.name.trim(),
-        providerType: currentWorkspace.sourceDraft.providerType,
-        mode:
-          currentWorkspace.kind === "builtin"
-            ? currentWorkspace.sourceDraft.mode
-            : "custom",
-        enabled: currentWorkspace.sourceDraft.enabled,
-        baseUrl: currentWorkspace.sourceDraft.baseUrl,
-      });
+      const savedSource = await desktopApi.providers.saveSource(
+        createSourceDraftPayload(currentWorkspace),
+      );
 
       if (currentWorkspace.apiKeyInput.trim()) {
         await desktopApi.providers.setCredentials(
@@ -398,40 +412,34 @@ export function KeysSection({
     } finally {
       setSaving(false);
     }
-  }, [currentWorkspace, desktopApi, reload]);
+  }, [createSourceDraftPayload, currentWorkspace, desktopApi, reload]);
 
   const handleTest = useCallback(async () => {
     if (!desktopApi || !currentWorkspace) return;
 
+    const startedAt = performance.now();
     setTesting(true);
     setError(null);
 
     try {
-      const result = await desktopApi.providers.testSource({
-        id: currentWorkspace.persistedSourceId,
-        name:
-          currentWorkspace.kind === "builtin"
-            ? currentWorkspace.sourceDraft.name
-            : currentWorkspace.sourceDraft.name.trim(),
-        providerType: currentWorkspace.sourceDraft.providerType,
-        mode:
-          currentWorkspace.kind === "builtin"
-            ? currentWorkspace.sourceDraft.mode
-            : "custom",
-        enabled: currentWorkspace.sourceDraft.enabled,
-        baseUrl: currentWorkspace.sourceDraft.baseUrl,
-      });
+      const result = await desktopApi.providers.testSource(
+        createSourceDraftPayload(currentWorkspace),
+      );
 
-      setTestResult(result);
+      setTestResult({
+        ...result,
+        durationMs: Math.max(1, Math.round(performance.now() - startedAt)),
+      });
     } catch (nextError) {
       setTestResult({
         success: false,
         error: nextError instanceof Error ? nextError.message : "测试失败",
+        durationMs: Math.max(1, Math.round(performance.now() - startedAt)),
       });
     } finally {
       setTesting(false);
     }
-  }, [currentWorkspace, desktopApi]);
+  }, [createSourceDraftPayload, currentWorkspace, desktopApi]);
 
   const handleFetchModels = useCallback(async () => {
     if (!desktopApi || !currentWorkspace) return;
@@ -441,20 +449,9 @@ export function KeysSection({
     setError(null);
 
     try {
-      const result = await desktopApi.providers.fetchModels({
-        id: currentWorkspace.persistedSourceId,
-        name:
-          currentWorkspace.kind === "builtin"
-            ? currentWorkspace.sourceDraft.name
-            : currentWorkspace.sourceDraft.name.trim(),
-        providerType: currentWorkspace.sourceDraft.providerType,
-        mode:
-          currentWorkspace.kind === "builtin"
-            ? currentWorkspace.sourceDraft.mode
-            : "custom",
-        enabled: currentWorkspace.sourceDraft.enabled,
-        baseUrl: currentWorkspace.sourceDraft.baseUrl,
-      });
+      const result = await desktopApi.providers.fetchModels(
+        createSourceDraftPayload(currentWorkspace),
+      );
 
       if (!result.success) {
         setFetchModelsResult({
@@ -526,7 +523,7 @@ export function KeysSection({
     } finally {
       setFetchingModels(false);
     }
-  }, [currentWorkspace, desktopApi, updateWorkspace]);
+  }, [createSourceDraftPayload, currentWorkspace, desktopApi, updateWorkspace]);
 
   if (loading) {
     return (
@@ -1117,13 +1114,13 @@ export function KeysSection({
                       testResult.success ? "text-[color:var(--chela-status-success-text)]" : "text-[color:var(--chela-status-warning-text)]"
                     }
                   >
-                    {testResult.success
+                    {(testResult.success
                       ? "连接测试通过"
                       : formatProviderError(
                         testResult.error,
                         testResult.errorCode,
                         "连接测试失败",
-                      )}
+                      )) + ` · ${testResult.durationMs} ms`}
                   </span>
                 ) : dirty ? (
                   "当前提供商有未保存修改。"

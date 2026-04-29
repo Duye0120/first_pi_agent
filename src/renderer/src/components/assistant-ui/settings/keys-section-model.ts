@@ -128,7 +128,7 @@ function normalizeCapabilityOverride(value: boolean | null): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
-function normalizeCapabilitiesOverride(
+export function normalizeCapabilitiesOverride(
   capabilities: ModelCapabilitiesOverride,
 ): ModelCapabilitiesOverride {
   return {
