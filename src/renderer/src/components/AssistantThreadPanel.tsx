@@ -23,6 +23,7 @@ import type {
   PendingApprovalGroup,
   RunChangeSummary,
   RuntimeSkillUsage,
+  SendMessageOrigin,
   ThinkingLevel,
 } from "@shared/contracts";
 import { extractRuntimeSkillUsages } from "@shared/skill-usage";
@@ -85,11 +86,13 @@ function createStep(kind: AgentStep["kind"], id?: string): AgentStep {
 type RuntimeResponse = AgentResponse & {
   internalRun?: InterruptedApprovalReloadConfig | null;
   errorMessage?: string;
+  sendOrigin?: SendMessageOrigin;
 };
 
 function createResponse(
   id: string,
   internalRun: InterruptedApprovalReloadConfig | null = null,
+  sendOrigin: SendMessageOrigin = "user",
 ): RuntimeResponse {
   return {
     id,
@@ -99,6 +102,7 @@ function createResponse(
     skillUsages: [],
     runChangeSummary: null,
     internalRun,
+    sendOrigin,
     startedAt: Date.now(),
     errorMessage: undefined,
   };
@@ -158,6 +162,10 @@ function buildRuntimeMessageCustomMetadata(response: RuntimeResponse) {
 
   if (response.internalRun) {
     custom.internalRun = response.internalRun;
+  }
+
+  if (response.sendOrigin === "guided") {
+    custom.sendOrigin = "guided";
   }
 
   return Object.keys(custom).length > 0 ? custom : undefined;
@@ -523,6 +531,7 @@ function buildAssistantParts(
   steps: AgentStep[],
   finalText: string,
   runStatus: AgentResponse["status"] = "completed",
+  sendOrigin: SendMessageOrigin = "user",
 ): ThreadAssistantMessagePart[] {
   const parts: ActivityThreadAssistantMessagePart[] = [];
   let toolGroup: AgentStep[] = [];
@@ -618,6 +627,7 @@ function buildAssistantParts(
         ],
         details: {
           entries: processEntries,
+          sendOrigin,
           startedAt: processStartedAt,
           endedAt: isRunActive || statusStep?.status === "executing"
             ? undefined
@@ -667,6 +677,7 @@ function toThreadMessage(message: ChatMessage): ThreadMessageLike | null {
       message.steps ?? [],
       message.content,
       message.status === "error" ? "error" : "completed",
+      message.meta?.sendOrigin === "guided" ? "guided" : "user",
     );
     const runChangeSummary = filterRunChangeSummaryForMessage(
       message.meta?.runChangeSummary as RunChangeSummary | null | undefined,
@@ -692,6 +703,9 @@ function toThreadMessage(message: ChatMessage): ThreadMessageLike | null {
             ? { runChangeSummary }
             : {}),
           ...(skillUsages.length > 0 ? { skillUsages } : {}),
+          ...(message.meta?.sendOrigin === "guided"
+            ? { sendOrigin: "guided" }
+            : {}),
         },
       },
     };
@@ -720,6 +734,9 @@ function toThreadMessage(message: ChatMessage): ThreadMessageLike | null {
     metadata: {
       custom: {
         rawMessageId: message.id,
+        ...(message.meta?.sendOrigin === "guided"
+          ? { sendOrigin: "guided" }
+          : {}),
       },
     },
   };
@@ -744,6 +761,21 @@ function extractUserText(messages: readonly ThreadMessageLike[]) {
     .filter((part): part is Extract<(typeof latestUserMessage.content)[number], { type: "text" }> => part.type === "text")
     .map((part) => part.text)
     .join("\n");
+}
+
+function getLatestUserMessageSendOrigin(
+  messages: readonly ThreadMessageLike[],
+): SendMessageOrigin {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role === "user") {
+      return message.metadata?.custom?.sendOrigin === "guided"
+        ? "guided"
+        : "user";
+    }
+  }
+
+  return "user";
 }
 
 function createRunQueue() {
@@ -1106,10 +1138,11 @@ function SessionRuntime({
   }, []);
 
   const handleEnqueueQueuedMessage = useCallback(
-    async (text: string) => {
+    async (text: string, source: "queued" | "guided" = "queued") => {
       const queuedMessage = await desktopApi.chat.enqueueQueuedMessage({
         sessionId: latestSessionRef.current.id,
         text,
+        source,
       });
       await latestReloadSessionRef.current(latestSessionRef.current.id);
       return queuedMessage.id;
@@ -1134,7 +1167,7 @@ function SessionRuntime({
       // 先把新消息入队并移到队首，再触发取消。
       // 顺序不能颠倒：如果 cancel 在 trigger 移到队首之前完成，run 结束后
       // 自动派发 effect 会看到旧队首并误派发，引导就失效了。
-      const queuedId = await handleEnqueueQueuedMessage(text);
+      const queuedId = await handleEnqueueQueuedMessage(text, "guided");
       await handleTriggerQueuedMessage(queuedId);
       cancelRunRef.current?.();
     },
@@ -1159,6 +1192,9 @@ function SessionRuntime({
         runId,
       };
       const text = internalRun?.prompt ?? extractUserText(messages);
+      const sendOrigin = internalRun
+        ? resolveSendMessageOrigin(internalRun)
+        : getLatestUserMessageSendOrigin(messages);
       const pendingAttachments = internalRun ? [] : currentSession.attachments;
       const title =
         !internalRun && currentSession.messages.length === 0
@@ -1182,6 +1218,7 @@ function SessionRuntime({
       const response = createResponse(
         runId,
         toInterruptedApprovalReloadConfig(internalRun),
+        sendOrigin,
       );
       const queue = createRunQueue();
 
@@ -1458,7 +1495,7 @@ function SessionRuntime({
           text,
           attachments: pendingAttachments,
           modelEntryId: currentModelId,
-          origin: resolveSendMessageOrigin(internalRun),
+          origin: sendOrigin,
         })
         .catch((error) => {
           if (settled) return;

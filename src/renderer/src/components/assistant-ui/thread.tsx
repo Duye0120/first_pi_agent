@@ -153,7 +153,10 @@ type ThreadProps = {
     allowed: boolean,
   ) => Promise<void>;
   onCompactContext?: () => void | Promise<void>;
-  onEnqueueQueuedMessage?: (text: string) => Promise<string>;
+  onEnqueueQueuedMessage?: (
+    text: string,
+    source?: QueuedMessage["source"],
+  ) => Promise<string>;
   onTriggerQueuedMessage?: (messageId: string) => Promise<void>;
   onGuideQueuedMessage?: (text: string) => Promise<void>;
   onRemoveQueuedMessage?: (messageId: string) => Promise<void>;
@@ -191,7 +194,10 @@ type ThreadResolvedProps = {
     allowed: boolean,
   ) => Promise<void>;
   onCompactContext: () => void | Promise<void>;
-  onEnqueueQueuedMessage: (text: string) => Promise<string>;
+  onEnqueueQueuedMessage: (
+    text: string,
+    source?: QueuedMessage["source"],
+  ) => Promise<string>;
   onTriggerQueuedMessage: (messageId: string) => Promise<void>;
   onGuideQueuedMessage: (text: string) => Promise<void>;
   onRemoveQueuedMessage: (messageId: string) => Promise<void>;
@@ -629,9 +635,14 @@ const Composer: FC<ThreadResolvedProps> = ({
         );
 
         try {
+          const sendOrigin = queuedMessage.source === "guided" ? "guided" : "user";
+
           aui.thread().append({
             role: "user",
             content: [{ type: "text", text: queuedMessage.text }],
+            metadata: {
+              custom: sendOrigin === "guided" ? { sendOrigin } : {},
+            },
           });
         } catch (error) {
           console.error("[queued-dispatch] thread.append 失败", error);
@@ -894,13 +905,15 @@ const QueuedMessageCard: FC<{
   onTrigger: () => Promise<void>;
   onRemove: () => Promise<void>;
 }> = ({ message, remainingCount, disabled, onTrigger, onRemove }) => {
+  const isGuided = message.source === "guided";
+
   return (
     <div className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-panel-bg)] px-3 py-2 text-[13px] text-[color:var(--color-text-secondary)] shadow-[var(--color-control-shadow)]">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className="text-[12px] font-medium text-[color:var(--color-text-secondary)]">
-              当前回复结束后继续
+              {isGuided ? "已引导对话" : "当前回复结束后继续"}
             </p>
             {remainingCount > 0 ? (
               <Badge variant="secondary" className="px-2 py-0.5 text-[10px]">
@@ -962,7 +975,10 @@ const ComposerAction: FC<
     | "isCancelling"
   > & {
     isVisionBlocked: boolean;
-    onEnqueueQueuedMessage: (text: string) => Promise<string>;
+    onEnqueueQueuedMessage: (
+      text: string,
+      source?: QueuedMessage["source"],
+    ) => Promise<string>;
     onGuideQueuedMessage: (text: string) => Promise<void>;
     onAfterComposerEnqueue?: () => void;
   }
@@ -1523,6 +1539,7 @@ const UserMessage: FC = () => {
 
       <ComposerPrimitive.If editing={false}>
         <div className="relative col-start-2 min-w-0">
+          <UserMessageGuidedBadge />
           <div className="wrap-break-word peer rounded-[var(--radius-shell)] bg-[color:var(--chela-message-user-bg)] px-4 py-2 text-[15px] leading-7 text-[color:var(--chela-message-user-text)] shadow-[var(--chela-message-user-shadow)] empty:hidden">
             <MessagePrimitive.Parts />
           </div>
@@ -1553,6 +1570,25 @@ const UserMessage: FC = () => {
         </div>
       </ComposerPrimitive.If>
     </MessagePrimitive.Root>
+  );
+};
+
+const UserMessageGuidedBadge: FC = () => {
+  const isGuided = useAuiState(
+    (s) => s.message.metadata?.custom?.sendOrigin === "guided",
+  );
+
+  if (!isGuided) {
+    return null;
+  }
+
+  return (
+    <div className="mb-1 flex justify-end">
+      <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-2 py-1 text-[12px] font-medium text-[color:var(--chela-text-tertiary)]">
+        <Wand2Icon className="size-3.5" />
+        <span>已引导对话</span>
+      </span>
+    </div>
   );
 };
 

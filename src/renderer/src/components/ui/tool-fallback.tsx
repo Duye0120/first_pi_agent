@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import {
   AlertCircleIcon,
   CheckIcon,
@@ -542,6 +542,11 @@ function getProcessGroupTiming(result: unknown) {
   return { startedAt, endedAt };
 }
 
+function getProcessGroupSendOrigin(result: unknown) {
+  const details = getToolDetails(result);
+  return details?.sendOrigin === "guided" ? "guided" : "user";
+}
+
 function formatProcessDuration(startedAt: number | null, endedAt: number | null) {
   if (startedAt === null || endedAt === null || endedAt < startedAt) {
     return null;
@@ -748,7 +753,12 @@ function CommandGroupFallback({
 }
 
 function ProcessReasoningBlock({ entry }: { entry: Extract<ProcessGroupEntry, { type: "reasoning" }> }) {
-  const [open, setOpen] = useState(false);
+  const isExecuting = entry.status === "executing";
+  const [open, setOpen] = useState(isExecuting);
+
+  useEffect(() => {
+    setOpen(isExecuting);
+  }, [isExecuting]);
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -783,10 +793,16 @@ function ProcessReasoningBlock({ entry }: { entry: Extract<ProcessGroupEntry, { 
 }
 
 function ProcessCommandsBlock({ entry }: { entry: Extract<ProcessGroupEntry, { type: "commands" }> }) {
-  const [open, setOpen] = useState(false);
+  const isExecuting = entry.status === "executing";
+  const [open, setOpen] = useState(isExecuting);
+
+  useEffect(() => {
+    setOpen(isExecuting);
+  }, [isExecuting]);
+
   const commandLabel = entry.commands.length === 1 ? "command" : "commands";
   const summaryText =
-    entry.status === "executing"
+    isExecuting
       ? `Running ${entry.commands.length} ${commandLabel}`
       : `Ran ${entry.commands.length} ${commandLabel}`;
 
@@ -816,6 +832,29 @@ function ProcessCommandsBlock({ entry }: { entry: Extract<ProcessGroupEntry, { t
   );
 }
 
+function ProcessGroupEntriesList({ entries }: { entries: ProcessGroupEntry[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      {entries.map((entry) =>
+        entry.type === "reasoning" ? (
+          <ProcessReasoningBlock key={entry.id} entry={entry} />
+        ) : (
+          <ProcessCommandsBlock key={entry.id} entry={entry} />
+        ),
+      )}
+    </div>
+  );
+}
+
+function ProcessGuidedNotice() {
+  return (
+    <div className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-2 py-1 text-[12px] font-medium text-[color:var(--chela-text-tertiary)]">
+      <span className="text-[13px] leading-none">↪</span>
+      <span>已引导对话</span>
+    </div>
+  );
+}
+
 function ProcessGroupFallback({
   result,
   status,
@@ -824,26 +863,42 @@ function ProcessGroupFallback({
   status?: ToolCallMessagePartStatus;
 }) {
   const entries = getProcessGroupEntries(result);
-  const [open, setOpen] = useState(
-    status?.type === "running" || status?.type === "incomplete",
-  );
+  const statusType = status?.type ?? "complete";
+  const isRunning = statusType === "running";
+  const isGuided = getProcessGroupSendOrigin(result) === "guided";
+  const [open, setOpen] = useState(statusType === "incomplete");
+
+  useEffect(() => {
+    if (statusType === "complete") {
+      setOpen(false);
+    }
+    if (statusType === "incomplete") {
+      setOpen(true);
+    }
+  }, [statusType]);
 
   if (entries.length === 0) {
     return null;
   }
 
+  if (isRunning) {
+    return (
+      <div className="aui-process-group mb-3 w-full max-w-[760px]">
+        {isGuided ? <ProcessGuidedNotice /> : null}
+        <ProcessGroupEntriesList entries={entries} />
+      </div>
+    );
+  }
+
   const { startedAt, endedAt } = getProcessGroupTiming(result);
-  const isRunning = status?.type === "running";
   const duration = formatProcessDuration(startedAt, endedAt);
   const commandCount = entries.reduce(
     (count, entry) => count + (entry.type === "commands" ? entry.commands.length : 0),
     0,
   );
-  const summaryText = isRunning
-    ? "处理中"
-    : ["已处理", duration, commandCount > 0 ? `${commandCount} 个命令` : null]
-        .filter(Boolean)
-        .join(" · ");
+  const summaryText = ["已处理", duration, commandCount > 0 ? `${commandCount} 个命令` : null]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <Collapsible
@@ -865,14 +920,9 @@ function ProcessGroupFallback({
       </CollapsibleTrigger>
 
       <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-        <div className="mt-2 flex flex-col gap-4">
-          {entries.map((entry) =>
-            entry.type === "reasoning" ? (
-              <ProcessReasoningBlock key={entry.id} entry={entry} />
-            ) : (
-              <ProcessCommandsBlock key={entry.id} entry={entry} />
-            ),
-          )}
+        <div className="mt-2">
+          {isGuided ? <ProcessGuidedNotice /> : null}
+          <ProcessGroupEntriesList entries={entries} />
         </div>
       </CollapsibleContent>
     </Collapsible>
