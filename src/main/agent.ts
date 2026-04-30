@@ -6,6 +6,7 @@ import {
   buildContextSystemPrompt,
   createTransformContext,
 } from "./context/service.js";
+import { createToolLoopGuardedTransform } from "./agent-loop-guard.js";
 import { getSettings } from "./settings.js";
 import { buildToolPool } from "./tools/index.js";
 import { loadMcpConfig, getActiveServers } from "../mcp/config.js";
@@ -260,9 +261,11 @@ export async function initAgent(
       messages: normalizedMessages,
     },
     getApiKey: () => resolved.getApiKey(),
-    transformContext: createTransformContext(
-      sessionId,
-      resolved.model.contextWindow ?? null,
+    transformContext: createToolLoopGuardedTransform(
+      createTransformContext(
+        sessionId,
+        resolved.model.contextWindow ?? null,
+      ),
     ),
     sessionId,
   });
