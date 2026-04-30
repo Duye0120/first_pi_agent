@@ -1,6 +1,6 @@
 # Chela TODO 索引
 
-最后更新：2026-04-27（Phase 2 IPC 契约校验已启动）
+最后更新：2026-04-28（底层基建 Phase 1-6 已收口，下一阶段转入产品能力推进）
 
 本目录用于沉淀「想做但没做」的事项；正在执行的计划仍放在 `docs/plans/`，已落定的设计放在 `specs/`。
 本索引按优先级聚合各来源（plan、spec、AGENTS 约束、讨论稿），同一条事项不重复落地点，只指向源文档。
@@ -13,13 +13,13 @@
 
 执行顺序：
 - [x] Phase 1：环境 Doctor
-- [ ] Phase 2：IPC 契约校验（`settings:update` 已覆盖）
-- [ ] Phase 3：Memory 管理闭环
-- [ ] Phase 4：Provider / 模型目录稳定性
-- [ ] Phase 5：Harness / 长任务恢复
-- [ ] Phase 6：插件 / 扩展底座
+- [x] Phase 2：IPC 契约校验
+- [x] Phase 3：Memory 管理闭环
+- [x] Phase 4：Provider / 模型目录稳定性
+- [x] Phase 5：Harness / 长任务恢复
+- [x] Phase 6：插件 / 扩展底座
 
-目标：把 Chela 的底层从“执行主干已具备”推进到“适合长期持续加功能”的状态，预计 12-18 轮有效改动。
+目标：底层基建路线已完成第一轮闭环，后续重点转入 Browser Preview / DOM Inspector、Agent Core 真恢复、记忆信号驱动和 UI 回归稳定。
 
 ---
 
@@ -67,7 +67,7 @@
 
 ## 🧠 记忆 / RAG 系统
 
-### 工程实施 ✅ 完成，2 条收尾
+### 工程实施 ✅ 完成，3 条收尾
 源：[../plans/memory-rag-implementation.md](../plans/memory-rag-implementation.md)
 
 - ~~Phase 1-5~~ → `embedding.ts`（worker_threads）、`store.ts`（SQLite）、`retrieval.ts`（余弦相似度 + 缓存）、IPC 注册 全部完成
@@ -122,7 +122,7 @@
 - Task 1-14 分阶段实施（archive 层、组件、样式统一）
 - 依赖 design spec 中的精确数值（字号、间距、圆角）
 
-### AGENTS.md 约束的违反项（2/3 已修复）
+### AGENTS.md 约束的违反项（3/3 已修复）
 - ~~context 圆环缺失「0% 灰环」状态~~ ✅
 - ~~approval 卡片错误文案泄露内部 ID~~ ✅
 - ~~branch-switcher 未走缓存~~ ✅ 组件实例级 `useRef` 缓存
