@@ -1,6 +1,7 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { Type } from "@mariozechner/pi-ai";
 import { getMemdirStore, type MemdirEntry } from "../memory/service.js";
+import { formatMemorySaveResultText } from "./memory-result.js";
 
 const memorySaveParameters = Type.Object({
   summary: Type.String({
@@ -58,7 +59,7 @@ export function createMemorySaveTool(
         content: [
           {
             type: "text",
-            text: `已保存记忆到 [${entry.topic}]：${entry.summary}`,
+            text: formatMemorySaveResultText(entry),
           },
         ],
         details: { saved: entry },

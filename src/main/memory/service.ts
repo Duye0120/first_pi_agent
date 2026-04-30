@@ -16,6 +16,10 @@ import { resolveModelEntry } from "../providers.js";
 import { loadTranscriptEvents } from "../session/service.js";
 import { getSettings } from "../settings.js";
 import { getChelaMemoryService } from "./rag-service.js";
+import {
+  classifyMemorySaveCandidate,
+  type MemorySaveStatus,
+} from "./dedupe.js";
 
 // ---------------------------------------------------------------------------
 // Hard limits — aligned with Claude Code memdir philosophy
@@ -47,6 +51,12 @@ export type MemdirEntry = {
   topic: string;
   /** 来源：agent / user / system */
   source: string;
+  /** 保存结果状态 */
+  status: MemorySaveStatus;
+  /** 命中的相近记忆 */
+  matchedSummary?: string;
+  /** 状态判定原因 */
+  reason?: string;
 };
 
 export type MemdirSaveInput = {
@@ -532,24 +542,62 @@ class MemdirStore {
     const topic = input.topic || "general";
     const source = input.source || "agent";
     const summary = input.summary.trim();
-
-    // Step 1: 写入 topic 文件
-    appendToTopicFile(topic, summary, input.detail, source);
-
-    // Step 2: 更新索引
     const entries = this.loadIndex();
+    const decision = classifyMemorySaveCandidate({ summary, topic }, entries);
 
-    // 去重：同 topic 下相同摘要不重复添加
+    if (decision.status === "duplicate") {
+      appLogger.info({
+        scope: "memdir",
+        message: "Memory save skipped as duplicate",
+        data: {
+          topic,
+          summary: summary.slice(0, 80),
+          matchedSummary: decision.matchedSummary?.slice(0, 80),
+          reason: decision.reason,
+        },
+      });
+
+      return {
+        summary,
+        topic,
+        source,
+        status: decision.status,
+        matchedSummary: decision.matchedSummary,
+        reason: decision.reason,
+      };
+    }
+
+    if (decision.status === "merged" && decision.matchedSummary) {
+      const matchedIndex = entries.findIndex(
+        (entry) =>
+          entry.topic === topic &&
+          entry.summary.toLowerCase() === decision.matchedSummary?.toLowerCase(),
+      );
+      if (matchedIndex >= 0) {
+        entries.splice(matchedIndex, 1);
+      }
+    }
+
+    const detail =
+      decision.status === "conflict" && decision.matchedSummary
+        ? [
+          `_possible_conflict_with: ${decision.matchedSummary}_`,
+          "",
+          input.detail ?? "_（无详细正文）_",
+        ].join("\n")
+        : input.detail;
+
+    appendToTopicFile(topic, summary, detail, source);
+
     const duplicate = entries.find(
-      (e) =>
-        e.topic === topic &&
-        e.summary.toLowerCase() === summary.toLowerCase(),
+      (entry) =>
+        entry.topic === topic &&
+        entry.summary.toLowerCase() === summary.toLowerCase(),
     );
     if (!duplicate) {
       entries.push({ summary, topic });
     }
 
-    // 硬限制检查
     this.enforceIndexLimits(entries);
     atomicWrite(getIndexPath(), renderIndex(entries));
     this.invalidateCache();
@@ -557,10 +605,23 @@ class MemdirStore {
     appLogger.info({
       scope: "memdir",
       message: "Memory saved",
-      data: { topic, summary: summary.slice(0, 80) },
+      data: {
+        topic,
+        summary: summary.slice(0, 80),
+        status: decision.status,
+        matchedSummary: decision.matchedSummary?.slice(0, 80),
+        reason: decision.reason,
+      },
     });
 
-    return { summary, topic, source };
+    return {
+      summary,
+      topic,
+      source,
+      status: decision.status,
+      matchedSummary: decision.matchedSummary,
+      reason: decision.reason,
+    };
   }
 
   /** 删除一条索引记录 */
