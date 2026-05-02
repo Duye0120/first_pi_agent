@@ -109,3 +109,55 @@
 - 相近记忆存在数字/时间冲突时返回 `conflict`，保留新条目并标记可能冲突。
 - `saved / merged / conflict` 会写入向量库，设置页刷新后能看到向量记忆数量变化。
 - `duplicate` 会显示向量库跳过原因，避免重复向量记录。
+
+## 完善记忆系统闭环
+
+时间：2026-04-30 23:58:00 +08:00
+
+改了什么：
+- 新增 `MemoryPipeline` 编排层，统一当前轮快路径检索、后台慢路径刷新、候选过滤和四态写入。
+- `getSemanticMemoryPromptSection` 改为消费 pipeline 检索结果，向量检索和 memdir 检索一起进入当前轮 `semantic-memory`。
+- 自动记忆刷新改为 background `memory_refresh` run，按 `sessionId + runId` 去重，写入 transcript event 和日志。
+- 自动提取候选走 `saved / duplicate / merged / conflict` 四态判定，`saved / merged / conflict` 写入向量库，`duplicate` 记录跳过。
+- `memory_save` 工具改为复用同一条 pipeline，返回 memdir 状态和向量库状态。
+- 扩展记忆 metadata、IPC 列表过滤、向量重建失败计数和设置页记忆总览。
+- 设置页增加 memdir 条数、向量条数、同步状态、最近自动提取、最近失败原因、状态/source/topic/confidence 过滤、冲突和合并对象展示。
+- 新增回归测试覆盖 pipeline 保存、候选过滤、prompt 格式化和后台刷新队列去重。
+
+为什么改：
+- 记忆系统需要形成明确闭环：当前轮只使用快速检索，回复结束后后台提取，产物从下一轮开始生效。
+- 记忆内容存在模糊边界，统一四态能让模型、设置页和存储层得到一致反馈。
+- memdir 和向量库都属于长期记忆存储，显式保存和自动刷新都需要同步表达写入结果。
+
+涉及文件：
+- `src/shared/contracts.ts`
+- `src/main/memory/pipeline.ts`
+- `src/main/memory/service.ts`
+- `src/main/memory/store.ts`
+- `src/main/memory/embedding-worker.ts`
+- `src/main/memory/rag-service.ts`
+- `src/main/tools/memory.ts`
+- `src/main/tools/memory-vector.ts`
+- `src/main/ipc/memory.ts`
+- `src/main/ipc/schema.ts`
+- `src/main/background-run.ts`
+- `src/main/session/service.ts`
+- `src/main/session/transcript-writer.ts`
+- `src/renderer/src/components/assistant-ui/settings/memory-section.tsx`
+- `src/renderer/src/components/assistant-ui/settings/memory-status.ts`
+- `tests/memory-pipeline-regression.test.ts`
+- `tests/memory-refresh-regression.test.ts`
+- `package.json`
+- `docs/changes/2026-04-30/changes.md`
+
+结果：
+- 每轮开始先做轻量记忆检索，主 Agent 当前轮收到稳定的 `semantic-memory`。
+- 每轮结束后后台自动提取长期记忆，结果进入下一轮使用。
+- `memory_save` 和自动刷新共享四态保存语义，工具结果会明确显示向量库写入、跳过或失败。
+- 设置页能同时看到 memdir 与向量库状态，并能定位 conflict / merged 的命中对象。
+
+补充审查修正：
+- 时间：2026-04-30 23:59:30 +08:00
+- 快路径检索改成向量库和 memdir 两路互相隔离；向量检索或 query rewrite 失败时，仍使用原始 query 检索并注入 memdir 结果。
+- 设置页记忆过滤改为过滤时扫描完整列表，再按 limit 截断，避免大量历史记忆下漏掉旧的匹配记录。
+- 新增回归断言覆盖向量检索失败和 query rewrite 失败的 fallback 行为。

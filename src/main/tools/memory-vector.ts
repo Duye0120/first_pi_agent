@@ -25,9 +25,10 @@ export function buildMemoryVectorAddInput(
       source: "memory_save",
       topic: entry.topic,
       memdirStatus: entry.status,
+      pipelineSource: "memory_save",
       originalSource: entry.source,
-      reason: entry.reason ?? null,
-      matchedSummary: entry.matchedSummary ?? null,
+      reason: entry.reason,
+      matchedSummary: entry.matchedSummary,
       tags: [entry.topic, "memory_save", entry.status],
     },
   };

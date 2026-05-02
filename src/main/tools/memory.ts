@@ -1,13 +1,8 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { Type } from "@mariozechner/pi-ai";
-import { getMemdirStore, type MemdirEntry } from "../memory/service.js";
+import { getMemdirStore, getMemoryPipeline, type MemdirEntry } from "../memory/service.js";
 import { formatMemorySaveResultText } from "./memory-result.js";
-import { getChelaMemoryService } from "../memory/rag-service.js";
-import {
-  buildMemoryVectorAddInput,
-  shouldPersistMemoryToVectorStore,
-  type MemoryVectorPersistResult,
-} from "./memory-vector.js";
+import type { MemoryVectorPersistResult } from "./memory-vector.js";
 
 const memorySaveParameters = Type.Object({
   summary: Type.String({
@@ -45,30 +40,8 @@ type MemorySaveDetails = {
 };
 type MemoryListDetails = { count: number; topics: string[] };
 
-async function persistMemoryToVectorStore(
-  entry: MemdirEntry,
-  detail?: string,
-): Promise<MemoryVectorPersistResult> {
-  if (!shouldPersistMemoryToVectorStore(entry.status)) {
-    return {
-      status: "skipped",
-      reason: `${entry.status} 不重复写入向量库`,
-    };
-  }
-
-  try {
-    await getChelaMemoryService().add(buildMemoryVectorAddInput(entry, detail));
-    return { status: "written" };
-  } catch (error) {
-    return {
-      status: "failed",
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
 export function createMemorySaveTool(
-  _sessionId: string,
+  sessionId: string,
 ): AgentTool<typeof memorySaveParameters, MemorySaveDetails> {
   return {
     name: "memory_save",
@@ -78,23 +51,28 @@ export function createMemorySaveTool(
       "需要指定 topic 分类和一句话摘要。只保存跨会话有价值的信息。",
     parameters: memorySaveParameters,
     async execute(_toolCallId, params) {
-      const store = getMemdirStore();
-      const entry = store.save({
-        summary: params.summary,
-        topic: params.topic,
-        detail: params.detail,
-        source: params.source ?? "agent",
-      });
-      const vector = await persistMemoryToVectorStore(entry, params.detail);
+      const result = await getMemoryPipeline().saveCandidate(
+        {
+          content: params.summary,
+          topic: params.topic,
+          detail: params.detail,
+          source: params.source ?? "agent",
+          sessionId,
+        },
+        "memory_save",
+      );
 
       return {
         content: [
           {
             type: "text",
-            text: formatMemorySaveResultText({ ...entry, vector }),
+            text: formatMemorySaveResultText({
+              ...result.entry,
+              vector: result.vector,
+            }),
           },
         ],
-        details: { saved: entry, vector },
+        details: { saved: result.entry, vector: result.vector },
       };
     },
   };

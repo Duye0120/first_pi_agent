@@ -69,6 +69,7 @@ export async function executeScheduledRun<T>(
     runKind: input.runKind,
     modelEntryId: input.modelEntryId,
     thinkingLevel: input.thinkingLevel,
+    metadata: input.metadata,
   });
 
   try {

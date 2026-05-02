@@ -3,6 +3,7 @@ import type {
   MemoryAddInput,
   MemoryListInput,
   MemoryListSort,
+  MemoryMemdirStatus,
   McpServerConfigDraft,
   ProviderSourceDraft,
   Settings,
@@ -55,13 +56,26 @@ const PROVIDER_SOURCE_DRAFT_KEYS = new Set([
 const PROVIDER_TYPES = ["anthropic", "openai", "google", "openai-compatible"] as const;
 const PROVIDER_MODES = ["native", "custom"] as const;
 const MEMORY_ADD_KEYS = new Set(["content", "metadata"]);
-const MEMORY_LIST_KEYS = new Set(["sort", "limit"]);
+const MEMORY_LIST_KEYS = new Set([
+  "sort",
+  "limit",
+  "status",
+  "source",
+  "topic",
+  "minConfidence",
+]);
 const MEMORY_LIST_SORTS: readonly MemoryListSort[] = [
   "created_desc",
   "last_matched_desc",
   "match_count_desc",
   "feedback_score_desc",
   "confidence_desc",
+];
+const MEMORY_MEMDIR_STATUSES: readonly MemoryMemdirStatus[] = [
+  "saved",
+  "duplicate",
+  "merged",
+  "conflict",
 ];
 const GIT_COMMIT_KEYS = new Set(["message", "paths"]);
 const MCP_SERVER_DRAFT_KEYS = new Set([
@@ -192,11 +206,28 @@ export function validateMemoryListPayload(value: unknown): MemoryListInput | und
   }
   const input = expectPlainObject(value, IPC_CHANNELS.memoryList, "input");
   assertKnownKeys(input, MEMORY_LIST_KEYS, IPC_CHANNELS.memoryList, "input");
-  if ("sort" in input) {
+  if ("sort" in input && input.sort !== undefined) {
     expectEnum(input.sort, MEMORY_LIST_SORTS, IPC_CHANNELS.memoryList, "sort");
   }
-  if ("limit" in input) {
+  if ("limit" in input && input.limit !== undefined) {
     expectPositiveInteger(input.limit, IPC_CHANNELS.memoryList, "limit");
+  }
+  if ("status" in input && input.status !== undefined) {
+    expectEnum(
+      input.status,
+      ["all", ...MEMORY_MEMDIR_STATUSES],
+      IPC_CHANNELS.memoryList,
+      "status",
+    );
+  }
+  if ("source" in input) {
+    expectOptionalString(input.source, IPC_CHANNELS.memoryList, "source");
+  }
+  if ("topic" in input) {
+    expectOptionalString(input.topic, IPC_CHANNELS.memoryList, "topic");
+  }
+  if ("minConfidence" in input && input.minConfidence !== undefined) {
+    expectNumber(input.minConfidence, IPC_CHANNELS.memoryList, "minConfidence");
   }
   return input as MemoryListInput;
 }

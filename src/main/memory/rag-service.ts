@@ -73,6 +73,11 @@ class ChelaMemoryService {
 
     return {
       ...stats,
+      vectorMemoryCount: stats.totalMemories,
+      memdirMemoryCount: 0,
+      lastAutoRefreshAt: null,
+      lastFailureReason: null,
+      vectorSyncStatus: "unknown",
       workerState: this.workerClient.getState(),
     };
   }

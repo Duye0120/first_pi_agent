@@ -278,6 +278,34 @@ export function appendCompactAppliedEvent(input: {
   }));
 }
 
+export function appendMemoryRefreshEvent(input: {
+  sessionId: string;
+  runId: string;
+  report: Omit<
+    Extract<SessionTranscriptEvent, { type: "memory_refresh" }>,
+    "seq" | "timestamp" | "type" | "runId"
+  >;
+}): SessionTranscriptEvent {
+  return appendTranscriptEvent(input.sessionId, (nextSeq) => ({
+    seq: nextSeq,
+    sessionId: input.sessionId,
+    runId: input.runId,
+    timestamp: new Date().toISOString(),
+    type: "memory_refresh",
+    sourceRunId: input.report.sourceRunId,
+    status: input.report.status,
+    extractedCount: input.report.extractedCount,
+    acceptedCount: input.report.acceptedCount,
+    savedCount: input.report.savedCount,
+    duplicateCount: input.report.duplicateCount,
+    mergedCount: input.report.mergedCount,
+    conflictCount: input.report.conflictCount,
+    vectorWrittenCount: input.report.vectorWrittenCount,
+    vectorFailedCount: input.report.vectorFailedCount,
+    failureReason: input.report.failureReason,
+  }));
+}
+
 export function appendRunFinishedEvent(input: {
   sessionId: string;
   runId: string;

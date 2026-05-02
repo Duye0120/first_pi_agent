@@ -549,71 +549,85 @@ export function KeysSection({
           >
             添加自定义提供商
           </Button>
-          <div className="grid grid-cols-2 gap-2">
-            {LOCAL_PROVIDER_PRESETS.map((preset) => (
-              <Button
-                key={preset.id}
-                type="button"
-                variant="outline"
-                onClick={() => handleAddLocalProvider(preset)}
-                className="h-8 rounded-[var(--radius-shell)] px-2 text-[12px]"
-              >
-                {preset.label}
-              </Button>
-            ))}
-          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-          <div className="space-y-2">
-            {sourceList.map((workspace) => {
-              const isSelected = workspace.sourceId === selectedSourceId;
-              const sourceDirty =
-                serializeWorkspace(workspace) !== workspace.baseline;
-              const sourceName = workspace.sourceDraft.name || "未命名提供商";
+          <div className="flex min-h-full flex-col gap-3">
+            <div className="space-y-2">
+              {sourceList.map((workspace) => {
+                const isSelected = workspace.sourceId === selectedSourceId;
+                const sourceDirty =
+                  serializeWorkspace(workspace) !== workspace.baseline;
+                const sourceName = workspace.sourceDraft.name || "未命名提供商";
 
-              return (
-                <button
-                  type="button"
-                  key={workspace.sourceId}
-                  onClick={() => {
-                    setSelectedSourceId(workspace.sourceId);
-                    setError(null);
-                    setTestResult(null);
-                  }}
-                  className={`w-full rounded-[var(--radius-shell)] px-3 py-2 text-left transition-colors ${isSelected
+                return (
+                  <button
+                    type="button"
+                    key={workspace.sourceId}
+                    onClick={() => {
+                      setSelectedSourceId(workspace.sourceId);
+                      setError(null);
+                      setTestResult(null);
+                    }}
+                    className={`w-full rounded-[var(--radius-shell)] px-3 py-2 text-left transition-colors ${isSelected
                       ? "bg-[color:var(--color-control-selected-bg)] text-[color:var(--color-control-selected-text)] font-medium"
                       : "bg-transparent text-foreground hover:bg-[color:var(--color-control-bg-hover)]"
-                    }`}
-                >
-                  <div className="truncate text-[13px] font-semibold text-foreground">
-                    {sourceName}
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--color-text-muted)]">
-                    <span
-                      title={
-                        workspace.sourceDraft.enabled
-                          ? "已配置/已连接"
-                          : "未配置"
-                      }
-                      className={`inline-block h-2 w-2 rounded-full ${workspace.sourceDraft.enabled
+                      }`}
+                  >
+                    <div className="truncate text-[13px] font-semibold text-foreground">
+                      {sourceName}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--color-text-muted)]">
+                      <span
+                        title={
+                          workspace.sourceDraft.enabled
+                            ? "已配置/已连接"
+                            : "未配置"
+                        }
+                        className={`inline-block h-2 w-2 rounded-full ${workspace.sourceDraft.enabled
                           ? "bg-[color:var(--chela-status-success-text)]"
                           : "bg-zinc-400"
-                        }`}
-                    />
-                    <span>
-                      {providerTypeLabel(workspace.sourceDraft.providerType)}
-                    </span>
-                    <Badge variant="secondary">
-                      {workspace.kind === "builtin" ? "内置" : "自定义"}
-                    </Badge>
-                    {sourceDirty ? (
-                      <Badge variant="warning">未保存</Badge>
-                    ) : null}
-                  </div>
-                </button>
-              );
-            })}
+                          }`}
+                      />
+                      <span>
+                        {providerTypeLabel(workspace.sourceDraft.providerType)}
+                      </span>
+                      <Badge variant="secondary">
+                        {workspace.kind === "builtin" ? "内置" : "自定义"}
+                      </Badge>
+                      {sourceDirty ? (
+                        <Badge variant="warning">未保存</Badge>
+                      ) : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-auto px-2 pt-4">
+              <div className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-3 py-3 shadow-[var(--color-control-shadow)]">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-[12px] font-semibold text-foreground">
+                    快捷配置
+                  </p>
+                  <Badge variant="secondary">本地接入</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {LOCAL_PROVIDER_PRESETS.map((preset) => (
+                    <Button
+                      key={preset.id}
+                      type="button"
+                      variant="outline"
+                      aria-label={`添加 ${preset.label} 本地提供商`}
+                      onClick={() => handleAddLocalProvider(preset)}
+                      className="h-8 rounded-[var(--radius-shell)] px-2 text-[12px]"
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

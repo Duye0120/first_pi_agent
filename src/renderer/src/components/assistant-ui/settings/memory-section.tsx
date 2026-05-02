@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import type {
   MemoryListSort,
+  MemoryMemdirStatus,
   MemoryRecord,
   MemoryRebuildResult,
   MemoryStats,
@@ -98,6 +99,14 @@ const MEMORY_SORT_OPTIONS: Array<{ value: MemoryListSort; label: string }> = [
   { value: "created_desc", label: "最近创建" },
 ];
 
+const MEMORY_STATUS_OPTIONS: Array<{ value: MemoryMemdirStatus | "all"; label: string }> = [
+  { value: "all", label: "全部状态" },
+  { value: "saved", label: "saved" },
+  { value: "merged", label: "merged" },
+  { value: "conflict", label: "conflict" },
+  { value: "duplicate", label: "duplicate" },
+];
+
 function getMemoryTags(memory: MemoryRecord): string[] {
   return Array.isArray(memory.metadata?.tags) ? memory.metadata.tags : [];
 }
@@ -106,6 +115,46 @@ function getMemorySource(memory: MemoryRecord): string {
   return typeof memory.metadata?.source === "string"
     ? memory.metadata.source
     : "memory";
+}
+
+function getMemoryTopic(memory: MemoryRecord): string {
+  return typeof memory.metadata?.topic === "string"
+    ? memory.metadata.topic
+    : "general";
+}
+
+function getMemoryStatus(memory: MemoryRecord): MemoryMemdirStatus | null {
+  const status = memory.metadata?.memdirStatus;
+  return status === "saved" ||
+    status === "duplicate" ||
+    status === "merged" ||
+    status === "conflict"
+    ? status
+    : null;
+}
+
+function getSyncLabel(status: MemoryStats["vectorSyncStatus"]): string {
+  switch (status) {
+    case "synced":
+      return "已同步";
+    case "memdir_ahead":
+      return "文件领先";
+    case "vector_ahead":
+      return "向量领先";
+    case "unknown":
+    default:
+      return "未知";
+  }
+}
+
+function getStatusVariant(status: MemoryMemdirStatus | null) {
+  if (status === "conflict") {
+    return "warning" as const;
+  }
+  if (status === "saved" || status === "merged") {
+    return "success" as const;
+  }
+  return "secondary" as const;
 }
 
 export function MemorySection({
@@ -124,6 +173,11 @@ export function MemorySection({
   const [memories, setMemories] = useState<MemoryRecord[]>([]);
   const [memorySort, setMemorySort] =
     useState<MemoryListSort>("confidence_desc");
+  const [statusFilter, setStatusFilter] =
+    useState<MemoryMemdirStatus | "all">("all");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [topicFilter, setTopicFilter] = useState("");
+  const [minConfidenceFilter, setMinConfidenceFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [memoriesLoading, setMemoriesLoading] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
@@ -190,9 +244,20 @@ export function MemorySection({
     setError(null);
 
     try {
+      const parsedMinConfidence = Number(minConfidenceFilter);
+      const source = sourceFilter.trim();
+      const topic = topicFilter.trim();
+      const minConfidence =
+        Number.isFinite(parsedMinConfidence) && minConfidenceFilter.trim()
+          ? parsedMinConfidence
+          : null;
       const nextMemories = await desktopApi.memory.list({
         sort: memorySort,
         limit: 80,
+        status: statusFilter,
+        ...(source ? { source } : {}),
+        ...(topic ? { topic } : {}),
+        ...(minConfidence !== null ? { minConfidence } : {}),
       });
       setMemories(nextMemories);
     } catch (err) {
@@ -200,7 +265,14 @@ export function MemorySection({
     } finally {
       setMemoriesLoading(false);
     }
-  }, [desktopApi, memorySort]);
+  }, [
+    desktopApi,
+    memorySort,
+    minConfidenceFilter,
+    sourceFilter,
+    statusFilter,
+    topicFilter,
+  ]);
 
   useEffect(() => {
     void loadMemories();
@@ -565,8 +637,12 @@ export function MemorySection({
           <div className="space-y-4">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
               <MetaItem
-                label="记忆总数"
-                value={loading && !stats ? "加载中…" : String(stats?.totalMemories ?? 0)}
+                label="向量记忆"
+                value={loading && !stats ? "加载中…" : String(stats?.vectorMemoryCount ?? stats?.totalMemories ?? 0)}
+              />
+              <MetaItem
+                label="文件记忆"
+                value={loading && !stats ? "加载中…" : String(stats?.memdirMemoryCount ?? 0)}
               />
               <MetaItem
                 label="累计命中"
@@ -585,6 +661,10 @@ export function MemorySection({
                 value={stats ? String(stats.candidateLimit) : "—"}
               />
               <MetaItem
+                label="同步状态"
+                value={stats ? getSyncLabel(stats.vectorSyncStatus) : "—"}
+              />
+              <MetaItem
                 label="当前模型"
                 value={stats?.selectedModelId ?? settings.memory.embeddingModelId}
                 breakAll
@@ -601,6 +681,15 @@ export function MemorySection({
               <MetaItem
                 label="最近重建"
                 value={formatTimestamp(stats?.lastRebuiltAt ?? null, timeZone)}
+              />
+              <MetaItem
+                label="最近自动提取"
+                value={formatTimestamp(stats?.lastAutoRefreshAt ?? null, timeZone)}
+              />
+              <MetaItem
+                label="最近失败"
+                value={stats?.lastFailureReason ?? "—"}
+                breakAll
               />
               <MetaItem
                 label="数据库"
@@ -658,11 +747,35 @@ export function MemorySection({
         >
           <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="sm:w-[220px]">
+              <div className="grid flex-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
                 <FieldSelect
                   value={memorySort}
                   onChange={(value) => setMemorySort(value as MemoryListSort)}
                   options={MEMORY_SORT_OPTIONS}
+                />
+                <FieldSelect
+                  value={statusFilter}
+                  onChange={(value) => setStatusFilter(value as MemoryMemdirStatus | "all")}
+                  options={MEMORY_STATUS_OPTIONS}
+                />
+                <FieldInput
+                  value={sourceFilter}
+                  onChange={(event) => setSourceFilter(event.target.value)}
+                  placeholder="source"
+                />
+                <FieldInput
+                  value={topicFilter}
+                  onChange={(event) => setTopicFilter(event.target.value)}
+                  placeholder="topic"
+                />
+                <FieldInput
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={minConfidenceFilter}
+                  onChange={(event) => setMinConfidenceFilter(event.target.value)}
+                  placeholder="confidence ≥"
                 />
               </div>
               <Button
@@ -688,6 +801,23 @@ export function MemorySection({
               ) : (
                 memories.map((memory) => {
                   const tags = getMemoryTags(memory);
+                  const status = getMemoryStatus(memory);
+                  const matchedSummary =
+                    typeof memory.metadata?.matchedSummary === "string"
+                      ? memory.metadata.matchedSummary
+                      : null;
+                  const conflictWith =
+                    typeof memory.metadata?.conflictWith === "string"
+                      ? memory.metadata.conflictWith
+                      : null;
+                  const supersedes =
+                    typeof memory.metadata?.supersedes === "string"
+                      ? memory.metadata.supersedes
+                      : null;
+                  const confidence =
+                    typeof memory.metadata?.confidence === "number"
+                      ? memory.metadata.confidence
+                      : null;
                   const confidenceScore = memory.matchCount + memory.feedbackScore;
                   const actionBusy = memoryAction !== null;
                   const rowBusy = memoryAction?.id === memory.id;
@@ -702,9 +832,29 @@ export function MemorySection({
                       className="rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg)] px-4 py-3"
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <p className="text-[13px] leading-5 text-foreground">
-                          {memory.content}
-                        </p>
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {status ? (
+                              <span className={[
+                                "inline-flex rounded-[var(--radius-shell)] px-2 py-1 text-[11px] font-medium",
+                                getStatusVariant(status) === "warning"
+                                  ? "bg-[color:var(--chela-status-warning-bg)] text-[color:var(--chela-status-warning-text)]"
+                                  : getStatusVariant(status) === "success"
+                                    ? "bg-[color:var(--chela-status-success-bg)] text-[color:var(--chela-status-success-text)]"
+                                    : "bg-[color:var(--color-control-bg-active)] text-muted-foreground",
+                              ].join(" ")}
+                              >
+                                {status}
+                              </span>
+                            ) : null}
+                            <span className="text-[11px] text-muted-foreground">
+                              {getMemoryTopic(memory)}
+                            </span>
+                          </div>
+                          <p className="break-words text-[13px] leading-5 text-foreground">
+                            {memory.content}
+                          </p>
+                        </div>
                         <div className="flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground">
                           <span className="px-1">综合 {confidenceScore}</span>
                           <Button
@@ -754,6 +904,9 @@ export function MemorySection({
                         <span>命中 {memory.matchCount}</span>
                         <span>反馈 {memory.feedbackScore}</span>
                         <span>来源 {getMemorySource(memory)}</span>
+                        {confidence !== null ? (
+                          <span>置信 {confidence.toFixed(2)}</span>
+                        ) : null}
                         <span>
                           创建 {formatTimestamp(memory.createdAt, timeZone)}
                         </span>
@@ -761,6 +914,19 @@ export function MemorySection({
                           最近命中 {formatTimestamp(memory.lastMatchedAt, timeZone)}
                         </span>
                       </div>
+                      {conflictWith || supersedes || matchedSummary ? (
+                        <div className="mt-3 rounded-[var(--radius-shell)] bg-[color:var(--color-control-bg-active)] px-3 py-2 text-[11px] leading-5 text-muted-foreground">
+                          {conflictWith ? (
+                            <p>冲突对象：{conflictWith}</p>
+                          ) : null}
+                          {supersedes ? (
+                            <p>升级对象：{supersedes}</p>
+                          ) : null}
+                          {!conflictWith && !supersedes && matchedSummary ? (
+                            <p>命中对象：{matchedSummary}</p>
+                          ) : null}
+                        </div>
+                      ) : null}
                       {tags.length > 0 ? (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {tags.map((tag) => (

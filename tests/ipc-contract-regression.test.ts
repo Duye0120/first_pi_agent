@@ -218,6 +218,24 @@ assert.deepEqual(validateMemoryListPayload({ sort: "created_desc", limit: 20 }),
   sort: "created_desc",
   limit: 20,
 });
+assert.deepEqual(
+  validateMemoryListPayload({
+    sort: "confidence_desc",
+    limit: 80,
+    status: "all",
+    source: undefined,
+    topic: undefined,
+    minConfidence: undefined,
+  }),
+  {
+    sort: "confidence_desc",
+    limit: 80,
+    status: "all",
+    source: undefined,
+    topic: undefined,
+    minConfidence: undefined,
+  },
+);
 
 assert.throws(
   () => validateMemoryIdPayload(IPC_CHANNELS.memoryDelete, 0),

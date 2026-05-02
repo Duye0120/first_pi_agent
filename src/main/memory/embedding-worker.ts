@@ -304,6 +304,7 @@ async function startMemoryWorker(data: MemoryWorkerInitData): Promise<void> {
           result: store.listMemories({
             sort,
             limit,
+            filters: request.payload.input,
           }),
         };
       }
@@ -311,16 +312,21 @@ async function startMemoryWorker(data: MemoryWorkerInitData): Promise<void> {
       case "rebuild": {
         const candidates = store.listAllCandidates();
         const updates: Array<{ id: number; embedding: number[] }> = [];
+        let failedCount = 0;
 
         for (const candidate of candidates) {
-          updates.push({
-            id: candidate.id,
-            embedding: await embeddingRuntime.encode(
-              candidate.content,
-              request.payload.modelId,
-              request.payload.provider,
-            ),
-          });
+          try {
+            updates.push({
+              id: candidate.id,
+              embedding: await embeddingRuntime.encode(
+                candidate.content,
+                request.payload.modelId,
+                request.payload.provider,
+              ),
+            });
+          } catch {
+            failedCount += 1;
+          }
         }
 
         queryCache.clear();
@@ -331,6 +337,7 @@ async function startMemoryWorker(data: MemoryWorkerInitData): Promise<void> {
           ok: true,
           result: {
             rebuiltCount: updatedCount,
+            failedCount,
             modelId: request.payload.modelId,
             completedAt,
           },

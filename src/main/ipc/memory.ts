@@ -1,5 +1,6 @@
 import { IPC_CHANNELS } from "../../shared/ipc.js";
 import { getChelaMemoryService } from "../memory/rag-service.js";
+import { getMemorySyncStats } from "../memory/service.js";
 import { handleIpc } from "./handle.js";
 import {
   validateMemoryAddPayload,
@@ -25,9 +26,14 @@ export function registerMemoryIpc(): void {
   handleIpc(IPC_CHANNELS.memoryList, async (_event, input) =>
     memoryService.list(validateMemoryListPayload(input)),
   );
-  handleIpc(IPC_CHANNELS.memoryGetStats, async () =>
-    memoryService.getStats(),
-  );
+  handleIpc(IPC_CHANNELS.memoryGetStats, async () => {
+    const stats = await memoryService.getStats();
+    return {
+      ...stats,
+      vectorMemoryCount: stats.totalMemories,
+      ...getMemorySyncStats(stats),
+    };
+  });
   handleIpc(IPC_CHANNELS.memoryRebuild, async () =>
     memoryService.rebuild(),
   );

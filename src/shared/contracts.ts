@@ -256,12 +256,23 @@ export type Settings = {
 
 export type MemoryMetadataPrimitive = string | number | boolean | null;
 export type MemoryMetadataValue = MemoryMetadataPrimitive | string[];
+export type MemoryMemdirStatus = "saved" | "duplicate" | "merged" | "conflict";
+export type MemoryPipelineSource = "memory_save" | "auto_refresh" | "manual";
 
 export type MemoryMetadata = {
   source?: string;
   tags?: string[];
   sessionId?: string;
   messageId?: string;
+  topic?: string;
+  memdirStatus?: MemoryMemdirStatus;
+  pipelineSource?: MemoryPipelineSource;
+  sourceRunId?: string;
+  confidence?: number;
+  matchedSummary?: string;
+  reason?: string;
+  conflictWith?: string;
+  supersedes?: string;
   [key: string]: MemoryMetadataValue | undefined;
 };
 
@@ -295,16 +306,25 @@ export type MemoryListSort =
 export type MemoryListInput = {
   sort?: MemoryListSort;
   limit?: number;
+  status?: MemoryMemdirStatus | "all";
+  source?: string;
+  topic?: string;
+  minConfidence?: number;
 };
 
 export type MemoryStats = {
   totalMemories: number;
+  vectorMemoryCount?: number;
+  memdirMemoryCount?: number;
   totalMatches: number;
   indexedModelId: string | null;
   selectedModelId: MemoryEmbeddingModelId;
   candidateLimit: number;
   lastIndexedAt: string | null;
   lastRebuiltAt: string | null;
+  lastAutoRefreshAt?: string | null;
+  lastFailureReason?: string | null;
+  vectorSyncStatus?: "synced" | "memdir_ahead" | "vector_ahead" | "unknown";
   workerState: "idle" | "starting" | "ready" | "error";
   dbPath: string;
   modelLoaded: boolean;
@@ -312,6 +332,7 @@ export type MemoryStats = {
 
 export type MemoryRebuildResult = {
   rebuiltCount: number;
+  failedCount?: number;
   modelId: MemoryEmbeddingModelId;
   completedAt: string;
 };
@@ -820,6 +841,24 @@ export type SessionTranscriptEvent =
     snapshotRevision: number;
     compactedUntilSeq: number;
     reason: "manual" | "auto";
+  }
+  | {
+    seq: number;
+    sessionId: string;
+    runId: string;
+    timestamp: string;
+    type: "memory_refresh";
+    sourceRunId: string;
+    status: "completed" | "skipped" | "failed";
+    extractedCount: number;
+    acceptedCount: number;
+    savedCount: number;
+    duplicateCount: number;
+    mergedCount: number;
+    conflictCount: number;
+    vectorWrittenCount: number;
+    vectorFailedCount: number;
+    failureReason?: string;
   }
   | {
     seq: number;

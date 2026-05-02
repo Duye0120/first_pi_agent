@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import type {
   MemoryAddInput,
   MemoryListSort,
+  MemoryListInput,
   MemoryMetadata,
   MemoryRecord,
 } from "../../shared/contracts.js";
@@ -84,6 +85,56 @@ function normalizeRecord(row: MemoryRow): MemoryRecord {
     feedbackScore: row.feedback_score ?? 0,
     lastMatchedAt: row.last_matched_at ?? null,
   };
+}
+
+function matchesTextFilter(value: unknown, expected: string | undefined): boolean {
+  if (!expected?.trim()) {
+    return true;
+  }
+  return typeof value === "string" && value.toLowerCase() === expected.trim().toLowerCase();
+}
+
+function matchesListFilters(
+  record: MemoryRecord,
+  filters: MemoryListInput | undefined,
+): boolean {
+  const metadata = record.metadata;
+  if (!filters) {
+    return true;
+  }
+
+  if (
+    filters.status &&
+    filters.status !== "all" &&
+    metadata?.memdirStatus !== filters.status
+  ) {
+    return false;
+  }
+  if (!matchesTextFilter(metadata?.topic, filters.topic)) {
+    return false;
+  }
+  if (
+    filters.source?.trim() &&
+    metadata?.source !== filters.source &&
+    metadata?.pipelineSource !== filters.source
+  ) {
+    return false;
+  }
+  if (
+    typeof filters.minConfidence === "number" &&
+    typeof metadata?.confidence === "number" &&
+    metadata.confidence < filters.minConfidence
+  ) {
+    return false;
+  }
+  if (
+    typeof filters.minConfidence === "number" &&
+    typeof metadata?.confidence !== "number"
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 export class MemoryStore {
@@ -247,8 +298,15 @@ export class MemoryStore {
   listMemories(input: {
     sort: MemoryListSort;
     limit: number;
+    filters?: MemoryListInput;
   }): MemoryRecord[] {
     const orderBy = MEMORY_LIST_ORDER_BY[input.sort];
+    const hasFilters =
+      (!!input.filters?.status && input.filters.status !== "all") ||
+      !!input.filters?.source?.trim() ||
+      !!input.filters?.topic?.trim() ||
+      typeof input.filters?.minConfidence === "number";
+    const scanLimit = hasFilters ? -1 : input.limit;
     const rows = this.db
       .prepare(`
         SELECT id, content, embedding, metadata, created_at
@@ -257,9 +315,16 @@ export class MemoryStore {
         ORDER BY ${orderBy}
         LIMIT ?
       `)
-      .all(input.limit) as MemoryRow[];
+      .all(scanLimit) as MemoryRow[];
 
-    return rows.map(normalizeRecord);
+    const records = rows.map(normalizeRecord);
+    if (!hasFilters) {
+      return records;
+    }
+
+    return records
+      .filter((record) => matchesListFilters(record, input.filters))
+      .slice(0, input.limit);
   }
 
   recordMatches(memoryIds: number[]): void {

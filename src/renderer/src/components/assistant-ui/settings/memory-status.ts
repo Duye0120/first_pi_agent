@@ -20,5 +20,8 @@ export function getRebuildStatusText(
   if (!result) {
     return null;
   }
-  return `上次重建：${result.rebuiltCount} 条，模型 ${result.modelId}，完成 ${result.completedAt}`;
+  const failed = result.failedCount && result.failedCount > 0
+    ? `，失败 ${result.failedCount} 条`
+    : "";
+  return `上次重建：${result.rebuiltCount} 条${failed}，模型 ${result.modelId}，完成 ${result.completedAt}`;
 }
