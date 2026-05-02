@@ -231,6 +231,52 @@ async function resolveDetachedHeadLabel(workspacePath: string): Promise<string> 
   }
 }
 
+async function resolveCurrentBranchName(workspacePath: string): Promise<string | null> {
+  try {
+    const result = await runGit(["symbolic-ref", "--short", "-q", "HEAD"], workspacePath);
+    const branchName = result.stdout.trim();
+    return branchName || null;
+  } catch {
+    return null;
+  }
+}
+
+async function hasBranchUpstream(workspacePath: string): Promise<boolean> {
+  try {
+    await runGit(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], workspacePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolvePushRemote(workspacePath: string, branchName: string): Promise<string | null> {
+  try {
+    const configuredRemote = (
+      await runGit(["config", "--get", `branch.${branchName}.remote`], workspacePath)
+    ).stdout.trim();
+    if (configuredRemote) {
+      return configuredRemote;
+    }
+  } catch {
+    // 读取分支配置失败时继续回退到仓库远程列表。
+  }
+
+  try {
+    const result = await runGit(["remote"], workspacePath);
+    const remotes = result.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (remotes.includes("origin")) {
+      return "origin";
+    }
+    return remotes[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveBranchSummary(
   branchLine: string | undefined,
   workspacePath: string,
@@ -672,7 +718,28 @@ export async function commitGitChanges(
 }
 
 export async function pushGitChanges(workspacePath: string): Promise<void> {
-  await runGit(["push"], workspacePath);
+  await ensureGitRepository(workspacePath);
+  const branchName = await resolveCurrentBranchName(workspacePath);
+
+  if (!branchName) {
+    throw new Error("分离 HEAD 状态需要先切换到本地分支再推送。");
+  }
+
+  try {
+    if (await hasBranchUpstream(workspacePath)) {
+      await runGit(["push"], workspacePath);
+      return;
+    }
+
+    const remote = await resolvePushRemote(workspacePath, branchName);
+    if (!remote) {
+      throw new Error("请先添加远程仓库，再推送当前分支。");
+    }
+
+    await runGit(["push", "--set-upstream", remote, branchName], workspacePath);
+  } catch (error) {
+    throw new Error(getGitErrorMessage(error, "推送失败。"));
+  }
 }
 
 export async function pullGitChanges(workspacePath: string): Promise<void> {

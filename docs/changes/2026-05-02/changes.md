@@ -38,3 +38,27 @@
 结果：
 - 搜索和自定义提供商入口保持在顶部。
 - 本地接入预设固定落在左侧列表底部空白区域，列表内容较多时随列表区域滚动可达。
+
+## 修复新分支 Push 缺少 upstream 报错
+
+时间：2026-05-02 21:44:13 +08:00
+
+改了什么：
+- 调整 `git:push` 主进程实现，推送前检测当前分支的 tracking upstream。
+- 当前分支已有 upstream 时继续执行普通 `git push`。
+- 当前分支缺少 upstream 时，自动选择分支配置远程或 `origin`，并执行 `git push --set-upstream <remote> <branch>`。
+- 新增真实临时 Git 仓库回归测试，覆盖新分支首次 push 自动建立 upstream。
+- 将 `tests/git-regression.test.ts` 纳入 `pnpm test:regression`。
+
+为什么改：
+- 新建分支第一次通过 Chela 的 Push 按钮推送时，裸 `git push` 会被 Git 拒绝，并提示当前分支缺少 upstream。
+
+涉及文件：
+- `src/main/git.ts`
+- `tests/git-regression.test.ts`
+- `package.json`
+- `docs/changes/2026-05-02/changes.md`
+
+结果：
+- 新分支首次 push 会自动推送到远程并建立 upstream。
+- 后续 push 会沿用普通 `git push` 流程。
