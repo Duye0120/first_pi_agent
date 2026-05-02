@@ -71,6 +71,7 @@ export {
   appendCompactAppliedEvent,
   appendConfirmationRequestedEvent,
   appendConfirmationResolvedEvent,
+  appendMemoryRefreshEvent,
   appendRunFinishedEvent,
   appendRunRecoveryRequestedEvent,
   appendRunStartedEvent,
